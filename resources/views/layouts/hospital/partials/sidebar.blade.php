@@ -36,14 +36,14 @@
         </li>
 
         @can('view-appointments')
-        <!-- <li class="sidebar-list">
+        <li class="sidebar-list">
             <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.front-office.*') ? 'active' : '' }}" href="{{ route('hospital.front-office.index') }}">
                 <span class="nav-icon">🏢</span>
                 <span class="nav-label">Front Office</span>
             </a>
-        </li> -->
+        </li>
         @endcan
-        @if(auth()->user()->can('view-patient-management') || auth()->user()->can('view-patient-management'))
+        @if(auth()->user()->can('view-opd-patient') || auth()->user()->can('view-ipd-patient'))
         <li class="sidebar-list">
             <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.patient-management.*') ? 'active' : '' }}" href="{{ route('hospital.patient-management.index') }}">
                 <span class="nav-icon">👤</span>
@@ -51,31 +51,22 @@
             </a>
         </li>
         @endif
-        @can('view-patient-management')
+        @can('view-opd-patient')
         <li class="sidebar-list">
-            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.patient-management.*') ? 'active' : '' }}" href="{{ route('hospital.patient-management.index') }}">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.opd-patient.*') ? 'active' : '' }}" href="{{ route('hospital.opd-patient.index') }}">
                 <span class="nav-icon">🩺</span>
                 <span class="nav-label">OPD Management</span>
             </a>
         </li>
         @endcan
 
-        @can('view-patient-management')
+        @can('view-opd-patient')
         <li class="sidebar-list">
-            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.patient-management.*') ? 'active' : '' }}" href="{{ route('hospital.patient-management.index') }}">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.ipd-patient.*') ? 'active' : '' }}" href="{{ route('hospital.ipd-patient.index') }}">
                 <span class="nav-icon">🛏️</span>
                 <span class="nav-label">IPD / ADT</span>
             </a>
         </li>
-        @endcan
-
-        @can('view-billing-and-finance')
-            <li class="sidebar-list">
-                <a class="sidebar-link sidebar-title" href="{{ route('hospital.billing.index') }}">
-                    <span class="nav-icon">💳</span>
-                    <span class="nav-label">Billing & Finance</span>
-                </a>
-            </li>
         @endcan
 
         <li class="sidebar-list">

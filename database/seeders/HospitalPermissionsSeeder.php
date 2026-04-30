@@ -25,12 +25,6 @@ class HospitalPermissionsSeeder extends Seeder
             //IPD Patient
             'IPD Patient' => 'ipd-patient',
 
-            // Billing & Finance
-            'Billing & Finance' => 'billing-and-finance',
-
-            //Patient Management
-            'Patient Management' => 'patient-management',
-
             // Front Office
             'Appointments' => 'appointments',
             'Visitor Purpose' => 'visitor-purposes',

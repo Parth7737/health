@@ -27,7 +27,7 @@
         <div class="stat-icon">✅</div>
         <div class="stat-info">
             <div class="stat-value lab-kpi-value loading" id="labKpiCompleted">0</div>
-            <div class="stat-label">Completed Today</div>
+            <div class="stat-label">Completed</div>
             <div class="lab-stat-note">Status = completed</div>
         </div>
     </div>

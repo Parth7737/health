@@ -47,8 +47,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::post('show-visitor-form', 'VisitorController@showform')->name('visitor.showform');
         });
     });
-    //Patient Management
-    Route::group(['middleware' => ['permission:view-patient-management'], 'prefix' => 'patient-management', 'as' => 'patient-management.'], function () {
+    Route::group(['middleware' => ['permission:view-opd-patient'], 'prefix' => 'patient-management', 'as' => 'patient-management.'], function () {
         Route::get('/', 'PatientManagementController@index')->name('index');
         Route::get('stats', 'PatientManagementController@stats')->name('stats');
         Route::get('patients', 'PatientManagementController@loadPatients')->name('patients');
@@ -70,18 +69,6 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::post('cancel-booking-appointment', 'PatientManagementController@cancelBookingAppointment')->name('cancel-booking-appointment');
         Route::post('ipd-admit', 'PatientManagementController@ipdAdmit')->name('ipd-admit');
     });
-
-    // Billing & Finance
-    Route::group(['middleware' => ['permission:view-billing-and-finance'], 'prefix' => 'billing', 'as' => 'billing.'], function () {
-        Route::get('/', 'BillingController@index')->name('index');
-        Route::get('invoices', 'BillingController@invoices')->name('invoices');
-        Route::get('payments', 'BillingController@payments')->name('payments');
-        Route::get('refunds', 'BillingController@refunds')->name('refunds');
-        Route::get('invoice-details/{invoice}', 'BillingController@invoiceDetails')->name('invoice-details');
-        Route::post('process-payment/{invoice}', 'BillingController@processPayment')->name('process-payment');
-        Route::post('process-refund/{invoice}', 'BillingController@processRefund')->name('process-refund');
-    });
-
     //OPD Patient
     Route::group(['middleware' => ['permission:view-opd-patient'],'prefix' => 'opd-patient', 'as' => 'opd-patient.'], function () {
         Route::resource('/', 'OpdPatientController');
@@ -212,6 +199,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('worklist/tat-analytics', 'DiagnosticWorklistController@getTatAnalytics')->name('worklist.tat-analytics');
         Route::get('worklist/analyzer-config', 'DiagnosticWorklistController@getAnalyzerConfig')->name('worklist.analyzer-config');
         Route::get('item/{item}/parameters', 'DiagnosticWorklistController@getItemParameters')->name('item.parameters');
+        Route::post('report/create', 'DiagnosticWorklistController@createReport')->name('sample.create');
+        Route::post('report/save', 'DiagnosticWorklistController@saveReport')->name('sample.save');
+
     });
     
     // Radiology Worklist

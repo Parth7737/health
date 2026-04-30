@@ -1,16 +1,22 @@
-@extends('layouts.hospital.app', [])
+@extends('layouts.hospital.app', ['is_dashbaord' => true, 'is_header_hiden' => true])
 
 @section('title', 'Executive Dashboard')
-@section('page_subtitle')
-District Hospital Dehradun &mdash; Real-Time Operations Overview | <span id="liveClock" style="font-weight:700;color:var(--primary)"></span>
-@endsection
 
-@section('page_header_actions')
-  <button class="btn btn-secondary btn-sm" onclick="refreshDashboard()">&#x1F504; Refresh</button>
-  <button class="btn btn-outline-primary btn-sm" onclick="printSection('dashPrintArea','Executive Dashboard')">&#x1F5A8; Print Report</button>
-  <a href="{{ route('hospital.front-office.index') }}" class="btn btn-primary btn-sm">&#x2795; New Patient</a>
-@endsection
 @section('content')
+
+      <!-- Page Header -->
+      <div class="page-header">
+        <div>
+          <div class="page-title">&#x1F4CA; Executive Dashboard</div>
+          <div class="page-subtitle">District Hospital Dehradun &mdash; Real-Time Operations Overview | <span id="liveClock" style="font-weight:700;color:var(--primary)"></span></div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" onclick="refreshDashboard()">&#x1F504; Refresh</button>
+          <button class="btn btn-outline-primary btn-sm" onclick="printSection('dashPrintArea','Executive Dashboard')">&#x1F5A8; Print Report</button>
+          <a href="{{ route('hospital.front-office.index') }}" class="btn btn-primary btn-sm">&#x2795; New Patient</a>
+        </div>
+      </div>
+
       <!-- Critical Alerts Bar -->
       <div id="alertsBar" style="margin-bottom:16px"></div>
 

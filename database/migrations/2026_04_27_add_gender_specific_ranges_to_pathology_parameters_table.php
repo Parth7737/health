@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('pathology_parameters', function (Blueprint $table) {
-            $table->enum('applicable_gender', ['all', 'male', 'female'])->default('all')->after('description')->comment('Gender for which this range applies');
+            $table->enum('applicable_gender', ['all', 'male', 'female'])->default('all')->after('critical_high')->comment('Gender for which this range applies');
             $table->decimal('min_value_male', 10, 4)->nullable()->after('applicable_gender')->comment('Minimum normal value for males');
             $table->decimal('max_value_male', 10, 4)->nullable()->after('min_value_male')->comment('Maximum normal value for males');
             $table->decimal('critical_low_male', 10, 4)->nullable()->after('max_value_male')->comment('Critical low for males');

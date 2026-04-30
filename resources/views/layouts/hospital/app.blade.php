@@ -51,8 +51,6 @@
     <div class="hims-shell" id="pageWrapper">
         @if($useDoctorSidebar)
             @include('layouts.hospital.partials.sidebar-doctor')
-        @elseif(@$usebillingSidebar)
-             @include('layouts.hospital.partials.sidebar-billing')
         @else
             @include('layouts.hospital.partials.sidebar')
         @endif

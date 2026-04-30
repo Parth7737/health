@@ -17,6 +17,8 @@
     <link rel="stylesheet" type="text/css" href="{{asset('public/front/assets/css/vendors/scrollbar.css')}}">
     <link rel="stylesheet" type="text/css" href="{{asset('public/front/assets/css/vendors/select/bootstrap-select.min.css')}}">
     <!-- Plugins css Ends-->
+    @stack('css')
+    @stack('styles')
     <!-- Bootstrap css -->
     <link rel="stylesheet" type="text/css" href="{{asset('public/front/assets/css/vendors/bootstrap.css')}}">
     <link rel="stylesheet" type="text/css" href="{{asset('public/front/assets/css/vendors/select2.min.css')}}">
@@ -29,8 +31,6 @@
     <!-- HIMS css must load last so dashboard shell styles win -->
     <link rel="stylesheet" type="text/css" href="{{asset('public/front/assets/css/hims.css')}}">
     
-    @stack('css')
-    @stack('styles')
     <style>
         /* Keep Bootstrap modal behavior deterministic. */
         .modal.fade:not(.show) {
