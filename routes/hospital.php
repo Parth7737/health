@@ -212,6 +212,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('worklist/tat-analytics', 'DiagnosticWorklistController@getTatAnalytics')->name('worklist.tat-analytics');
         Route::get('worklist/analyzer-config', 'DiagnosticWorklistController@getAnalyzerConfig')->name('worklist.analyzer-config');
         Route::get('item/{item}/parameters', 'DiagnosticWorklistController@getItemParameters')->name('item.parameters');
+        Route::post('report/create', 'DiagnosticWorklistController@createReport')->name('sample.create');
+        Route::post('report/save', 'DiagnosticWorklistController@saveReport')->name('sample.save');
+
     });
     
     // Radiology Worklist

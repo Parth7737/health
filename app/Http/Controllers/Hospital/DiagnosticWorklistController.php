@@ -8,6 +8,7 @@ use App\Models\DiagnosticOrderItem;
 use App\Models\HeaderFooter;
 use App\Models\Notifications;
 use App\Models\PathologyStatus;
+use App\Models\Staff;
 use App\Services\PathologyFlagService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -59,6 +60,27 @@ class DiagnosticWorklistController extends BaseHospitalController
                 'save' => route('hospital.radiology.worklist.save', ['item' => '__ITEM__']),
                 'print' => route('hospital.radiology.worklist.print', ['item' => '__ITEM__']),
             ],
+        ]);
+    }
+
+    public function createReport(Request $request) {
+        $query = Staff::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->doctor()
+            ->active()
+            ->select('id', 'first_name', 'last_name', 'slot_duration', 'work_timings');
+
+        $doctors = $query->orderBy('first_name')->get()->map(function ($s) {
+            return [
+                'id'   => $s->id,
+                'name' => trim($s->first_name . ' ' . $s->last_name),
+            ];
+        });
+        return view('hospital.lab.create-report', [
+            'routes' => [
+                'save' => route('hospital.pathology.sample.save'),
+            ],
+            'doctors' => $doctors,
         ]);
     }
 
