@@ -2,6 +2,9 @@
     $selectedParameterIds = isset($data) && $data ? $data->parameters->pluck('id')->map(function ($id) {
         return (int) $id;
     })->all() : [];
+    $selectedSampleTypeIds = isset($data) && $data ? $data->sampleTypes->pluck('id')->map(function ($id) {
+        return (int) $id;
+    })->all() : [];
 @endphp
 
 <div class="modal-header">
@@ -55,8 +58,14 @@
             </div>
             
             <div class="col-md-6">
-                <label class="form-label">Sample Type</label>
-                <textarea name="sample_type" id="sample_type" class="form-control" rows="2">{{ @$data->sample_type }}</textarea>
+                <label class="form-label">Sample Types</label>
+                <select name="sample_type_ids[]" id="sample_type_ids" class="form-control select2-modal" multiple>
+                    @foreach($sampleTypes as $sampleType)
+                        <option value="{{ $sampleType->id }}" {{ in_array((int) $sampleType->id, $selectedSampleTypeIds, true) ? 'selected' : '' }}>
+                            {{ $sampleType->name }}
+                        </option>
+                    @endforeach
+                </select>
             </div>
 
             <div class="col-md-6">

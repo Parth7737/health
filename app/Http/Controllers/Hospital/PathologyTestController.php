@@ -7,6 +7,7 @@ use App\Http\Controllers\BaseHospitalController;
 use App\Models\ChargeMaster;
 use App\Models\PathologyCategory;
 use App\Models\PathologyParameter;
+use App\Models\PathologySampleType;
 use App\Models\PathologyTest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,12 +45,16 @@ class PathologyTestController extends BaseHospitalController
         $data = PathologyTest::with([
             'category:id,name',
             'parameters:id,name',
+            'sampleTypes:id,name',
             'chargeMaster:id,code,name',
         ])->select('*');
 
         return DataTables::of($data)
             ->addColumn('parameters_list', function ($row) {
                 return $row->parameters->pluck('name')->implode(', ');
+            })
+            ->addColumn('sample_types_list', function ($row) {
+                return $row->sampleTypes->pluck('name')->implode(', ');
             })
             ->addColumn('actions', function ($row) {
                 return view('hospital.settings.pathology.test.partials.actions', compact('row'))->render();
@@ -64,7 +69,7 @@ class PathologyTestController extends BaseHospitalController
         $data = null;
 
         if ($id) {
-            $data = PathologyTest::with(['parameters:id,name,pathology_unit_id,range'])->where('id', $id)->first();
+            $data = PathologyTest::with(['parameters:id,name,pathology_unit_id,range', 'sampleTypes:id,name'])->where('id', $id)->first();
         }
 
         $categories = PathologyCategory::select('id', 'name')->orderBy('name')->get();
@@ -72,6 +77,7 @@ class PathologyTestController extends BaseHospitalController
             ->select('id', 'name', 'pathology_unit_id', 'range')
             ->orderBy('name')
             ->get();
+        $sampleTypes = PathologySampleType::select('id', 'name')->orderBy('name')->get();
 
         $selectedChargeMasterId = $data?->charge_master_id;
         $chargeMasters = ChargeMaster::query()
@@ -86,7 +92,7 @@ class PathologyTestController extends BaseHospitalController
             ->orderBy('name')
             ->get(['id', 'code', 'name', 'standard_rate', 'category']);
 
-        return view('hospital.settings.pathology.test.form', compact('data', 'id', 'categories', 'parameters', 'chargeMasters'));
+        return view('hospital.settings.pathology.test.form', compact('data', 'id', 'categories', 'parameters', 'chargeMasters', 'sampleTypes'));
     }
 
     public function store(Request $request)
@@ -95,11 +101,12 @@ class PathologyTestController extends BaseHospitalController
             'pathology_category_id' => 'nullable|integer|exists:pathology_categories,id',
             'test_name' => 'required|string|max:255',
             'test_code' => 'nullable|string|max:255',
-            'sample_type' => 'nullable|string',
             'method' => 'nullable|string|max:255',
             'report_days' => 'nullable|string',
             'description' => 'nullable|string',
             'charge_master_id' => 'required|integer|exists:charge_masters,id',
+            'sample_type_ids' => 'nullable|array',
+            'sample_type_ids.*' => 'required|integer|exists:pathology_sample_types,id',
             'pathology_parameter_ids' => 'required|array|min:1',
             'pathology_parameter_ids.*' => 'required|integer|exists:pathology_parameters,id',
         ]);
@@ -169,6 +176,16 @@ class PathologyTestController extends BaseHospitalController
             if ($validCount !== $parameterIds->count()) {
                 $validator->errors()->add('pathology_parameter_ids', 'One or more selected parameters are invalid.');
             }
+
+            $sampleTypeIds = collect($request->sample_type_ids ?? [])->filter()->map(function ($id) {
+                return (int) $id;
+            })->unique()->values();
+            if ($sampleTypeIds->isNotEmpty()) {
+                $sampleTypeCount = PathologySampleType::whereIn('id', $sampleTypeIds)->count();
+                if ($sampleTypeCount !== $sampleTypeIds->count()) {
+                    $validator->errors()->add('sample_type_ids', 'One or more selected sample types are invalid.');
+                }
+            }
         });
 
         if ($validator->fails()) {
@@ -182,10 +199,22 @@ class PathologyTestController extends BaseHospitalController
             ->unique()
             ->values()
             ->all();
+        $sampleTypeIds = collect($request->sample_type_ids ?? [])
+            ->map(function ($id) {
+                return (int) $id;
+            })
+            ->unique()
+            ->values()
+            ->all();
 
-        DB::transaction(function () use ($request, $parameterIds) {
+        DB::transaction(function () use ($request, $parameterIds, $sampleTypeIds) {
             $chargeMaster = ChargeMaster::where('id', $request->charge_master_id)->first();
             $standardCharge = (float) ($chargeMaster?->standard_rate ?? 0);
+            $sampleTypeNames = PathologySampleType::whereIn('id', $sampleTypeIds)
+                ->orderBy('name')
+                ->pluck('name')
+                ->all();
+            $sampleTypeText = !empty($sampleTypeNames) ? implode(' | ', $sampleTypeNames) : null;
 
             $test = PathologyTest::updateOrCreate(
                 ['id' => $request->id],
@@ -195,7 +224,7 @@ class PathologyTestController extends BaseHospitalController
                     'charge_master_id' => $chargeMaster?->id,
                     'test_name' => trim((string) $request->test_name),
                     'test_code' => trim((string) $request->test_code) ?: null,
-                    'sample_type' => $request->sample_type,
+                    'sample_type' => $sampleTypeText,
                     'method' => $request->method,
                     'report_days' => $request->report_days,
                     'description' => $request->description,
@@ -204,6 +233,7 @@ class PathologyTestController extends BaseHospitalController
             );
 
             $test->parameters()->sync($parameterIds);
+            $test->sampleTypes()->sync($sampleTypeIds);
         });
 
         $msg = $request->id ? 'Pathology Test updated successfully.' : 'Pathology Test created successfully.';

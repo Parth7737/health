@@ -4,6 +4,7 @@
         <div class="nav flex-lg-column nav-pills nav-primary">
             @can('view-pathology-test')
                 <a class="nav-link {{ request()->routeIs('hospital.settings.pathology.test.*') ? 'active' : '' }}" href="{{ route('hospital.settings.pathology.test.index') }}">Pathology Test</a>
+                <a class="nav-link {{ request()->routeIs('hospital.settings.pathology.sample-type.*') ? 'active' : '' }}" href="{{ route('hospital.settings.pathology.sample-type.index') }}">Pathology Sample Type</a>
             @endcan
             @can('view-pathology-category')
             <a class="nav-link {{ request()->routeIs('hospital.settings.pathology.category.index') ? 'active' : '' }}" href="{{ route('hospital.settings.pathology.category.index') }}">Pathology Category</a>

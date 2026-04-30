@@ -35,6 +35,12 @@ class PathologyTest extends Model
             ->withTimestamps();
     }
 
+    public function sampleTypes()
+    {
+        return $this->belongsToMany(PathologySampleType::class, 'pathology_test_sample_types')
+            ->withTimestamps();
+    }
+
     public function chargeMaster()
     {
         return $this->belongsTo(ChargeMaster::class);

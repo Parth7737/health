@@ -1,10 +1,10 @@
 @extends('layouts.hospital.app')
-@section('title','Pathology Tests')
+@section('title','Pathology Sample Types')
 @section('page_header_icon', '🧪')
-@section('page_subtitle', 'Manage Pathology Tests')
+@section('page_subtitle', 'Manage Pathology Sample Types')
 @section('page_header_actions')
 @can('create-pathology-test')
-    <button class="btn btn-info adddata" data-id="">+ Add Test</button>
+    <button class="btn btn-info adddata" data-id="">+ Add Sample Type</button>
 @endcan
 @endsection
 @section('content')
@@ -12,7 +12,7 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-xl-3">
-            @include('hospital.settings.pathology.submenu')
+          @include('hospital.settings.pathology.submenu')
         </div>
         <div class="col-xl-9">
             <div class="card">
@@ -22,12 +22,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>#</th>
-                                    <th>Test Name</th>
-                                    <th>Code</th>
-                                    <th>Category</th>
-                                    <th>Sample Types</th>
-                                    <th>Parameters</th>
-                                    <th>Charge</th>
+                                    <th>Name</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
