@@ -8,4 +8,4 @@
             <div class="empty-title">No critical values found</div>
         </div>
     </div>
-</div>
+</div>   
