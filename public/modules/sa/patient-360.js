@@ -17,6 +17,7 @@
     // --- State ---
     var state = {
         mode:                    'opd',
+        openContext:             'order',
         opdPatientId:            '',
         allocationId:            '',
         prescriptionStoreUrl:    '',
@@ -47,8 +48,8 @@
             ? new win.bootstrap.Modal(modalEl)
             : null;
 
-        var openBtn = doc.getElementById('patient360NewOrderBtn');
-        if (openBtn) {
+        var openButtons = doc.querySelectorAll('#patient360NewOrderBtn, #patient360PrescribeBtn, #patient360AddNoteBtn');
+        openButtons.forEach(function (openBtn) {
             openBtn.addEventListener('click', function () {
                 if (this.disabled || this.getAttribute('data-can-new-order') === '0') {
                     var reason = this.getAttribute('data-block-reason') || 'New orders are not allowed for this patient in the current visit state.';
@@ -60,11 +61,12 @@
                     return;
                 }
                 state.mode         = this.dataset.mode || 'opd';
+                state.openContext  = this.dataset.openContext || 'order';
                 state.opdPatientId = this.dataset.opdId || '';
                 state.allocationId = this.dataset.allocationId || '';
                 openModal();
             });
-        }
+        });
 
         if (els.saveBtn) {
             els.saveBtn.addEventListener('click', saveAll);
@@ -178,6 +180,7 @@
             fillDiagnosticSlot('radiology', results[2]);
             wirePlugins();
             showSaveBtn();
+            applyOpenContextFocus();
         } catch (err) {
             if (els.body) {
                 els.body.innerHTML = '<div class="alert alert-danger m-3">Unable to load workspace. Please try again.</div>';
@@ -190,50 +193,11 @@
         var canPath = cfg.permissions.canPathology;
         var canRadi = cfg.permissions.canRadiology;
 
-        var labCard = '';
-        if (canPath || canRadi) {
-            var typeOpts = '';
-            if (canPath) { typeOpts += '<option value="pathology">Pathology</option>'; }
-            if (canRadi) { typeOpts += '<option value="radiology">Radiology</option>'; }
-            labCard = '<div class="doctor-care-card">'
-                + '<div class="doctor-care-card-head"><span class="doctor-care-section-title">&#x1F9EA; Lab Tests</span>'
-                + '<button type="button" class="btn btn-outline-primary doctor-care-head-action" id="doctorUnifiedAddTestBtn">+ Add Test</button></div>'
-                + '<div class="doctor-care-card-body">'
-                + '<div id="doctorUnifiedTestBlock" class="doctor-care-test-block">'
-                + '<div class="doctor-care-test-grid">'
-                + '<div class="doctor-care-form-group"><label>Type</label>'
-                + '<select id="doctorUnifiedTestType" class="form-control"><option value="">Select Type</option>' + typeOpts + '</select></div>'
-                + '<div class="doctor-care-form-group"><label>Test</label>'
-                + '<select id="doctorUnifiedTestSelect" class="form-control"><option value="">Select test</option></select></div>'
-                + '<div class="doctor-care-form-group"><label>Priority <span class="text-danger">*</span></label>'
-                + '<select id="doctorUnifiedTestPriority" class="form-control"><option value="Routine">Routine</option><option value="Urgent">Urgent</option><option value="STAT">STAT</option></select></div>'
-                + '</div></div>'
-                + '<div id="labTestsAdded" class="doctor-care-test-added"><span class="doctor-care-empty-text">No tests added</span></div>'
-                + '</div></div>';
-        }
-
-        var shellHtml = '<div class="doctor-care-unified-modal">'
-            + '<div class="doctor-care-grid">'
-            + '<div class="doctor-care-col-stack">'
-            + '<div class="doctor-care-card">'
-            + '<div class="doctor-care-card-head">'
-            + '<span class="doctor-care-section-title">&#x1F48A; e-Prescription</span>'
-            + '<button type="button" class="btn btn-success doctor-care-head-action" id="doctorUnifiedAddDrugBtn">+ Add Drug</button>'
-            + '</div>'
-            + '<div class="doctor-care-card-body"><div id="doctorUnifiedPrescriptionSlot">Loading...</div></div>'
-            + '</div>'
-            + '</div>'
-            + '<div class="doctor-care-col-stack">'
-            + labCard
-            + '<div id="doctorUnifiedPathologySlot" class="doctor-care-hidden-slot"></div>'
-            + '<div id="doctorUnifiedRadiologySlot" class="doctor-care-hidden-slot"></div>'
-            + '</div>'
-            + '</div>'
-            + '</div>';
-
-        if (els.body) { els.body.innerHTML = shellHtml; }
-
         try {
+            var shellUrl  = rpl(cfg.routes.ipd.careUnifiedForm, state.allocationId, '__ALLOCATION__');
+            var shellHtml = await fetchHtml(shellUrl);
+            if (els.body) { els.body.innerHTML = shellHtml; }
+
             var results = await Promise.all([
                 fetchHtml(rpl(cfg.routes.ipd.prescriptionForm, state.allocationId, '__ALLOCATION__')),
                 canPath ? postHtml(rpl(cfg.routes.ipd.diagnosticShow, state.allocationId, '__ALLOCATION__'), { order_type: 'pathology' }) : Promise.resolve(''),
@@ -244,6 +208,7 @@
             fillDiagnosticSlot('radiology', results[2]);
             wirePlugins();
             showSaveBtn();
+            applyOpenContextFocus();
         } catch (err) {
             if (els.body) {
                 els.body.innerHTML = '<div class="alert alert-danger m-3">Unable to load form. Please try again.</div>';
@@ -634,6 +599,55 @@
                 }
             }
 
+            // 1.25 IPD vitals / clinical snapshot
+            if (state.mode === 'ipd' && cfg.routes.ipd.clinicalUpdate) {
+                var ipdVitalsForm = doc.getElementById('doctorUnifiedIpdVitalsForm');
+                if (ipdVitalsForm) {
+                    var cvUrl = rpl(cfg.routes.ipd.clinicalUpdate, state.allocationId, '__ALLOCATION__');
+                    var cvRes = await fetch(cvUrl, {
+                        method:  'POST',
+                        headers: { 'X-CSRF-TOKEN': cfg.csrf, 'X-Requested-With': 'XMLHttpRequest' },
+                        body:    new FormData(ipdVitalsForm)
+                    });
+                    var cvData = await cvRes.json();
+                    if (cvData.status === false || cvData.errors) {
+                        throw new Error(errMsg(cvData, 'Unable to save IPD vitals.'));
+                    }
+                }
+            }
+
+            // 1.5 IPD SOAP note (optional)
+            if (state.mode === 'ipd' && cfg.routes.ipd.notesStore) {
+                var soapS = (doc.getElementById('doctorUnifiedIpdSoapS') || {}).value || '';
+                var soapO = (doc.getElementById('doctorUnifiedIpdSoapO') || {}).value || '';
+                var soapA = (doc.getElementById('doctorUnifiedIpdSoapA') || {}).value || '';
+                var soapP = (doc.getElementById('doctorUnifiedIpdSoapP') || {}).value || '';
+                var noteTypeEl = doc.getElementById('doctorUnifiedIpdNoteType');
+                var noteType = noteTypeEl ? noteTypeEl.value : 'progress';
+
+                var soapParts = [];
+                if (String(soapS).trim() !== '') { soapParts.push('S: ' + String(soapS).trim()); }
+                if (String(soapO).trim() !== '') { soapParts.push('O: ' + String(soapO).trim()); }
+                if (String(soapA).trim() !== '') { soapParts.push('A: ' + String(soapA).trim()); }
+                if (String(soapP).trim() !== '') { soapParts.push('P: ' + String(soapP).trim()); }
+
+                if (soapParts.length) {
+                    var nBody = new FormData();
+                    nBody.append('note_type', noteType || 'progress');
+                    nBody.append('note', soapParts.join('\n'));
+                    var nUrl = rpl(cfg.routes.ipd.notesStore, state.allocationId, '__ALLOCATION__');
+                    var nRes = await fetch(nUrl, {
+                        method:  'POST',
+                        headers: { 'X-CSRF-TOKEN': cfg.csrf, 'X-Requested-With': 'XMLHttpRequest' },
+                        body:    nBody
+                    });
+                    var nData = await nRes.json();
+                    if (nData.status === false || nData.errors) {
+                        throw new Error(errMsg(nData, 'Unable to save IPD SOAP note.'));
+                    }
+                }
+            }
+
             // 2. Prescription
             var prescSlot = doc.getElementById('doctorUnifiedPrescriptionSlot');
             var fSel      = state.mode === 'ipd' ? '#ipdPrescriptionForm' : '#opdPrescriptionForm';
@@ -776,6 +790,7 @@
     // --- Modal cleanup ---
     function onModalClose() {
         prescComposer = null;
+        state.openContext = 'order';
         if (win.jQuery) {
             win.jQuery('#p360ModalBody .select2-modal').each(function () {
                 var $el = win.jQuery(this);
@@ -837,6 +852,25 @@
 
     function showLoader() { if (typeof win.loader === 'function') { win.loader('show'); } }
     function hideLoader() { if (typeof win.loader === 'function') { win.loader('hide'); } }
+
+    function applyOpenContextFocus() {
+        if (state.openContext !== 'note') { return; }
+
+        if (state.mode === 'opd') {
+            var opdSubjective = (els.body && els.body.querySelector('textarea[name="subjective_notes"]')) || doc.querySelector('textarea[name="subjective_notes"]');
+            if (opdSubjective) {
+                opdSubjective.focus();
+                opdSubjective.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+
+        var ipdSubjective = doc.getElementById('doctorUnifiedIpdSoapS');
+        if (ipdSubjective) {
+            ipdSubjective.focus();
+            ipdSubjective.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
 
     // --- Boot ---
     if (doc.readyState === 'loading') {

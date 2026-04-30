@@ -91,7 +91,7 @@
                         <span class="badge badge-warning">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? str_pad((int) data_get($latestOpdVisit, 'token_no'), 3, '0', STR_PAD_LEFT) : '-' }}</span>
                         <span class="badge {{ $p360VisitStatusBadgeClass }}" style="font-size:11px">Status: {{ $p360VisitStatusLabel }}</span>
                     @endif
-                    <button class="btn btn-ghost btn-sm" style="color:#d0e8fb;border-color:rgba(255,255,255,.15)" onclick="window.print()">Print</button>
+                    <!-- <button class="btn btn-ghost btn-sm" style="color:#d0e8fb;border-color:rgba(255,255,255,.15)" onclick="window.print()">🖨 Print</button> -->
                     <button
                         type="button"
                         class="btn btn-primary btn-sm"
@@ -132,14 +132,14 @@
         <!-- Tab navigation -->
         <div style="background:#fff;border-bottom:2px solid #e2ecf4;padding:0 24px">
             <div class="tab-bar" style="border:none;margin:0">
-                <button class="tab-btn active" data-tab="tabTimeline" onclick="switchEMRTab('tabTimeline',this)">Timeline</button>
-                <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">Orders</button>
-                <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">Medications</button>
-                <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">Clinical Notes</button>
-                <button class="tab-btn" data-tab="tabLab" onclick="switchEMRTab('tabLab',this)">Lab Results</button>
-                <button class="tab-btn" data-tab="tabVitals" onclick="switchEMRTab('tabVitals',this)">Vitals Chart</button>
-                <button class="tab-btn" data-tab="tabHistory" onclick="switchEMRTab('tabHistory',this)">History</button>
-                <button class="tab-btn" data-tab="tabBilling" onclick="switchEMRTab('tabBilling',this)">Billing</button>
+                <button class="tab-btn active" data-tab="tabTimeline" onclick="switchEMRTab('tabTimeline',this)">📅 Timeline</button>
+                <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">📋 Orders</button>
+                <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">💊 Medications</button>
+                <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">📝 Clinical Notes</button>
+                <button class="tab-btn" data-tab="tabLab" onclick="switchEMRTab('tabLab',this)">🧪 Lab Results</button>
+                <button class="tab-btn" data-tab="tabVitals" onclick="switchEMRTab('tabVitals',this)">📈 Vitals Chart</button>
+                <button class="tab-btn" data-tab="tabHistory" onclick="switchEMRTab('tabHistory',this)">📁 History</button>
+                <button class="tab-btn" data-tab="tabBilling" onclick="switchEMRTab('tabBilling',this)">💳 Billing</button>
             </div>
         </div>
 
@@ -378,17 +378,28 @@
             <!-- MEDICATIONS -->
             <div class="tab-pane" id="tabMeds">
                 <div class="card">
-                    <div class="card-header"><div class="card-title">Current Medication Sheet</div><button class="btn btn-primary btn-sm">+ Prescribe</button></div>
+                    <div class="card-header"><div class="card-title">💊 Current Medication Sheet</div><button type="button" class="btn btn-primary btn-sm" id="patient360PrescribeBtn" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if(!($canPatient360NewOrder ?? true)) disabled aria-disabled="true" style="opacity:.55;cursor:not-allowed" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Prescribe</button></div>
                     <div class="table-wrap">
                         <table>
-                            <thead><tr><th>Drug</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Prescribed By</th><th>Status</th></tr></thead>
+                            <thead><tr><th>Drug</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Prescribed By</th><th>Visit</th><th>Start Date</th><th>Status</th></tr></thead>
                             <tbody>
-                                <tr><td class="font-600">Metformin</td><td>500mg</td><td>Oral</td><td>Twice daily (after food)</td><td>Ongoing</td><td>Dr. Sharma</td><td><span class="badge badge-success">Active</span></td></tr>
-                                <tr><td class="font-600">Amlodipine</td><td>10mg</td><td>Oral</td><td>Once daily (morning)</td><td>Ongoing</td><td>Dr. Sharma</td><td><span class="badge badge-success">Active</span></td></tr>
-                                <tr><td class="font-600">Atorvastatin</td><td>40mg</td><td>Oral</td><td>Once daily (night)</td><td>Ongoing</td><td>Dr. Sharma</td><td><span class="badge badge-success">Active</span></td></tr>
-                                <tr><td class="font-600">Inj. Normal Saline</td><td>500mL</td><td>IV</td><td>Q12h</td><td>48 hours</td><td>Dr. Sharma</td><td><span class="badge badge-warning">Running</span></td></tr>
-                                <tr><td class="font-600">Aspirin</td><td>75mg</td><td>Oral</td><td>Once daily</td><td>Ongoing</td><td>Dr. Sharma</td><td><span class="badge badge-success">Active</span></td></tr>
-                                <tr style="background:#fff3e0"><td class="font-600" style="color:#e65100">Inj. Labetalol</td><td>20mg</td><td>IV</td><td>STAT (given)</td><td>Single dose</td><td>Dr. Sharma</td><td><span class="badge badge-gray">Completed</span></td></tr>
+                                @forelse(($medicationRows ?? collect()) as $medRow)
+                                    <tr>
+                                        <td class="font-600">{{ $medRow['drug'] }}</td>
+                                        <td>{{ $medRow['dose'] }}</td>
+                                        <td>{{ $medRow['route'] }}</td>
+                                        <td>{{ $medRow['frequency'] }}</td>
+                                        <td>{{ $medRow['duration'] }}</td>
+                                        <td>{{ $medRow['prescribed_by'] }}</td>
+                                        <td>{{ $medRow['reference'] }}</td>
+                                        <td>{{ !empty($medRow['started_at']) ? \Carbon\Carbon::parse($medRow['started_at'])->format('d M Y') : '-' }}</td>
+                                        <td><span class="badge {{ $medRow['status_class'] }}">{{ $medRow['status_label'] }}</span></td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="9" class="text-center text-muted">No prescribed medicines found for this patient.</td>
+                                    </tr>
+                                @endforelse
                             </tbody>
                         </table>
                     </div>
@@ -407,7 +418,7 @@
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-header">
-                            <div class="card-title">Lab Results (Pathology)</div>
+                            <div class="card-title">Lab Results</div>
                             @if($labRows->isNotEmpty() && $abnormalLabCount > 0)
                                 <span class="badge badge-warning">{{ $abnormalLabCount }} abnormal</span>
                             @endif
@@ -630,22 +641,33 @@
             <!-- NOTES -->
             <div class="tab-pane" id="tabNotes">
                 <div class="card">
-                    <div class="card-header"><div class="card-title">Clinical Notes</div><button class="btn btn-primary btn-sm">+ Add Note</button></div>
+                    <div class="card-header"><div class="card-title">Clinical Notes</div><button type="button" class="btn btn-primary btn-sm" id="patient360AddNoteBtn" data-open-context="note" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if(!($canPatient360NewOrder ?? true)) disabled aria-disabled="true" style="opacity:.55;cursor:not-allowed" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Add Note</button></div>
                     <div class="card-body">
-                        <div style="border:1.5px solid #e2ecf4;border-radius:10px;padding:16px;margin-bottom:16px">
-                            <div class="flex justify-between mb-2">
-                                <div><strong>Progress Note</strong> - Dr. Rajesh Sharma</div>
-                                <div class="text-muted text-sm">Today, 10:15 AM</div>
+                        @forelse(($clinicalNotes ?? collect()) as $note)
+                            @php
+                                $noteAt = !empty($note['noted_at']) ? \Carbon\Carbon::parse($note['noted_at']) : null;
+                                $noteAtLabel = $noteAt
+                                    ? ($noteAt->isToday()
+                                        ? 'Today, ' . $noteAt->format('h:i A')
+                                        : ($noteAt->isYesterday()
+                                            ? 'Yesterday, ' . $noteAt->format('h:i A')
+                                            : $noteAt->format('d M Y, h:i A')))
+                                    : '-';
+                            @endphp
+                            <div style="border:1.5px solid #e2ecf4;border-radius:10px;padding:16px;margin-bottom:16px">
+                                <div class="flex justify-between mb-2">
+                                    <div>
+                                        <strong>{{ $note['title'] }}</strong> - {{ $note['author'] }}
+                                        <span class="badge {{ $note['note_badge'] }}" style="margin-left:8px">{{ $note['author_role'] }}</span>
+                                    </div>
+                                    <div class="text-muted text-sm">{{ $noteAtLabel }}</div>
+                                </div>
+                                <div class="text-muted text-sm mb-2">{{ $note['context'] }}</div>
+                                <p style="font-size:13px;line-height:1.6;color:#344a5e;white-space:pre-line">{{ $note['body'] ?: '-' }}</p>
                             </div>
-                            <p style="font-size:13px;line-height:1.6;color:#344a5e"><strong>S:</strong> Patient c/o headache improved. BP remains elevated. No chest pain. Diet: poor compliance.<br><strong>O:</strong> BP 148/94, Pulse 88, Temp 99.2°F, RBS 212. JVP normal. No ankle oedema.<br><strong>A:</strong> Hypertensive crisis - improving. Uncontrolled T2DM - medication review needed.<br><strong>P:</strong> Increase Amlodipine to 10mg. Review Metformin dose. HbA1c result awaited. Continue IV fluids. Repeat BP in 4h.</p>
-                        </div>
-                        <div style="border:1.5px solid #e2ecf4;border-radius:10px;padding:16px;opacity:.7">
-                            <div class="flex justify-between mb-2">
-                                <div><strong>Admission Note</strong> - Dr. Rajesh Sharma</div>
-                                <div class="text-muted text-sm">Yesterday, 6:00 PM</div>
-                            </div>
-                            <p style="font-size:13px;line-height:1.6;color:#344a5e">62M known T2DM, HTN, Dyslipidaemia. Presented with severe headache, BP 196/110, RBS 340. IV Labetalol given. IV access established. Admitted for monitoring and stabilisation.</p>
-                        </div>
+                        @empty
+                            <div class="text-center text-muted" style="padding:24px">No clinical notes found for this patient.</div>
+                        @endforelse
                     </div>
                 </div>
             </div>
@@ -714,6 +736,64 @@
     justify-content: flex-end;
     background: #f7fafd;
 }
+
+/* Force patient.html button look for this page */
+.opd-content-wrap .btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    padding: 8px 18px !important;
+    border-radius: 8px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    border: 1px solid transparent !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    transition: all .18s ease !important;
+}
+.opd-content-wrap .btn-sm { padding: 5px 12px !important; font-size: 11.5px !important; }
+.opd-content-wrap .btn-xs { padding: 3px 9px !important; font-size: 11px !important; }
+.opd-content-wrap .btn-primary {
+    background: #1565c0 !important;
+    border-color: #1565c0 !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(21,101,192,.3) !important;
+}
+.opd-content-wrap .btn-primary:hover {
+    background: #003580 !important;
+    border-color: #003580 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(21,101,192,.4) !important;
+}
+.opd-content-wrap .btn-ghost {
+    background: transparent !important;
+    border-color: #ccd8e8 !important;
+    color: #2c4460 !important;
+}
+.opd-content-wrap .btn-ghost:hover { background: #eef3f8 !important; }
+
+.opd-content-wrap .tab-btn {
+    padding: 9px 16px !important;
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    color: #5a7894 !important;
+    border-radius: 8px 8px 0 0 !important;
+    border: 1px solid transparent !important;
+    border-bottom: none !important;
+    background: transparent !important;
+    margin-bottom: -2px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+.opd-content-wrap .tab-btn:hover { color: #1565c0 !important; background: #e3f2fd !important; }
+.opd-content-wrap .tab-btn.active {
+    color: #1565c0 !important;
+    background: #fff !important;
+    border-color: #e2ecf4 !important;
+    border-bottom-color: #fff !important;
+    font-weight: 600 !important;
+}
 </style>
 @endsection
 
@@ -778,11 +858,14 @@ window.Patient360Config = {
             updateVitalsSocial:      @json(route('hospital.opd-patient.vitals-social.update',   ['opdPatient' => '__ID__']))
         },
         ipd: {
+            careUnifiedForm:         @json(route('hospital.ipd-patient.doctor-care.unified',    ['allocation' => '__ALLOCATION__'])),
             prescriptionForm:        @json(route('hospital.ipd-patient.prescription.form',      ['allocation' => '__ALLOCATION__'])),
             prescriptionStore:       @json(route('hospital.ipd-patient.prescription.store',     ['allocation' => '__ALLOCATION__'])),
             prescriptionLoadDosages: @json(route('hospital.ipd-patient.prescription.load-dosages')),
             diagnosticShow:          @json(route('hospital.ipd-patient.diagnostics.showform',   ['allocation' => '__ALLOCATION__'])),
-            diagnosticStore:         @json(route('hospital.ipd-patient.diagnostics.store',      ['allocation' => '__ALLOCATION__']))
+            diagnosticStore:         @json(route('hospital.ipd-patient.diagnostics.store',      ['allocation' => '__ALLOCATION__'])),
+            notesStore:              @json(route('hospital.ipd-patient.notes.store',            ['allocation' => '__ALLOCATION__'])),
+            clinicalUpdate:          @json(route('hospital.ipd-patient.clinical.update',        ['allocation' => '__ALLOCATION__']))
         }
     },
     csrf: @json(csrf_token()),
