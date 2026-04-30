@@ -825,8 +825,8 @@
         <div class="input-group"><span class="input-addon">₹</span><input type="number" class="form-control" id="tok_charge" readonly/></div>
       </div>
       <div style="background:linear-gradient(135deg,var(--primary),var(--blue-mid));border-radius:12px;padding:16px;text-align:center;color:white;margin-top:8px" id="tokenPreview">
-        <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.06em">OPD Token</div>
-        <div style="font-size:36px;font-weight:900;letter-spacing:2px" id="tokenDisplayNo">---</div>
+        <!-- <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.06em">OPD Token</div>
+        <div style="font-size:36px;font-weight:900;letter-spacing:2px" id="tokenDisplayNo">---</div> -->
         <div style="font-size:12px;opacity:.85" id="tokenDisplayDept">Select Department</div>
         <div style="font-size:11px;opacity:.7;margin-top:4px" id="tokenDisplayTime">—</div>
       </div>
