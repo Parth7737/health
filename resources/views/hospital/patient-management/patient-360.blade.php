@@ -45,6 +45,25 @@
     $weightRaw = $isIpdActive ? data_get($contextRecord, 'weight') : data_get($contextRecord, 'weight');
     $weightText = filled($weightRaw) ? ((string) $weightRaw . ' kg') : '-';
     $bmiText = data_get($contextRecord, 'bmi') ?: '-';
+
+    $p360VisitStatusRaw = strtolower((string) ($isIpdActive ? data_get($activeIpdAllocation, 'status') : data_get($latestOpdVisit, 'status')));
+    if ($isIpdActive) {
+        $p360VisitStatusLabel = $p360VisitStatusRaw !== ''
+            ? ucwords(str_replace('_', ' ', $p360VisitStatusRaw))
+            : 'Admitted';
+        $p360VisitStatusBadgeClass = $p360VisitStatusRaw !== '' ? 'badge-secondary' : 'badge-success';
+    } else {
+        $p360VisitStatusLabel = $p360VisitStatusRaw !== ''
+            ? ucwords(str_replace('_', ' ', $p360VisitStatusRaw))
+            : '—';
+        $p360VisitStatusBadgeClass = match ($p360VisitStatusRaw) {
+            'completed' => 'badge-success',
+            'in_room' => 'badge-primary',
+            'waiting' => 'badge-warning',
+            'booking' => 'badge-info',
+            default => 'badge-secondary',
+        };
+    }
 @endphp
 <div class="container-fluid px-0">
     <div class="opd-content-wrap">
@@ -66,9 +85,11 @@
                     @if($isIpdActive)
                         <span class="badge badge-danger" style="font-size:11px">IPD - {{ $wardName }} Bed {{ $bedCode }}</span>
                         <span class="badge badge-primary">Admission: {{ $activeIpdAllocation->admission_no ?: '-' }}</span>
+                        <span class="badge {{ $p360VisitStatusBadgeClass }}" style="font-size:11px">Status: {{ $p360VisitStatusLabel }}</span>
                     @else
                         <span class="badge badge-primary" style="font-size:11px">OPD - Visit {{ data_get($latestOpdVisit, 'case_no') ?: '-' }}</span>
                         <span class="badge badge-warning">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? str_pad((int) data_get($latestOpdVisit, 'token_no'), 3, '0', STR_PAD_LEFT) : '-' }}</span>
+                        <span class="badge {{ $p360VisitStatusBadgeClass }}" style="font-size:11px">Status: {{ $p360VisitStatusLabel }}</span>
                     @endif
                     <button class="btn btn-ghost btn-sm" style="color:#d0e8fb;border-color:rgba(255,255,255,.15)" onclick="window.print()">Print</button>
                     <button
@@ -78,6 +99,14 @@
                         data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}"
                         data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}"
                         data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}"
+                        data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}"
+                        data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}"
+                        @if(!($canPatient360NewOrder ?? true))
+                            disabled
+                            aria-disabled="true"
+                            style="opacity:.55;cursor:not-allowed"
+                            title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}"
+                        @endif
                     >+ New Order</button>
                 </div>
             </div>
@@ -105,7 +134,6 @@
             <div class="tab-bar" style="border:none;margin:0">
                 <button class="tab-btn active" data-tab="tabTimeline" onclick="switchEMRTab('tabTimeline',this)">Timeline</button>
                 <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">Orders</button>
-                <button class="tab-btn" data-tab="tabPrescriptions" onclick="switchEMRTab('tabPrescriptions',this)">Prescriptions</button>
                 <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">Medications</button>
                 <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">Clinical Notes</button>
                 <button class="tab-btn" data-tab="tabLab" onclick="switchEMRTab('tabLab',this)">Lab Results</button>
@@ -347,76 +375,6 @@
                 </div>
             </div>
 
-            <!-- PRESCRIPTIONS -->
-            <div class="tab-pane" id="tabPrescriptions">
-                @php
-                    $displayPrescriptions = $isIpdActive ? ($ipdPrescriptions ?? collect()) : ($prescriptionVisits ?? collect());
-                    $emptyMsg = $isIpdActive ? 'No IPD prescriptions found.' : 'No OPD prescriptions found.';
-                @endphp
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">{{ $isIpdActive ? 'IPD Prescriptions' : 'OPD Prescriptions' }}</div>
-                        <button class="btn btn-primary btn-sm load-prescription-form" onclick="loadPrescriptionForm()">+ Add Prescription</button>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Reference</th>
-                                    <th>Prescribed By</th>
-                                    <th>Date</th>
-                                    <th>Valid Till</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($displayPrescriptions as $prescription)
-                                    @php
-                                        $doctorName = trim(
-                                            data_get($prescription, 'doctor.first_name', '') . ' ' . data_get($prescription, 'doctor.last_name', '')
-                                        );
-                                        $validTill = data_get($prescription, 'valid_till');
-                                        $createdAt = data_get($prescription, 'created_at');
-                                        $refText = $isIpdActive
-                                            ? 'IPD - Admission ' . (data_get($prescription, 'allocation.admission_no') ?: '-')
-                                            : 'Case ' . (data_get($prescription, 'opdPatient.case_no') ?: '-');
-                                        $printRoute = $isIpdActive
-                                            ? (Route::has('hospital.ipd-patient.prescription.print') ? route('hospital.ipd-patient.prescription.print', [
-                                                'allocation' => $prescription->bed_allocation_id,
-                                                'prescription' => $prescription->id,
-                                            ]) : null)
-                                            : (Route::has('hospital.opd-patient.prescription.print') ? route('hospital.opd-patient.prescription.print', [
-                                                'opdPatient' => $prescription->opd_patient_id,
-                                            ]) : null);
-                                    @endphp
-                                    <tr>
-                                        <td class="font-600">{{ $refText }}</td>
-                                        <td>{{ $doctorName ?: '-' }}</td>
-                                        <td>{{ $createdAt ? \Carbon\Carbon::parse($createdAt)->format('d M Y, h:i A') : '-' }}</td>
-                                        <td>{{ $validTill ? \Carbon\Carbon::parse($validTill)->format('d M Y') : '-' }}</td>
-                                        <td><span class="badge badge-success">Issued</span></td>
-                                        <td class="text-end">
-                                            @if(!empty($printRoute))
-                                                <a href="{{ $printRoute }}" target="_blank" class="btn btn-ghost btn-xs">View</a>
-                                            @else
-                                                -
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="6" class="text-center" style="padding: 2rem;">{{ $emptyMsg }}</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <!-- Prescription Form Slot -->
-                <div id="sym:prescriptionFormSlot" style="margin-top: 20px;"></div>
-            </div>
-
             <!-- MEDICATIONS -->
             <div class="tab-pane" id="tabMeds">
                 <div class="card">
@@ -437,21 +395,84 @@
                 </div>
             </div>
 
-            <!-- LAB RESULTS -->
+            <!-- LAB RESULTS — pathology: abnormal / flagged / summary only (in-range normal lines hidden) -->
             <div class="tab-pane" id="tabLab">
+                @php
+                    $labRows = $pathologyLabResultRows ?? collect();
+                    $abnormalLabCount = (int) ($pathologyAbnormalCount ?? 0);
+                    $radiologySorted = ($radiologyVisits ?? collect())->sortByDesc(function ($r) {
+                        return optional($r->reported_at ?? $r->created_at)->timestamp ?? 0;
+                    })->values();
+                @endphp
                 <div class="grid-2">
                     <div class="card">
-                        <div class="card-header"><div class="card-title">Lab Results</div><span class="badge badge-warning">2 Abnormal</span></div>
+                        <div class="card-header">
+                            <div class="card-title">Lab Results (Pathology)</div>
+                            @if($labRows->isNotEmpty() && $abnormalLabCount > 0)
+                                <span class="badge badge-warning">{{ $abnormalLabCount }} abnormal</span>
+                            @endif
+                        </div>
                         <div class="table-wrap">
                             <table>
-                                <thead><tr><th>Test</th><th>Result</th><th>Ref. Range</th><th>Status</th><th>Date</th></tr></thead>
+                                <thead><tr><th>Test</th><th>Result</th><th>Ref. Range</th><th>Status</th><th>Date</th><th></th></tr></thead>
                                 <tbody>
-                                    <tr><td>Haemoglobin</td><td class="font-600">11.8 g/dL</td><td>13-17</td><td><span class="badge badge-warning">Low</span></td><td>Today</td></tr>
-                                    <tr><td>Fasting Glucose</td><td class="font-600" style="color:#c62828">212 mg/dL</td><td>70-100</td><td><span class="badge badge-danger">High</span></td><td>Today</td></tr>
-                                    <tr><td>HbA1c</td><td class="font-600">8.4%</td><td>&lt;5.7%</td><td><span class="badge badge-danger">High</span></td><td>15 Mar</td></tr>
-                                    <tr><td>Serum Creatinine</td><td class="font-600" style="color:#2e7d32">1.1 mg/dL</td><td>0.7-1.2</td><td><span class="badge badge-success">Normal</span></td><td>Today</td></tr>
-                                    <tr><td>Total Cholesterol</td><td class="font-600">198 mg/dL</td><td>&lt;200</td><td><span class="badge badge-success">Normal</span></td><td>15 Mar</td></tr>
-                                    <tr><td>LDL Cholesterol</td><td class="font-600" style="color:#e65100">142 mg/dL</td><td>&lt;100</td><td><span class="badge badge-warning">High</span></td><td>15 Mar</td></tr>
+                                    @forelse($labRows as $labRow)
+                                        @php
+                                            $flag = $labRow['result_flag'] ?? null;
+                                            $statusLabel = match ($flag) {
+                                                'low' => 'Low',
+                                                'high' => 'High',
+                                                'critical_low' => 'Critical low',
+                                                'critical_high' => 'Critical high',
+                                                'normal' => 'Normal',
+                                                default => '—',
+                                            };
+                                            $statusBadge = match ($flag) {
+                                                'low', 'high' => 'badge-warning',
+                                                'critical_low', 'critical_high' => 'badge-danger',
+                                                'normal' => 'badge-success',
+                                                default => 'badge-secondary',
+                                            };
+                                            $resultStyle = match ($flag) {
+                                                'critical_low', 'critical_high', 'high' => 'color:#c62828',
+                                                'low' => 'color:#e65100',
+                                                'normal' => 'color:#2e7d32',
+                                                default => '',
+                                            };
+                                            $labDate = !empty($labRow['dated_at']) ? \Carbon\Carbon::parse($labRow['dated_at']) : null;
+                                            $labStatusKey = strtolower(str_replace([' ', '-'], '_', (string) ($labRow['item_status'] ?? '')));
+                                            $printUrl = ($labStatusKey === 'completed' && \Illuminate\Support\Facades\Route::has('hospital.pathology.worklist.print'))
+                                                ? route('hospital.pathology.worklist.print', ['item' => $labRow['item_id']])
+                                                : null;
+                                        @endphp
+                                        <tr>
+                                            <td>
+                                                <div class="font-600">{{ $labRow['test_label'] }}</div>
+                                                <div class="fs-11 text-muted">{{ $labRow['context_line'] }}</div>
+                                            </td>
+                                            <td class="font-600" @if($resultStyle !== '') style="{{ $resultStyle }}" @endif>{{ $labRow['result'] }}</td>
+                                            <td>{{ $labRow['ref_range'] }}</td>
+                                            <td>
+                                                @if($flag)
+                                                    <span class="badge {{ $statusBadge }}">{{ $statusLabel }}</span>
+                                                @else
+                                                    <span class="badge badge-secondary">Summary</span>
+                                                @endif
+                                            </td>
+                                            <td>{{ $labDate ? $labDate->format('d M Y') : '—' }}</td>
+                                            <td>
+                                                @if($printUrl)
+                                                    <a href="{{ $printUrl }}" target="_blank" class="btn btn-ghost btn-xs">Print</a>
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted">No abnormal pathology results to show. In-range (normal) results are hidden.</td>
+                                        </tr>
+                                    @endforelse
                                 </tbody>
                             </table>
                         </div>
@@ -459,8 +480,32 @@
                     <div class="card">
                         <div class="card-header"><div class="card-title">Radiology Reports</div></div>
                         <div class="card-body-sm">
-                            <div class="list-item"><div class="list-item-icon" style="background:#e3f2fd"></div><div class="list-item-body"><div class="li-title">Chest X-Ray PA - Today</div><div class="li-sub">Mild cardiomegaly. No consolidation. No pleural effusion.</div></div><button class="btn btn-ghost btn-xs">View</button></div>
-                            <div class="list-item" style="opacity:.6"><div class="list-item-icon" style="background:#e8f5e9"></div><div class="list-item-body"><div class="li-title">2D Echo - 10 Mar 2024</div><div class="li-sub">EF 55%. Concentric LVH. Grade I diastolic dysfunction.</div></div><button class="btn btn-ghost btn-xs">View</button></div>
+                            @forelse($radiologySorted as $radItem)
+                                @php
+                                    $radStatusKey = strtolower(str_replace([' ', '-'], '_', (string) ($radItem->status ?? 'pending')));
+                                    $radDate = $radItem->reported_at ?? $radItem->created_at;
+                                    $radDateLabel = $radDate ? \Carbon\Carbon::parse($radDate)->format('d M Y') : '—';
+                                    $radSub = $radItem->report_summary ?: strip_tags((string) ($radItem->report_text ?? ''));
+                                    $radSubShort = \Illuminate\Support\Str::limit(trim($radSub ?: '—'), 180);
+                                    $radPrint = ($radStatusKey === 'completed' && \Illuminate\Support\Facades\Route::has('hospital.radiology.worklist.print'))
+                                        ? route('hospital.radiology.worklist.print', ['item' => $radItem->id])
+                                        : null;
+                                @endphp
+                                <div class="list-item" @if($radStatusKey !== 'completed') style="opacity:.75" @endif>
+                                    <div class="list-item-icon" style="background:#e3f2fd"></div>
+                                    <div class="list-item-body">
+                                        <div class="li-title">{{ $radItem->test_name }} — {{ $radDateLabel }}</div>
+                                        <div class="li-sub">{{ $radSubShort }}</div>
+                                    </div>
+                                    @if($radPrint)
+                                        <a href="{{ $radPrint }}" target="_blank" class="btn btn-ghost btn-xs">View</a>
+                                    @else
+                                        <span class="fs-11 text-muted">{{ ucfirst(str_replace('_', ' ', $radStatusKey)) }}</span>
+                                    @endif
+                                </div>
+                            @empty
+                                <div class="fs-12 text-muted" style="padding:12px 16px">No radiology reports found for this patient.</div>
+                            @endforelse
                         </div>
                     </div>
                 </div>
