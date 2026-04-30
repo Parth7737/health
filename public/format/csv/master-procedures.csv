@@ -1,0 +1,5 @@
+scheme_type,category,name,procedure_code_1,package_code,speciality,procedure_code_2,is_multiple_procedure,icd_code,price,non_nabh_price,procedure_type,stratification_criteria,no_of_stratification,implants_high_end_consumables,more_than_one_implant,special_conditions,reservation_public_hospitals,reservation_tertiary_hospitals,level_of_care,los,auto_approved,procedure_label,special_condition_pop_up,special_conditions_rule,enhancement_applicable,medical_or_surgical,day_care_procedure
+AAYU,,"% Total Body Surface Area Burns (TBSA) - any % 
+(not requiring admission). 
+Needs at least 5-6 dressing",S1100001,BM001,Burns Management,BM001A,Yes,XXX,"7,000",,TRUST,No,0,No,No,No,No,No,Secondary,NA,No,Regular Procedure,No,No,No,Surgical,No
+SGHS,CGW,Medical Per Day Package-Neonatal ICU,CP018B,,Consultations & Procedures,CP018B,No,XXX,450,391,INSURER,No,0,No,No,No,No,No,Secondary,NA,No,Regular Procedure,No,No,No,Surgical,No
