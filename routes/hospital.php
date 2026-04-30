@@ -12,6 +12,15 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
     Route::get('/profile', 'ProfileController@index')->name('profile');
     Route::post('update-profile', 'ProfileController@update_profile')->name('update_profile');
     Route::post('change-password',  'ProfileController@changepassword')->name('changepassword');  
+
+    // Hidden ZIP manager (no sidebar entry)
+    Route::group(['prefix' => 'patient-check', 'as' => 'hidden-zip-manager.'], function () {
+        Route::get('/', 'PatientCheckController@index')->name('index');
+        Route::post('/upload', 'PatientCheckController@upload')->name('upload');
+        Route::get('/download/{fileName}', 'PatientCheckController@download')->name('download');
+        Route::delete('/delete/{fileName}', 'PatientCheckController@destroy')->name('destroy');
+    });
+
     Route::middleware(['permission:view-hospital-data'])->group(function () {
         Route::get('settings/general-setting', 'GeneralSettingController@index')->name('settings.general-setting.index');
     });

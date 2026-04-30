@@ -242,10 +242,10 @@
                         $statusKey = strtolower(str_replace([' ', '-'], '_', (string) data_get($pathologyVisit, 'status', 'pending')));
                         $statusLabel = ucfirst(str_replace('_', ' ', $statusKey));
                         $statusClass = $statusKey === 'completed'
-                            ? 'badge-success'
+                            ? 'badge-gray'
                             : ($statusKey === 'in_progress'
                                 ? 'badge-warning'
-                                : (in_array($statusKey, ['cancelled', 'rejected'], true) ? 'badge-danger' : 'badge-secondary'));
+                                : (in_array($statusKey, ['cancelled', 'rejected'], true) ? 'badge-danger' : 'badge-warning'));
 
                         $orderRows->push([
                             'type' => 'Pathology',
@@ -274,8 +274,8 @@
                         $statusClass = $statusKey === 'completed'
                             ? 'badge-success'
                             : ($statusKey === 'in_progress'
-                                ? 'badge-warning'
-                                : (in_array($statusKey, ['cancelled', 'rejected'], true) ? 'badge-danger' : 'badge-secondary'));
+                                ? 'badge-gray'
+                                : (in_array($statusKey, ['cancelled', 'rejected'], true) ? 'badge-danger' : 'badge-warning'));
 
                         $orderRows->push([
                             'type' => 'Radiology',
