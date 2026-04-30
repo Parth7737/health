@@ -939,7 +939,7 @@ window.PM_BOOT = {
   states: @json($states ?? []),
 };
 </script>
-<script src="{{ asset('public/modules/sa/patient-management.js') }}?v={{ @filemtime(public_path('public/modules/sa/patient-management.js')) }}"></script>
+<script src="{{ asset('public/modules/sa/patient-management.js') }}?v={{ time() }}"></script>
 <script src="{{ asset('public/modules/sa/patient-registration-form.js') }}"></script>
 <script src="{{ asset('public/modules/sa/patient-visit-modals.js') }}"></script>
 @include('layouts.partials.flatpickr-js')
