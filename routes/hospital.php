@@ -216,8 +216,8 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('worklist/analyzer-config', 'DiagnosticWorklistController@getAnalyzerConfig')->name('worklist.analyzer-config');
         Route::get('item/{item}/parameters', 'DiagnosticWorklistController@getItemParameters')->name('item.parameters');
         Route::post('report/create', 'DiagnosticWorklistController@createReport')->name('sample.create');
-        Route::post('report/save', 'DiagnosticWorklistController@saveReport')->name('sample.save');
-
+        Route::get('report/tests', 'DiagnosticWorklistController@searchWalkInPathologyTests')->name('sample.tests');
+        Route::post('report/save', 'DiagnosticWorklistController@saveWalkInSample')->name('sample.save');
     });
     
     // Radiology Worklist
@@ -509,6 +509,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
                 Route::resource('status', 'PathologyStatusController');
                 Route::post('load-status', 'PathologyStatusController@loaddata')->name('status-load');
                 Route::post('show-status-form', 'PathologyStatusController@showform')->name('status.showform');
+                Route::resource('sample-type', 'PathologySampleTypeController');
+                Route::post('load-sample-type', 'PathologySampleTypeController@loaddata')->name('sample-type-load');
+                Route::post('show-sample-type-form', 'PathologySampleTypeController@showform')->name('sample-type.showform');
             });
 
             // Pathology Age Group

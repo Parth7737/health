@@ -4,16 +4,23 @@ namespace App\Http\Controllers\Hospital;
 
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\BaseHospitalController;
+use App\Models\DiagnosticOrder;
 use App\Models\DiagnosticOrderItem;
 use App\Models\HeaderFooter;
 use App\Models\Notifications;
+use App\Models\Patient;
 use App\Models\PathologyStatus;
+use App\Models\PathologyTest;
 use App\Models\Staff;
+use App\Services\ChargeLedgerService;
 use App\Services\PathologyFlagService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Yajra\DataTables\Facades\DataTables;
+use App\Services\PatientTimelineService;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Yajra\DataTables\Facades\DataTables;
 
 class DiagnosticWorklistController extends BaseHospitalController
 {
@@ -79,9 +86,221 @@ class DiagnosticWorklistController extends BaseHospitalController
         return view('hospital.lab.create-report', [
             'routes' => [
                 'save' => route('hospital.pathology.sample.save'),
+                'tests' => route('hospital.pathology.sample.tests'),
             ],
             'doctors' => $doctors,
         ]);
+    }
+
+    /**
+     * Pathology tests for walk-in / direct lab registration (searchable list).
+     */
+    public function searchWalkInPathologyTests(Request $request)
+    {
+        $q = trim((string) $request->input('q', ''));
+
+        $tests = PathologyTest::query()
+            ->with('category:id,name')
+            ->when($q !== '', function ($query) use ($q) {
+                $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+                $query->where(function ($inner) use ($like) {
+                    $inner->where('test_name', 'like', $like)
+                        ->orWhere('test_code', 'like', $like);
+                });
+            })
+            ->orderBy('test_name')
+            ->limit(300)
+            ->get()
+            ->map(function (PathologyTest $test) {
+                return [
+                    'id' => (int) $test->id,
+                    'test_name' => (string) $test->test_name,
+                    'test_code' => (string) ($test->test_code ?? ''),
+                    'category_name' => (string) (optional($test->category)->name ?? ''),
+                    'sample_type' => (string) ($test->sample_type ?? ''),
+                    'standard_charge' => (float) ($test->standard_charge ?? 0),
+                ];
+            })
+            ->values();
+
+        return response()->json(['data' => $tests]);
+    }
+
+    /**
+     * Register a direct (walk-in) pathology sample: one diagnostic order on the patient
+     * (no OPD/IPD visit), same billing + item rows as doctor-ordered tests.
+     */
+    public function saveWalkInSample(Request $request, ChargeLedgerService $chargeLedger, PatientTimelineService $timelineService)
+    {
+        $validator = Validator::make($request->all(), [
+            'patient_id' => ['required', 'integer', Rule::exists('patients', 'id')->where('hospital_id', $this->hospital_id)],
+            'pathology_test_ids' => ['required', 'array', 'min:1'],
+            'pathology_test_ids.*' => ['required', 'integer'],
+            'priority' => ['required', Rule::in(['Routine', 'Urgent', 'STAT'])],
+            'clinical_notes' => ['nullable', 'string', 'max:5000'],
+            'doctor_staff_id' => ['nullable', 'integer', Rule::exists('staff', 'id')->where('hospital_id', $this->hospital_id)],
+        ]);
+
+        $validator->after(function ($validator) use ($request) {
+            $testIds = collect($request->input('pathology_test_ids', []))->map(fn ($id) => (int) $id)->unique()->values();
+            if ($testIds->isEmpty()) {
+                return;
+            }
+            $count = PathologyTest::query()->whereIn('id', $testIds)->count();
+            if ($count !== $testIds->count()) {
+                $validator->errors()->add('pathology_test_ids', 'One or more selected tests are invalid for this hospital.');
+            }
+            $missingCharge = PathologyTest::query()
+                ->whereIn('id', $testIds)
+                ->whereNull('charge_master_id')
+                ->pluck('test_name')
+                ->all();
+            if (!empty($missingCharge)) {
+                $validator->errors()->add('pathology_test_ids', 'Charge master not mapped for: ' . implode(', ', $missingCharge));
+            }
+        });
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        $patient = Patient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereKey((int) $request->patient_id)
+            ->firstOrFail();
+
+        $testIds = collect($request->pathology_test_ids)->map(fn ($id) => (int) $id)->unique()->values();
+        $tests = PathologyTest::with(['category:id,name', 'parameters.unit:id,name', 'chargeMaster.tpaRates'])
+            ->whereIn('id', $testIds)
+            ->get();
+
+        $priorityValue = (string) $request->input('priority', 'Routine');
+        $clinicalNotes = trim((string) $request->input('clinical_notes', ''));
+        $doctorStaffId = $request->filled('doctor_staff_id') ? (int) $request->doctor_staff_id : null;
+
+        $order = DB::transaction(function () use ($patient, $tests, $chargeLedger, $priorityValue, $clinicalNotes, $doctorStaffId) {
+            $order = DiagnosticOrder::create([
+                'hospital_id' => $this->hospital_id,
+                'patient_id' => $patient->id,
+                'visitable_type' => null,
+                'visitable_id' => null,
+                'order_type' => 'pathology',
+                'type' => 'manual',
+                'order_no' => $this->generateWalkInPathologyOrderNo(),
+                'ordered_by' => auth()->id(),
+                'doctor_staff_id' => $doctorStaffId,
+                'notes' => $clinicalNotes !== '' ? $clinicalNotes : null,
+                'status' => 'ordered',
+            ]);
+
+            foreach ($tests as $test) {
+                $resolvedCharge = $this->resolveWalkInTestCharge($test, null);
+
+                $item = $order->items()->create([
+                    'department' => 'pathology',
+                    'testable_type' => PathologyTest::class,
+                    'testable_id' => $test->id,
+                    'test_name' => $test->test_name,
+                    'test_code' => $test->test_code,
+                    'category_name' => optional($test->category)->name,
+                    'priority' => $priorityValue,
+                    'sample_type' => $test->sample_type,
+                    'method' => $test->method,
+                    'expected_report_days' => $test->report_days,
+                    'standard_charge' => $resolvedCharge,
+                    'status' => 'sample_collected',
+                    'sample_collected_at' => now(),
+                    'sample_collected_by' => auth()->id(),
+                ]);
+
+                $chargeLedger->upsertCharge([
+                    'hospital_id' => $this->hospital_id,
+                    'patient_id' => $patient->id,
+                    'visitable_type' => Patient::class,
+                    'visitable_id' => $patient->id,
+                    'source_type' => DiagnosticOrderItem::class,
+                    'source_id' => $item->id,
+                    'module' => 'pathology',
+                    'particular' => 'PATHOLOGY - ' . $test->test_name,
+                    'charge_master_id' => $test->charge_master_id,
+                    'charge_category' => 'pathology',
+                    'calculation_type' => 'fixed',
+                    'billing_frequency' => 'one_time',
+                    'quantity' => 1,
+                    'unit_rate' => $resolvedCharge,
+                    'net_amount' => $resolvedCharge,
+                    'payer_type' => 'self',
+                    'tpa_id' => null,
+                    'charged_at' => now(),
+                ]);
+
+                foreach ($test->parameters as $index => $parameter) {
+                    $item->parameters()->create([
+                        'parameterable_type' => get_class($parameter),
+                        'parameterable_id' => $parameter->id,
+                        'parameter_name' => $parameter->name,
+                        'unit_name' => optional($parameter->unit)->name,
+                        'normal_range' => $parameter->range,
+                        'sort_order' => $index + 1,
+                    ]);
+                }
+            }
+
+            return $order;
+        });
+
+        $timelineService->log($patient, [
+            'event_key' => 'patient.pathology_walk_in_registered',
+            'title' => 'Direct lab sample registered',
+            'description' => 'Pathology order ' . $order->order_no . ' with ' . $tests->count() . ' test(s).',
+            'meta' => [
+                'order_no' => $order->order_no,
+                'type' => 'manual',
+                'doctor_staff_id' => $doctorStaffId,
+                'priority' => $priorityValue,
+                'test_count' => $tests->count(),
+            ],
+        ]);
+
+        $firstItemId = (int) $order->items()->orderBy('id')->value('id');
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Sample registered. Order ' . $order->order_no . ' — use this as barcode / accession reference.',
+            'order_no' => $order->order_no,
+            'diagnostic_order_id' => (int) $order->id,
+            'first_item_id' => $firstItemId,
+        ]);
+    }
+
+    protected function generateWalkInPathologyOrderNo(): string
+    {
+        $prefix = 'PAT';
+        $date = now()->format('Ymd');
+        $sequence = DiagnosticOrder::withoutGlobalScopes()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('order_type', 'pathology')
+            ->whereDate('created_at', now()->toDateString())
+            ->count() + 1;
+
+        return sprintf('%s-%s-%04d', $prefix, $date, $sequence);
+    }
+
+    protected function resolveWalkInTestCharge(object $test, ?int $tpaId = null): float
+    {
+        $chargeMaster = $test->chargeMaster ?? null;
+        if (!$chargeMaster) {
+            return (float) ($test->standard_charge ?? 0);
+        }
+
+        if ($tpaId) {
+            $tpaRate = collect($chargeMaster->tpaRates ?? [])->firstWhere('tpa_id', $tpaId);
+            if ($tpaRate && isset($tpaRate->rate)) {
+                return (float) $tpaRate->rate;
+            }
+        }
+
+        return (float) $chargeMaster->standard_rate;
     }
 
     public function loadPathology(Request $request)
