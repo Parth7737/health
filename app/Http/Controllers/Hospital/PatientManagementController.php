@@ -18,6 +18,7 @@ use App\Models\IndianDistrict;
 use App\Models\IndianState;
 use App\Models\OpdPatient;
 use App\Models\IpdPrescription;
+use App\Models\IpdProgressNote;
 use App\Models\OpdPrescription;
 use App\Models\Patient;
 use App\Models\PatientCategory;
@@ -986,247 +987,6 @@ class PatientManagementController extends BaseHospitalController
         ]);
     }
 
-    public function patientDetailsoldBackup(Request $request, ChargeLedgerService $chargeLedger)
-    {
-        $mrn = $request->input('mrn');
-        $id = $request->input('id');
-
-        $patient = Patient::query()
-            ->where('hospital_id', $this->hospital_id)
-            ->when($id, fn ($q) => $q->where('id', $id))
-            ->when($mrn && !$id, fn ($q) => $q->where(function ($inner) use ($mrn) {
-                $inner->where('mrn', $mrn)
-                    ->orWhere('patient_id', $mrn);
-            }))
-            ->first();
-
-        if (!$patient) {
-            abort(404, 'Patient not found.');
-        }
-
-        $visits = OpdPatient::select(
-                'id',
-                'hospital_id',
-                'patient_id',
-                'case_no',
-                'doctor_id',
-                'hr_department_id',
-                'appointment_date',
-                'tpa_id',
-                'tpa_reference_no as reference',
-                'standard_charge',
-                'applied_charge',
-                'payment_mode',
-                'symptoms',
-                'symptoms_description as symptoms_name',
-                'height',
-                'weight',
-                'bp',
-                'pluse',
-                'temperature',
-                'respiration',
-                'systolic_bp',
-                'diastolic_bp',
-                'diabetes',
-                'bmi',
-                'slot'
-            )
-            ->where('patient_id', $patient->id)
-            ->with([
-                'consultant:id,first_name,last_name',
-                'prescription:id,opd_patient_id',
-            ])
-            ->orderByDesc('appointment_date')
-            ->orderByDesc('id')
-            ->get();
-
-        $visits->each(function (OpdPatient $visit) use ($patient, $chargeLedger) {
-            if ((float) $visit->applied_charge <= 0) {
-                return;
-            }
-
-            $chargeLedger->upsertCharge([
-                'hospital_id' => $this->hospital_id,
-                'patient_id' => $patient->id,
-                'visitable_type' => OpdPatient::class,
-                'visitable_id' => $visit->id,
-                'source_type' => OpdPatient::class,
-                'source_id' => $visit->id,
-                'module' => 'opd',
-                'particular' => 'OPD Consultation - ' . $visit->case_no,
-                'charge_code' => $visit->doctor_id ? 'OPD-CONSULT-' . $visit->doctor_id : 'OPD-DEPT-' . $visit->hr_department_id,
-                'charge_category' => 'opd_consultation',
-                'calculation_type' => 'fixed',
-                'billing_frequency' => 'one_time',
-                'quantity' => 1,
-                'unit_rate' => $visit->applied_charge,
-                'net_amount' => $visit->applied_charge,
-                'payer_type' => $visit->tpa_id ? 'tpa' : 'self',
-                'tpa_id' => $visit->tpa_id,
-                'charged_at' => $visit->appointment_date,
-            ]);
-        });
-
-        $latestIpdAllocation = BedAllocation::query()
-            ->where('hospital_id', $this->hospital_id)
-            ->where('patient_id', $patient->id)
-            ->with(['consultantDoctor:id,first_name,last_name'])
-            ->orderByDesc('admission_date')
-            ->orderByDesc('id')
-            ->first();
-
-        if ($visits->isEmpty() && $latestIpdAllocation) {
-            $ipdVisit = (object) [
-                'id' => (int) $latestIpdAllocation->id,
-                'is_ipd' => true,
-                'case_no' => $latestIpdAllocation->admission_no,
-                'appointment_date' => $latestIpdAllocation->admission_date,
-                'reference' => $latestIpdAllocation->tpa_reference_no,
-                'symptoms_name' => $latestIpdAllocation->admission_reason,
-                'slot' => 'IPD Admission',
-                'consultant' => (object) [
-                    'full_name' => trim(($latestIpdAllocation->consultantDoctor?->first_name ?: '') . ' ' . ($latestIpdAllocation->consultantDoctor?->last_name ?: '')) ?: '-',
-                ],
-                'systolic_bp' => $latestIpdAllocation->systolic_bp,
-                'diastolic_bp' => $latestIpdAllocation->diastolic_bp,
-                'pluse' => $latestIpdAllocation->pulse,
-                'temperature' => $latestIpdAllocation->temperature,
-                'respiration' => $latestIpdAllocation->respiration,
-                'diabetes' => $latestIpdAllocation->diabetes,
-                'height' => $latestIpdAllocation->height,
-                'weight' => $latestIpdAllocation->weight,
-                'bmi' => $latestIpdAllocation->bmi,
-            ];
-
-            $visits = collect([$ipdVisit]);
-        }
-
-        $prescriptionVisits = OpdPrescription::query()
-            ->where('patient_id', $patient->id)
-            ->with([
-                'opdPatient:id,case_no,appointment_date,doctor_id,tpa_reference_no',
-                'doctor:id,first_name,last_name',
-            ])
-            ->latest('id')
-            ->get();
-
-        $ipdPrescriptionVisits = IpdPrescription::query()
-            ->where('patient_id', $patient->id)
-            ->with([
-                'allocation:id,admission_no',
-                'doctor:id,first_name,last_name',
-            ])
-            ->latest('id')
-            ->get();
-
-        $diagnosticItems = DiagnosticOrderItem::query()
-            ->whereHas('order', function ($query) use ($patient) {
-                $query->where('patient_id', $patient->id);
-            })
-            ->with(['order'])
-            ->latest('id')
-            ->get();
-
-        $pathologyVisits = $diagnosticItems->where('department', 'pathology')->values();
-        $radiologyVisits = $diagnosticItems->where('department', 'radiology')->values();
-        $visitsById = $visits->keyBy('id');
-
-        $patientCharges = PatientCharge::query()
-            ->where('patient_id', $patient->id)
-            ->orderByDesc('id')
-            ->get();
-
-        $patientPayments = PatientPayment::query()
-            ->where('patient_id', $patient->id)
-            ->orderByDesc('id')
-            ->get();
-
-        $totalCharges = (float) $patientCharges->sum('amount');
-        $totalDiscount = (float) $patientCharges->sum('discount_amount');
-        $totalTax = (float) $patientCharges->sum('tax_amount');
-        $totalPaid = (float) $patientCharges->sum('paid_amount');
-        $totalDue = (float) $patientCharges->sum(function (PatientCharge $charge) {
-            return max(0, (float) $charge->amount - (float) $charge->paid_amount);
-        });
-        $totalPayments = (float) $patientPayments->sum('amount');
-        $totalAllocated = (float) PatientPaymentAllocation::query()
-            ->whereHas('charge', function ($query) use ($patient) {
-                $query->where('patient_id', $patient->id);
-            })
-            ->sum('amount');
-        $advanceCredit = max(0, $totalPayments - $totalAllocated);
-
-        $vitalsVisits = $visits->filter(function ($visit) {
-            return filled(data_get($visit, 'systolic_bp'))
-                || filled(data_get($visit, 'diastolic_bp'))
-                || filled(data_get($visit, 'respiration'))
-                || filled(data_get($visit, 'temperature'))
-                || filled(data_get($visit, 'pluse'))
-                || filled(data_get($visit, 'diabetes'))
-                || filled(data_get($visit, 'height'))
-                || filled(data_get($visit, 'weight'))
-                || filled(data_get($visit, 'bmi'));
-        })->values();
-
-        $visitContext = ($visits->first() && data_get($visits->first(), 'is_ipd')) ? 'ipd' : 'opd';
-
-        $habitOptions = Habit::query()->select('id', 'name')->orderBy('name')->get();
-        $diseaseOptions = Disease::query()->select('id', 'name')->orderBy('name')->get();
-        $allergyOptions = Allergy::query()->select('id', 'name')->orderBy('name')->get();
-        $allergyReactionOptions = AllergyReaction::query()
-            ->select('id', 'allergy_id', 'name')
-            ->with('allergy:id,name')
-            ->orderBy('name')
-            ->get();
-        $relationOptions = ['Father', 'Mother', 'Brother', 'Sister', 'Spouse', 'Son', 'Daughter', 'Other'];
-
-        $diagnosisRoutes = [
-            'loadtable' => route('hospital.opd-patient.diagnosis.load', ['patient' => '__PATIENT__']),
-            'showform' => route('hospital.opd-patient.diagnosis.showform', ['patient' => '__PATIENT__']),
-            'store' => route('hospital.opd-patient.diagnosis.store', ['patient' => '__PATIENT__']),
-            'destroy' => route('hospital.opd-patient.diagnosis.destroy', ['patient' => '__PATIENT__', 'diagnosis' => '__DIAGNOSIS__']),
-            'showPaymentForm' => route('hospital.opd-patient.charges.show-payment-form', ['patient' => '__PATIENT__']),
-            'collectPayment' => route('hospital.opd-patient.charges.collect-payment', ['patient' => '__PATIENT__']),
-            'printFinalBill' => route('hospital.opd-patient.charges.final-bill.print', ['patient' => '__PATIENT__']),
-        ];
-
-        $timelineEntries = PatientTimeline::query()
-            ->where('patient_id', $patient->id)
-            ->orderByDesc('logged_at')
-            ->orderByDesc('id')
-            ->limit(200)
-            ->get();
-
-        return view('hospital.patient-management.patient-360', [
-            'patient' => $patient,
-            'visits' => $visits,
-            'vitalsVisits' => $vitalsVisits,
-            'habitOptions' => $habitOptions,
-            'diseaseOptions' => $diseaseOptions,
-            'allergyOptions' => $allergyOptions,
-            'allergyReactionOptions' => $allergyReactionOptions,
-            'relationOptions' => $relationOptions,
-            'prescriptionVisits' => $prescriptionVisits,
-            'ipdPrescriptionVisits' => $ipdPrescriptionVisits,
-            'pathologyVisits' => $pathologyVisits,
-            'radiologyVisits' => $radiologyVisits,
-            'visitsById' => $visitsById,
-            'patientCharges' => $patientCharges,
-            'patientPayments' => $patientPayments,
-            'totalCharges' => $totalCharges,
-            'totalDiscount' => $totalDiscount,
-            'totalTax' => $totalTax,
-            'totalPaid' => $totalPaid,
-            'totalDue' => $totalDue,
-            'advanceCredit' => $advanceCredit,
-            'timelineEntries' => $timelineEntries,
-            'visitContext' => $visitContext,
-            'activeIpdAllocation' => $latestIpdAllocation,
-            'routes' => $diagnosisRoutes,
-            'pathurl' => 'diagnosis',
-        ]);
-    }
-
     public function patientDetails(Request $request, ChargeLedgerService $chargeLedger)
     {
         $mrn = $request->input('mrn');
@@ -1353,12 +1113,123 @@ class PatientManagementController extends BaseHospitalController
             ->limit(200)
             ->get();
 
+        $opdSoapNotes = OpdPatient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('patient_id', $patient->id)
+            ->where(function ($query) {
+                $query->whereNotNull('subjective_notes')
+                    ->orWhereNotNull('objective_notes')
+                    ->orWhereNotNull('assessment_notes')
+                    ->orWhereNotNull('plan_notes');
+            })
+            ->with(['consultant:id,first_name,last_name'])
+            ->orderByDesc('appointment_date')
+            ->orderByDesc('id')
+            ->get([
+                'id',
+                'case_no',
+                'appointment_date',
+                'doctor_id',
+                'subjective_notes',
+                'objective_notes',
+                'assessment_notes',
+                'plan_notes',
+                'created_at',
+                'updated_at',
+            ]);
+
+        $ipdProgressNotes = IpdProgressNote::query()
+            ->where('patient_id', $patient->id)
+            ->with([
+                'allocation:id,admission_no',
+                'creator:id,name',
+            ])
+            ->orderByDesc('noted_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $clinicalNotes = collect();
+
+        foreach ($opdSoapNotes as $opdSoapNote) {
+            $soapParts = [];
+            if (filled($opdSoapNote->subjective_notes)) {
+                $soapParts[] = 'S: ' . trim((string) $opdSoapNote->subjective_notes);
+            }
+            if (filled($opdSoapNote->objective_notes)) {
+                $soapParts[] = 'O: ' . trim((string) $opdSoapNote->objective_notes);
+            }
+            if (filled($opdSoapNote->assessment_notes)) {
+                $soapParts[] = 'A: ' . trim((string) $opdSoapNote->assessment_notes);
+            }
+            if (filled($opdSoapNote->plan_notes)) {
+                $soapParts[] = 'P: ' . trim((string) $opdSoapNote->plan_notes);
+            }
+
+            $doctorName = trim(
+                data_get($opdSoapNote, 'consultant.first_name', '') . ' ' . data_get($opdSoapNote, 'consultant.last_name', '')
+            );
+
+            $clinicalNotes->push([
+                'title' => 'OPD Progress Note',
+                'context' => 'Visit: OPD - Case ' . ($opdSoapNote->case_no ?: '-'),
+                'author' => $doctorName !== '' ? $doctorName : '-',
+                'author_role' => 'Doctor',
+                'note_type' => 'opd',
+                'note_badge' => 'badge-primary',
+                'noted_at' => $opdSoapNote->updated_at ?? $opdSoapNote->appointment_date ?? $opdSoapNote->created_at,
+                'body' => implode("\n", $soapParts),
+            ]);
+        }
+
+        foreach ($ipdProgressNotes as $ipdProgressNote) {
+            $noteType = strtolower((string) ($ipdProgressNote->note_type ?? 'progress'));
+            $typeLabel = match ($noteType) {
+                'doctor' => 'IPD Doctor Progress Note',
+                'nursing' => 'IPD Nursing Note',
+                'discharge_plan' => 'IPD Discharge Plan',
+                default => 'IPD Progress Note',
+            };
+            $authorRole = match ($noteType) {
+                'doctor' => 'Doctor',
+                'nursing' => 'Nurse',
+                default => 'Staff',
+            };
+            $noteBadge = match ($noteType) {
+                'doctor' => 'badge-danger',
+                'nursing' => 'badge-warning',
+                'discharge_plan' => 'badge-success',
+                default => 'badge-secondary',
+            };
+
+            $clinicalNotes->push([
+                'title' => $typeLabel,
+                'context' => 'IPD - Admission No: ' . (data_get($ipdProgressNote, 'allocation.admission_no') ?: '-'),
+                'author' => data_get($ipdProgressNote, 'creator.name') ?: '-',
+                'author_role' => $authorRole,
+                'note_type' => 'ipd',
+                'note_badge' => $noteBadge,
+                'noted_at' => $ipdProgressNote->noted_at ?? $ipdProgressNote->created_at,
+                'body' => trim((string) ($ipdProgressNote->note ?? '')),
+            ]);
+        }
+
+        $clinicalNotes = $clinicalNotes
+            ->sortByDesc(function ($row) {
+                return filled($row['noted_at']) ? Carbon::parse($row['noted_at'])->timestamp : 0;
+            })
+            ->values();
+
         // OPD/IPD prescriptions for Patient 360 "Orders" tab (not a separate Prescriptions tab).
         $prescriptionVisits = OpdPrescription::query()
             ->where('patient_id', $patient->id)
             ->with([
                 'opdPatient:id,case_no,appointment_date,doctor_id',
                 'doctor:id,first_name,last_name',
+                'items.medicine:id,name',
+                'items.dosage:id,dosage',
+                'items.route:id,route',
+                'items.frequency:id,frequency',
+                'items.instruction:id,instruction',
             ])
             ->latest('id')
             ->get();
@@ -1368,9 +1239,77 @@ class PatientManagementController extends BaseHospitalController
             ->with([
                 'allocation:id,admission_no',
                 'doctor:id,first_name,last_name',
+                'items.medicine:id,name',
+                'items.dosage:id,dosage',
+                'items.route:id,route',
+                'items.frequency:id,frequency',
+                'items.instruction:id,instruction',
             ])
             ->latest('id')
             ->get();
+
+        $todayDate = now()->startOfDay();
+        $medicationRows = collect();
+
+        foreach ($prescriptionVisits as $opdPrescription) {
+            $doctorName = trim(
+                data_get($opdPrescription, 'doctor.first_name', '') . ' ' . data_get($opdPrescription, 'doctor.last_name', '')
+            ) ?: '-';
+            $visitRef = 'OPD - ' . (data_get($opdPrescription, 'opdPatient.case_no') ?: '-');
+
+            foreach (($opdPrescription->items ?? collect()) as $item) {
+                $days = (int) ($item->no_of_day ?? 0);
+                $startedAt = Carbon::parse($item->created_at ?? $opdPrescription->created_at)->startOfDay();
+                $endsAt = $days > 0 ? $startedAt->copy()->addDays($days - 1) : null;
+                $isCompleted = $endsAt ? $todayDate->gt($endsAt) : false;
+
+                $medicationRows->push([
+                    'drug' => data_get($item, 'medicine.name') ?: '-',
+                    'dose' => data_get($item, 'dosage.dosage') ?: '-',
+                    'route' => data_get($item, 'route.route') ?: '-',
+                    'frequency' => data_get($item, 'frequency.frequency') ?: '-',
+                    'duration' => $days > 0 ? ($days . ' day(s)') : '-',
+                    'prescribed_by' => $doctorName,
+                    'reference' => $visitRef,
+                    'started_at' => $startedAt,
+                    'status_label' => $isCompleted ? 'Completed' : 'Ongoing',
+                    'status_class' => $isCompleted ? 'badge-gray' : 'badge-success',
+                    'sort_ts' => Carbon::parse($item->created_at ?? $opdPrescription->created_at)->timestamp,
+                ]);
+            }
+        }
+
+        foreach ($ipdPrescriptionVisits as $ipdPrescription) {
+            $doctorName = trim(
+                data_get($ipdPrescription, 'doctor.first_name', '') . ' ' . data_get($ipdPrescription, 'doctor.last_name', '')
+            ) ?: '-';
+            $visitRef = 'IPD - ' . (data_get($ipdPrescription, 'allocation.admission_no') ?: '-');
+
+            foreach (($ipdPrescription->items ?? collect()) as $item) {
+                $days = (int) ($item->no_of_day ?? 0);
+                $startedAt = Carbon::parse($item->created_at ?? $ipdPrescription->created_at)->startOfDay();
+                $endsAt = $days > 0 ? $startedAt->copy()->addDays($days - 1) : null;
+                $isCompleted = $endsAt ? $todayDate->gt($endsAt) : false;
+
+                $medicationRows->push([
+                    'drug' => data_get($item, 'medicine.name') ?: '-',
+                    'dose' => data_get($item, 'dosage.dosage') ?: '-',
+                    'route' => data_get($item, 'route.route') ?: '-',
+                    'frequency' => data_get($item, 'frequency.frequency') ?: '-',
+                    'duration' => $days > 0 ? ($days . ' day(s)') : '-',
+                    'prescribed_by' => $doctorName,
+                    'reference' => $visitRef,
+                    'started_at' => $startedAt,
+                    'status_label' => $isCompleted ? 'Completed' : 'Ongoing',
+                    'status_class' => $isCompleted ? 'badge-gray' : 'badge-success',
+                    'sort_ts' => Carbon::parse($item->created_at ?? $ipdPrescription->created_at)->timestamp,
+                ]);
+            }
+        }
+
+        $medicationRows = $medicationRows
+            ->sortByDesc('sort_ts')
+            ->values();
 
         $diagnosticItems = DiagnosticOrderItem::query()
             ->whereHas('order', function ($query) use ($patient) {
@@ -1512,8 +1451,10 @@ class PatientManagementController extends BaseHospitalController
             'visits' => $visits,
             'visitContext' => $visitContext,
             'timelineEntries' => $timelineEntries,
+            'clinicalNotes' => $clinicalNotes,
             'prescriptionVisits' => $prescriptionVisits,
             'ipdPrescriptionVisits' => $ipdPrescriptionVisits,
+            'medicationRows' => $medicationRows,
             'pathologyVisits' => $pathologyVisits,
             'pathologyLabResultRows' => $pathologyLabResultRows,
             'pathologyAbnormalCount' => $pathologyAbnormalCount,

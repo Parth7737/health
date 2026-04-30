@@ -766,21 +766,33 @@ class IpdPatientController extends BaseHospitalController
             'family_history' => $familyHistoryValues->implode(', '),
         ]);
 
-        $timelineService->logForIpdAdmission($allocation, [
-            'event_key' => 'ipd.clinical_snapshot.updated',
-            'title' => 'Clinical Snapshot Updated',
-            'description' => 'Vitals and family history details were updated.',
-            'meta' => [
-                'height' => $allocation->height,
-                'weight' => $allocation->weight,
-                'bp' => $allocation->bp,
-                'pulse' => $allocation->pulse,
-            ],
-        ]);
+        // $timelineService->logForIpdAdmission($allocation, [
+        //     'event_key' => 'ipd.clinical_snapshot.updated',
+        //     'title' => 'Clinical Snapshot Updated',
+        //     'description' => 'Vitals and family history details were updated.',
+        //     'meta' => [
+        //         'height' => $allocation->height,
+        //         'weight' => $allocation->weight,
+        //         'bp' => $allocation->bp,
+        //         'pulse' => $allocation->pulse,
+        //     ],
+        // ]);
 
         return response()->json([
             'status' => true,
             'message' => 'Clinical snapshot updated successfully.',
+        ]);
+    }
+
+    public function doctorCareUnified(BedAllocation $allocation)
+    {
+        $allocation = $this->findAllocation($allocation->id);
+
+        return view('hospital.ipd-patient.doctor-care.unified', [
+            'allocation' => $allocation,
+            'patient' => $allocation->patient,
+            'canPathology' => auth()->user()->can('create-pathology-order'),
+            'canRadiology' => auth()->user()->can('create-radiology-order'),
         ]);
     }
 

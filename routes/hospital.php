@@ -159,6 +159,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::post('{allocation}/charges/store', 'IpdPatientController@storeAdditionalCharge')
             ->middleware('permission:edit-ipd-patient')
             ->name('charges.store');
+        Route::get('{allocation}/doctor-care/unified', 'IpdPatientController@doctorCareUnified')
+            ->middleware('permission:edit-ipd-patient')
+            ->name('doctor-care.unified');
         Route::get('{allocation}/prescription/form', 'IpdPrescriptionController@form')
             ->middleware('permission:edit-ipd-patient')
             ->name('prescription.form');
