@@ -50,6 +50,15 @@
         var openBtn = doc.getElementById('patient360NewOrderBtn');
         if (openBtn) {
             openBtn.addEventListener('click', function () {
+                if (this.disabled || this.getAttribute('data-can-new-order') === '0') {
+                    var reason = this.getAttribute('data-block-reason') || 'New orders are not allowed for this patient in the current visit state.';
+                    if (win.notify && typeof win.notify === 'function') {
+                        win.notify('New order', reason, 'info');
+                    } else if (win.alert) {
+                        win.alert(reason);
+                    }
+                    return;
+                }
                 state.mode         = this.dataset.mode || 'opd';
                 state.opdPatientId = this.dataset.opdId || '';
                 state.allocationId = this.dataset.allocationId || '';

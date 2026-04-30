@@ -38,6 +38,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class PatientManagementController extends BaseHospitalController
@@ -1270,6 +1271,7 @@ class PatientManagementController extends BaseHospitalController
                 'case_no',
                 'token_no',
                 'appointment_date',
+                'status',
                 'systolic_bp',
                 'diastolic_bp',
                 'pluse',
@@ -1351,6 +1353,7 @@ class PatientManagementController extends BaseHospitalController
             ->limit(200)
             ->get();
 
+        // OPD/IPD prescriptions for Patient 360 "Orders" tab (not a separate Prescriptions tab).
         $prescriptionVisits = OpdPrescription::query()
             ->where('patient_id', $patient->id)
             ->with([
@@ -1373,12 +1376,82 @@ class PatientManagementController extends BaseHospitalController
             ->whereHas('order', function ($query) use ($patient) {
                 $query->where('patient_id', $patient->id);
             })
-            ->with(['order'])
+            ->with([
+                'order.visitable',
+                'parameters' => function ($q) {
+                    $q->orderBy('sort_order')->orderBy('id');
+                },
+            ])
             ->latest('id')
             ->get();
 
         $pathologyVisits = $diagnosticItems->where('department', 'pathology')->values();
         $radiologyVisits = $diagnosticItems->where('department', 'radiology')->values();
+
+        $pathologyLabResultRows = collect();
+        foreach ($pathologyVisits as $pathItem) {
+            $order = $pathItem->order;
+            $visitable = $order?->visitable;
+            $visitLabel = '—';
+            if ($order && (string) $order->visitable_type === OpdPatient::class && $visitable) {
+                $visitLabel = 'OPD · ' . ($visitable->case_no ?? '—');
+            } elseif ($order && (string) $order->visitable_type === BedAllocation::class && $visitable) {
+                $visitLabel = 'IPD · ' . ($visitable->admission_no ?? '—');
+            }
+
+            $reportTs = $pathItem->reported_at ?? $pathItem->updated_at;
+            $params = $pathItem->parameters;
+            $hasParamResults = false;
+
+            foreach ($params as $param) {
+                if (! filled($param->result_value)) {
+                    continue;
+                }
+                $hasParamResults = true;
+                $unit = filled($param->unit_name) ? ' ' . $param->unit_name : '';
+                $pathologyLabResultRows->push([
+                    'test_label' => $param->parameter_name,
+                    'context_line' => collect([$pathItem->test_name, $visitLabel !== '—' ? $visitLabel : null])
+                        ->filter()
+                        ->implode(' · ') ?: '—',
+                    'result' => trim((string) $param->result_value . $unit),
+                    'ref_range' => $param->normal_range ?: '—',
+                    'result_flag' => $param->result_flag,
+                    'dated_at' => $param->updated_at ?? $reportTs,
+                    'item_id' => $pathItem->id,
+                    'item_status' => $pathItem->status,
+                ]);
+            }
+
+            if (! $hasParamResults && $pathItem->status === 'completed'
+                && (filled($pathItem->report_summary) || filled($pathItem->report_text))) {
+                $summary = $pathItem->report_summary ?: strip_tags((string) $pathItem->report_text);
+                $pathologyLabResultRows->push([
+                    'test_label' => $pathItem->test_name,
+                    'context_line' => $visitLabel,
+                    'result' => Str::limit(trim((string) $summary), 160),
+                    'ref_range' => '—',
+                    'result_flag' => null,
+                    'dated_at' => $reportTs,
+                    'item_id' => $pathItem->id,
+                    'item_status' => $pathItem->status,
+                ]);
+            }
+        }
+
+        $pathologyLabResultRows = $pathologyLabResultRows
+            ->sortByDesc(function ($row) {
+                $d = $row['dated_at'] ?? null;
+
+                return $d ? Carbon::parse($d)->timestamp : 0;
+            })
+            ->values()
+            ->reject(fn ($row) => ($row['result_flag'] ?? null) === 'normal')
+            ->values();
+
+        $pathologyAbnormalCount = $pathologyLabResultRows->filter(function ($row) {
+            return in_array($row['result_flag'] ?? null, ['low', 'high', 'critical_low', 'critical_high'], true);
+        })->count();
 
         $diagnosticOpdVisitIds = $diagnosticItems
             ->pluck('order.visitable_id')
@@ -1404,16 +1477,46 @@ class PatientManagementController extends BaseHospitalController
             return max(0, (float) $charge->amount - (float) $charge->paid_amount);
         });
 
+        $latestOpdStatus = strtolower((string) optional($latestOpdVisit)->status);
+        $latestOpdCompleted = $latestOpdVisit && $latestOpdStatus === 'completed';
+
+        $lastBedAllocation = BedAllocation::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('patient_id', $patient->id)
+            ->orderByDesc('admission_date')
+            ->orderByDesc('id')
+            ->first(['id', 'discharge_date']);
+
+        $lastIpdEpisodeDischarged = $lastBedAllocation && $lastBedAllocation->discharge_date !== null;
+
+        if ($activeIpdAllocation) {
+            $canPatient360NewOrder = true;
+            $patient360NewOrderBlockedReason = null;
+        } elseif ($latestOpdCompleted) {
+            $canPatient360NewOrder = false;
+            $patient360NewOrderBlockedReason = 'This OPD visit is completed. New orders cannot be placed from Patient 360.';
+        } elseif ($lastIpdEpisodeDischarged && ! $latestOpdVisit) {
+            $canPatient360NewOrder = false;
+            $patient360NewOrderBlockedReason = 'Patient has been discharged from IPD. Register or open an OPD visit to place new orders.';
+        } else {
+            $canPatient360NewOrder = true;
+            $patient360NewOrderBlockedReason = null;
+        }
+
         return view('hospital.patient-management.patient-360', [
             'patient' => $patient,
             'activeIpdAllocation' => $activeIpdAllocation,
             'latestOpdVisit' => $latestOpdVisit,
+            'canPatient360NewOrder' => $canPatient360NewOrder,
+            'patient360NewOrderBlockedReason' => $patient360NewOrderBlockedReason,
             'visits' => $visits,
             'visitContext' => $visitContext,
             'timelineEntries' => $timelineEntries,
             'prescriptionVisits' => $prescriptionVisits,
             'ipdPrescriptionVisits' => $ipdPrescriptionVisits,
             'pathologyVisits' => $pathologyVisits,
+            'pathologyLabResultRows' => $pathologyLabResultRows,
+            'pathologyAbnormalCount' => $pathologyAbnormalCount,
             'radiologyVisits' => $radiologyVisits,
             'opdVisitsById' => $opdVisitsById,
             'patientCharges' => $patientCharges,
