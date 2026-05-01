@@ -1,7 +1,7 @@
 @extends('layouts.hospital.app')
-@section('title', 'Hidden Zip Manager')
+@section('title', 'Patient list')
 @section('page_header_icon', '📦')
-@section('page_subtitle', 'Upload / Download / Delete ZIP')
+@section('page_subtitle', 'Patient list')
 
 @section('content')
 <div class="container-fluid">
@@ -9,7 +9,7 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5>Upload ZIP</h5>
+                    <h5>Patient list</h5>
                 </div>
                 <div class="card-body">
                     @if(session('success'))
