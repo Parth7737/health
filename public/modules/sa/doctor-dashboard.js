@@ -94,13 +94,41 @@
     return `${minutes} min`;
   }
 
-  function buildCareDataAttributes(row) {
-    return `data-opd-id="${row.id}" data-patient-id="${row.patient_id || ''}" data-doctor-id="${row.doctor_id || ''}" data-doctor="${escapeHtml(row.doctor || '')}" data-dept="${escapeHtml(row.dept || '')}" data-token="${escapeHtml(row.token || '')}" data-name="${escapeHtml(row.name || '')}" data-case="${escapeHtml(row.case_no || '')}"`;
+  function formatQueueAgeCompact(ageGender) {
+    const raw = String(ageGender ?? '').trim() || '-';
+    return `<span class="queue-age-ref" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`;
   }
 
-  function buildVisitHistoryUrl(row) {
-    const visitId = (row && row.id) ? String(row.id) : '1';
-    return `/hospital/opd-patient/visits/${encodeURIComponent(visitId)}`;
+  function buildQueuePatientInner(row) {
+    const name = escapeHtml(row.name || '-');
+    const pid = row.patient_id;
+    const caseNo = row.case_no ? escapeHtml(row.case_no) : '';
+    const sub = caseNo ? `<div class="queue-patient-mrn-ref">${caseNo}</div>` : '';
+    let nameHtml;
+    if (pid && ROUTES.patientDetails) {
+      const href = `${ROUTES.patientDetails}?id=${encodeURIComponent(String(pid))}`;
+      nameHtml = `<a class="queue-patient-name-ref queue-patient-360-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="Patient 360">${name}</a>`;
+    } else {
+      nameHtml = `<span class="queue-patient-name-ref">${name}</span>`;
+    }
+    return `<div class="queue-patient-ref">${nameHtml}</div>`;
+  }
+
+  function buildPatient360ActionButton(row) {
+    const pid = row.patient_id;
+    if (!pid || !ROUTES.patientDetails) {
+      return '<span class="btn btn-secondary btn-xs queue-btn-emr queue-btn-p360" style="opacity:.45;cursor:not-allowed;pointer-events:none" title="Patient ID unavailable">360</span>';
+    }
+    const href = `${ROUTES.patientDetails}?id=${encodeURIComponent(String(pid))}`;
+    return `<a class="btn btn-secondary btn-xs queue-btn-emr queue-btn-p360" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="Patient 360">360</a>`;
+  }
+
+  function queueWaitingTokenBadgeClass(row) {
+    return getPriorityMeta(row).cls === 'urgent' ? 'badge-red' : 'badge-blue';
+  }
+
+  function buildCareDataAttributes(row) {
+    return `data-opd-id="${row.id}" data-patient-id="${row.patient_id || ''}" data-doctor-id="${row.doctor_id || ''}" data-doctor="${escapeHtml(row.doctor || '')}" data-dept="${escapeHtml(row.dept || '')}" data-token="${escapeHtml(row.token || '')}" data-name="${escapeHtml(row.name || '')}" data-case="${escapeHtml(row.case_no || '')}"`;
   }
 
   function createFlowChart() {
@@ -374,7 +402,7 @@
         const composer = getPrescriptionComposer();
         if (composer) {
           composer.initialize();
-          if (state.activeSection === 'prescription' || state.activeSection === 'unified') {
+          if (state.activeSection === 'prescription') {
             composer.focusStart();
           }
         }
@@ -827,16 +855,6 @@
               entryGrid.classList.add('doctor-care-entry-flash');
             }
 
-            const medicineField = document.getElementById('prescription_entry_medicine');
-            if (medicineField) {
-              medicineField.focus();
-              if (window.jQuery) {
-                const $el = jQuery(medicineField);
-                if ($el.hasClass('select2-hidden-accessible')) {
-                  $el.select2('open');
-                }
-              }
-            }
           });
         }
 
@@ -848,18 +866,57 @@
       }
     }
 
+    async function markOpdVisitCompleted(opdPatientId) {
+      if (!ROUTES.updateStatus) {
+        throw new Error('Update status route is not configured.');
+      }
+
+      const url = routeWithId(ROUTES.updateStatus, opdPatientId);
+      const headers = {
+        'X-CSRF-TOKEN': CSRF,
+        'X-Requested-With': 'XMLHttpRequest',
+        Accept: 'application/json'
+      };
+      const body = new URLSearchParams();
+      body.append('_token', CSRF);
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body
+        });
+        const data = await response.json();
+        if (!response.ok || data.status === false) {
+          throw new Error(data.message || 'Unable to update visit status.');
+        }
+        if (data.current_status === 'completed') {
+          return;
+        }
+      }
+
+      throw new Error('Unable to mark visit as completed.');
+    }
+
     async function submitUnifiedSaveAll(isFinal) {
       const saveBtn = document.getElementById('doctorCareSaveAllBtn');
-      const originalLabel = saveBtn ? saveBtn.textContent : '';
+      const draftBtn = document.getElementById('doctorCareSaveDraftBtn');
+      const originalSaveLabel = saveBtn ? saveBtn.textContent : '';
+      const originalDraftLabel = draftBtn ? draftBtn.textContent : '';
 
       debugUnifiedSave('submitUnifiedSaveAll invoked', {
         opdPatientId: state.opdPatientId,
         activeSection: state.activeSection
       });
 
-      if (saveBtn) {
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
+      if (isFinal) {
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+        }
+      } else if (draftBtn) {
+        draftBtn.disabled = true;
+        draftBtn.textContent = 'Saving...';
       }
 
       showLoader();
@@ -1022,12 +1079,18 @@
           }
         }
 
+        if (isFinal) {
+          await markOpdVisitCompleted(state.opdPatientId);
+        }
+
         hideLoader();
-        notify('success', 'Clinical workspace saved successfully.');
+        notify('success', isFinal ? 'Visit completed.' : 'Draft saved.');
 
         if (isFinal) {
+          const printUrl = routeWithId(ROUTES.visitSummaryPrint, state.opdPatientId);
+          window.open(printUrl, '_blank', 'noopener');
           close();
-          window.location.reload();
+          await QueueDesk.fetchAndRender();
           return;
         }
 
@@ -1039,7 +1102,11 @@
       } finally {
         if (saveBtn) {
           saveBtn.disabled = false;
-          saveBtn.textContent = originalLabel || 'Save All';
+          saveBtn.textContent = originalSaveLabel || 'Complete & Print';
+        }
+        if (draftBtn) {
+          draftBtn.disabled = false;
+          draftBtn.textContent = originalDraftLabel || 'Save Draft';
         }
       }
     }
@@ -1496,19 +1563,15 @@
           ${completedPreview.map((q) => {
             return `
               <tr>
-                <td><span class="badge badge-green">${escapeHtml(q.token)}</span></td>
-                <td>
-                  <div style="font-weight:700">${escapeHtml(q.name)}</div>
-                  <div style="font-size:11px;color:#7a8ea5">${escapeHtml(q.case_no || '-')}</div>
-                </td>
-                <td>${escapeHtml(q.age_gender || '-')}</td>
-                <td>${escapeHtml(q.complaint || 'General consultation')}</td>
-                <td style="color:#2e7d32">Completed ${escapeHtml(q.completed_at || '-')}</td>
-                <td>
-                  <div style="display:flex;gap:4px;justify-content:flex-end">
-                    <button class="btn btn-primary btn-xs open-care-section" data-section="summary" ${buildCareDataAttributes(q)}>🩺 See</button>
-                    <a class="btn btn-secondary btn-xs" href="${buildVisitHistoryUrl(q)}" title="Patient History">📋</a>
-                    <span class="badge badge-green">Done</span>
+                <td class="queue-td-token"><span class="badge badge-green queue-token-badge">${escapeHtml(q.token)}</span></td>
+                <td class="queue-td-patient">${buildQueuePatientInner(q)}</td>
+                <td class="queue-td-age">${formatQueueAgeCompact(q.age_gender)}</td>
+                <td class="queue-td-complaint"><span class="queue-complaint-ref">${escapeHtml(q.complaint || 'General consultation')}</span></td>
+                <td class="queue-td-wait"><span class="queue-wait-ref" style="color:#2e7d32">Completed ${escapeHtml(q.completed_at || '-')}</span></td>
+                <td class="queue-td-action">
+                  <div class="queue-action-ref">
+                    <button type="button" class="btn btn-primary btn-xs queue-btn-see-icon open-care-section" data-section="summary" title="See consultation" aria-label="See consultation" ${buildCareDataAttributes(q)}>🩺</button>
+                    ${buildPatient360ActionButton(q)}
                   </div>
                 </td>
               </tr>
@@ -1528,17 +1591,16 @@
       }
 
       const currentRow = myCurrent ? `
-        <tr style="background:#e8f5e9">
-          <td><span class="badge badge-green">IN-${escapeHtml(myCurrent.token)}</span></td>
-          <td><div style="font-weight:700">${escapeHtml(myCurrent.name)}</div></td>
-          <td>${escapeHtml(myCurrent.age_gender || '-')}</td>
-          <td>${escapeHtml(myCurrent.complaint || 'General consultation')}</td>
-          <td>In Room</td>
-          <td>
-            <div style="display:flex;gap:4px;justify-content:flex-end">
-              <button class="btn btn-primary btn-xs open-care-section" data-section="summary" ${buildCareDataAttributes(myCurrent)}>🩺 See</button>
-              <a class="btn btn-secondary btn-xs" href="${buildVisitHistoryUrl(myCurrent)}" title="Patient History">📋</a>
-              <button class="btn btn-success btn-xs queue-call-next-btn" data-doctor-id="${myDoctorId || ''}">Complete</button>
+        <tr class="queue-row-active" style="background:#e8f5e9">
+          <td class="queue-td-token"><span class="badge badge-green queue-token-badge">IN-${escapeHtml(myCurrent.token)}</span></td>
+          <td class="queue-td-patient">${buildQueuePatientInner(myCurrent)}</td>
+          <td class="queue-td-age">${formatQueueAgeCompact(myCurrent.age_gender)}</td>
+          <td class="queue-td-complaint"><span class="queue-complaint-ref">${escapeHtml(myCurrent.complaint || 'General consultation')}</span></td>
+          <td class="queue-td-wait"><span class="queue-wait-ref">In Room</span></td>
+          <td class="queue-td-action">
+            <div class="queue-action-ref">
+              <button type="button" class="btn btn-primary btn-xs queue-btn-see-icon open-care-section" data-section="summary" title="See consultation" aria-label="See consultation" ${buildCareDataAttributes(myCurrent)}>🩺</button>
+              <button type="button" class="btn btn-success btn-xs queue-call-next-btn queue-btn-icon" data-doctor-id="${myDoctorId || ''}" title="Complete visit and call next" aria-label="Complete visit and call next"><i class="fa-solid fa-check"></i></button>
             </div>
           </td>
         </tr>
@@ -1555,22 +1617,19 @@
                 const showAbsentControls = qst === 'waiting';
                 return `
                   <tr class="${q.absent && showAbsentControls ? 'table-secondary opacity-75' : ''}">
-                    <td><span class="badge badge-blue">${escapeHtml(q.token)}</span></td>
-                    <td>
-                      <div style="font-weight:700">${escapeHtml(q.name)}</div>
-                      <div style="font-size:11px;color:#7a8ea5">${escapeHtml(q.case_no || '-')}</div>
-                    </td>
-                    <td>${escapeHtml(q.age_gender || '-')}</td>
-                    <td>${escapeHtml(q.complaint || 'General consultation')}</td>
-                    <td style="color:${priority.cls === 'urgent' ? 'var(--danger)' : '#6f839a'}">${escapeHtml(waitText)}</td>
-                    <td>
-                      <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
+                    <td class="queue-td-token"><span class="badge ${queueWaitingTokenBadgeClass(q)} queue-token-badge">${escapeHtml(q.token)}</span></td>
+                    <td class="queue-td-patient">${buildQueuePatientInner(q)}</td>
+                    <td class="queue-td-age">${formatQueueAgeCompact(q.age_gender)}</td>
+                    <td class="queue-td-complaint"><span class="queue-complaint-ref">${escapeHtml(q.complaint || 'General consultation')}</span></td>
+                    <td class="queue-td-wait"><span class="queue-wait-ref" style="color:${priority.cls === 'urgent' ? 'var(--danger)' : 'var(--text-muted)'}">${escapeHtml(waitText)}</span></td>
+                    <td class="queue-td-action">
+                      <div class="queue-action-ref">
                         ${canCall
-                          ? `<button class="btn btn-secondary btn-xs queue-call-next-btn" data-doctor-id="${q.doctor_id || ''}">Call</button>`
-                          : `<span class="badge badge-orange">Waiting</span>`}
+                          ? `<button type="button" class="btn btn-primary btn-xs queue-call-next-btn queue-btn-call-compact" data-doctor-id="${q.doctor_id || ''}">📣 Call</button>`
+                          : ``}
                         ${showAbsentControls ? (q.absent
-                          ? `<button type="button" class="btn btn-outline-success btn-xs py-0 px-2 queue-undo-skip-btn" data-id="${q.id}" title="Mark present"><i class="fa-solid fa-user-check"></i></button>`
-                          : `<button type="button" class="btn btn-outline-danger btn-xs py-0 px-2 queue-skip-btn" data-id="${q.id}" title="Not present"><i class="fa-solid fa-user-slash"></i></button>`) : ''}
+                          ? `<button type="button" class="btn btn-secondary btn-xs queue-undo-skip-btn queue-btn-emr" data-id="${q.id}" title="Mark present"><i class="fa-solid fa-user-check" aria-hidden="true"></i></button>`
+                          : `<button type="button" class="btn btn-secondary btn-xs queue-skip-btn queue-btn-emr" data-id="${q.id}" title="Not present"><i class="fa-solid fa-user-slash" aria-hidden="true"></i></button>`) : ''}
                       </div>
                     </td>
                   </tr>
@@ -1733,7 +1792,7 @@
 
   // Initialize on page load
   QueueDesk.fetchAndRender();
-  setInterval(() => QueueDesk.fetchAndRender(), 6000);
+  // setInterval(() => QueueDesk.fetchAndRender(), 6000);
 
   // Export public API to window
   window.DoctorDashboardApp = {

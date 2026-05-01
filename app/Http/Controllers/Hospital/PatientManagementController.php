@@ -2049,7 +2049,6 @@ class PatientManagementController extends BaseHospitalController
                     $appointmentDate = Carbon::createFromFormat('Y-m-d H:i', "$apptDate $apptTime");
 
                     $caseNo = $this->generateDailyCaseNo($appointmentDate);
-                    $bookingNo = $this->generateDailyBookingNumber($appointmentDate);
                     $tokenNo = $this->shouldIssueOpdTokenAtReception(
                         $appointmentDate,
                         $request->slot,
@@ -2057,6 +2056,7 @@ class PatientManagementController extends BaseHospitalController
                     )
                         ? $this->generateSlotWiseTokenNo($appointmentDate, $request->slot)
                         : null;
+                    $bookingNo = $tokenNo ? null : $this->generateDailyBookingNumber($appointmentDate);
 
                     $opdPatient = OpdPatient::create([
                         'hospital_id'    => $this->hospital_id,
@@ -2322,7 +2322,6 @@ class PatientManagementController extends BaseHospitalController
                     : 'OPD';
 
                 $caseNo  = $this->generateDailyCaseNo($appointmentDate);
-                $bookingNumber = $this->generateDailyBookingNumber($appointmentDate);
                 $tokenNo = $this->shouldIssueOpdTokenAtReception(
                     $appointmentDate,
                     $request->slot,
@@ -2330,6 +2329,7 @@ class PatientManagementController extends BaseHospitalController
                 )
                     ? $this->generateSlotWiseTokenNo($appointmentDate, $request->slot)
                     : null;
+                $bookingNumber = $tokenNo ? null : $this->generateDailyBookingNumber($appointmentDate);
 
                 $opdPatient = OpdPatient::create([
                     'hospital_id'       => $this->hospital_id,
@@ -2387,7 +2387,7 @@ class PatientManagementController extends BaseHospitalController
                     'event_key'   => 'opd.visit.created',
                     'title'       => 'OPD Booking Created',
                     'description' => $tokenNo
-                        ? "Booking {$bookingNumber} - Case {$caseNo} - Token " . OpdTokenNoService::formatForDisplay($tokenNo)
+                        ? "Case {$caseNo} - Token " . OpdTokenNoService::formatForDisplay($tokenNo)
                         : "Booking {$bookingNumber} - Case {$caseNo}",
                     'meta'        => [
                         'case_no' => $caseNo,
@@ -2775,12 +2775,12 @@ class PatientManagementController extends BaseHospitalController
     }
 
     /**
-     * Daily booking number: BK{hospital_id:04}{Ymd}{seq:05}
-     * Used instead of token at registration; token assigned at check-in
+     * Daily booking number: BK-YYYYMMDD-00001 (readable, no hospital id).
+     * Used instead of token at registration; token assigned at check-in.
      */
     private function generateDailyBookingNumber(Carbon $date): string
     {
-        $prefix = 'BK' . str_pad((string) $this->hospital_id, 4, '0', STR_PAD_LEFT) . $date->format('Ymd');
+        $prefix = 'BK-' . $date->format('Ymd') . '-';
 
         $last = OpdPatient::query()
             ->lockForUpdate()
@@ -2791,11 +2791,17 @@ class PatientManagementController extends BaseHospitalController
             ->value('booking_number');
 
         $next = 1;
-        if ($last && str_starts_with($last, $prefix)) {
-            $next = ((int) substr($last, -5)) + 1;
+        if ($last && preg_match('/^BK-\d{8}-(\d{5})$/', (string) $last, $m)) {
+            $next = ((int) $m[1]) + 1;
         }
 
-        return $prefix . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+        do {
+            $bookingNo = $prefix . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+            $next++;
+            // booking_number has unique index, so ensure global uniqueness.
+        } while (OpdPatient::query()->where('booking_number', $bookingNo)->exists());
+
+        return $bookingNo;
     }
 
     /**

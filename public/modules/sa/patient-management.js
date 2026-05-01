@@ -594,7 +594,7 @@ async function loadOPDCards(page = pmState.opd.page) {
             <span class="badge badge-${patient.token_no ? 'blue' : 'gray'}">${chipDisplay}</span>
             <span class="badge badge-${statusBadge}">${statusLabel}</span>
           </div>
-          <div class="fw-700 fs-13">${escapeHtml(patient.patient || '-')}${patient.token_no && patient.booking_number ? ` <span class="fs-11 text-muted fw-400">(${escapeHtml(patient.booking_number)})</span>` : ''}</div>
+          <div class="fw-700 fs-13">${escapeHtml(patient.patient || '-')}</div>
           <div class="fs-11 text-muted">${escapeHtml(patient.age_sex || '-')} | ${escapeHtml(patient.dept || '-')}</div>
           <div class="fs-11 text-muted mt-2">🏥 ${escapeHtml(patient.visit_type || '-')}</div>
           <div class="fs-11 text-muted mt-2">👨‍⚕️ ${escapeHtml(patient.doctor || '-')}</div>
@@ -639,7 +639,7 @@ async function loadBookingAppointments(page = pmState.booking.page) {
             <span class="badge badge-${patient.token_no ? 'blue' : 'gray'}">${chipDisplay}</span>
             <span class="badge badge-${statusBadge}">${statusLabel}</span>
           </div>
-          <div class="fw-700 fs-13">${escapeHtml(patient.patient || '-')}${patient.token_no && patient.booking_number ? ` <span class="fs-11 text-muted fw-400">(${escapeHtml(patient.booking_number)})</span>` : ''}</div>
+          <div class="fw-700 fs-13">${escapeHtml(patient.patient || '-')}</div>
           <div class="fs-11 text-muted">${escapeHtml(patient.age_sex || '-')} | ${escapeHtml(patient.dept || '-')}</div>
           <div class="fs-11 text-muted mt-2">🏥 ${escapeHtml(patient.visit_type || '-')}</div>
           <div class="fs-11 text-muted mt-2">👨‍⚕️ ${escapeHtml(patient.doctor || '-')}</div>

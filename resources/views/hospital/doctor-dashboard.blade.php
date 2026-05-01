@@ -148,7 +148,7 @@
     </div>
   </div>
 
-  <div class="dash-grid cols-2 mb-4" style="grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+  <div class="dash-grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
     <div class="card">
       <div class="card-header">
         <div>
@@ -158,12 +158,12 @@
         <div class="card-actions">
           <span class="badge badge-orange" id="queueCount">{{ $stats['waiting_count'] ?? 0 }} Waiting</span>
           <button class="btn btn-primary btn-xs queue-call-next-btn" type="button">📣 Call Next</button>
-          <button class="btn btn-success btn-xs" type="button" id="queueViewCompletedBtn">Completed OPD (<span id="queueCompletedCount">0</span>)</button>
+          <button class="btn btn-success btn-xs" type="button" id="queueViewCompletedBtn">Completed OPD <span id="queueCompletedCount">0</span></button>
           <button class="btn btn-outline-primary btn-xs" type="button" id="queueViewWaitingBtn" style="display:none">← OPD Queue</button>
         </div>
       </div>
-      <div class="table-wrap">
-        <table class="hims-table" id="opdQueueTable">
+      <div class="table-wrap opd-queue-wrap">
+        <table class="hims-table opd-queue-table" id="opdQueueTable">
           <thead>
             <tr>
               <th>Token</th>
@@ -427,6 +427,8 @@
       diagnosticStore: "{{ route('hospital.opd-patient.diagnostics.store', ['opdPatient' => '__ID__']) }}",
       diagnosticDestroy: "{{ route('hospital.opd-patient.diagnostics.destroy', ['opdPatient' => '__ID__', 'item' => '__ITEM__']) }}",
       updateVitalsSocial: "{{ route('hospital.opd-patient.vitals-social.update', ['opdPatient' => '__ID__']) }}",
+      updateStatus: "{{ route('hospital.opd-patient.update-status', ['opdPatient' => '__ID__']) }}",
+      patientDetails: "{{ route('hospital.patient-management.patient-details') }}",
       visits: "{{ route('hospital.opd-patient.visits', ['patient' => '__ID__']) }}",
       visitSummaryPrint: "{{ route('hospital.opd-patient.visit-summary.print', ['opdPatient' => '__ID__']) }}",
       prescriptionPrint: "{{ route('hospital.opd-patient.prescription.print', ['opdPatient' => '__ID__']) }}"
