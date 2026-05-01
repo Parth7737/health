@@ -21,6 +21,58 @@
         return scope ? String(scope.getAttribute('data-pacs-viewer-template') || '').trim() : '';
     }
 
+    function hasPacsTemplateTokens(tpl) {
+        return /\{\{?(accession|order_no|patient_id)\}?\}|:(accession|order_no|patient_id)|%(ACCESSION|ORDER_NO|PATIENT_ID)%/i.test(
+            String(tpl || '')
+        );
+    }
+
+    function isHttpUrl(url) {
+        try {
+            const u = new URL(String(url || ''));
+            return u.protocol === 'http:' || u.protocol === 'https:';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function normalizePacsTemplate(tpl) {
+        return String(tpl || '')
+            .replace(/\{\{\s*accession\s*\}\}/gi, '{accession}')
+            .replace(/\{\{\s*order_no\s*\}\}/gi, '{order_no}')
+            .replace(/\{\{\s*patient_id\s*\}\}/gi, '{patient_id}')
+            .replace(/:accession/gi, '{accession}')
+            .replace(/:order_no/gi, '{order_no}')
+            .replace(/:patient_id/gi, '{patient_id}')
+            .replace(/%ACCESSION%/g, '{accession}')
+            .replace(/%ORDER_NO%/g, '{order_no}')
+            .replace(/%PATIENT_ID%/g, '{patient_id}');
+    }
+
+    function canOpenPacs(ctx) {
+        const tpl = getPacsViewerTemplate();
+        const hasResolve = Boolean(getPacsResolveUrl(ctx && ctx.itemId));
+        return Boolean(ctx && ctx.itemId && ((tpl && isHttpUrl(tpl)) || hasResolve));
+    }
+
+    function getPacsResolveUrl(itemId) {
+        const id = String(itemId ?? '').trim();
+        if (!id) {
+            return '';
+        }
+        if (typeof window.route === 'function' && window.Routes && Object.prototype.hasOwnProperty.call(window.Routes, 'pacsResolve') && window.Routes.pacsResolve) {
+            let u = window.route('pacsResolve', { item: id });
+            u = u ? String(u) : '';
+            if (u.indexOf('__ITEM__') !== -1) {
+                u = u.split('__ITEM__').join(encodeURIComponent(id));
+            }
+            if (u) {
+                return u;
+            }
+        }
+        return '';
+    }
+
     /** POST URL for radiology worklist save (RIS + legacy modal). */
     function getRisSaveUrl(itemId) {
         const id = String(itemId ?? '').trim();
@@ -46,12 +98,32 @@
     }
 
     function buildPacsViewerUrl(tpl, ctx) {
-        const orderNo = ctx.orderNo || '';
-        const patientId = ctx.patientId || '';
-        return tpl
+        const cleanTpl = normalizePacsTemplate(tpl);
+        const orderNo = String((ctx && ctx.orderNo) || '');
+        const patientId = String((ctx && ctx.patientId) || '');
+
+        let out = cleanTpl
             .replace(/\{accession\}/g, encodeURIComponent(orderNo))
             .replace(/\{order_no\}/g, encodeURIComponent(orderNo))
             .replace(/\{patient_id\}/g, encodeURIComponent(patientId));
+
+        if (!hasPacsTemplateTokens(cleanTpl) && isHttpUrl(cleanTpl)) {
+            try {
+                const u = new URL(cleanTpl);
+                if (orderNo) {
+                    u.searchParams.set('accession', orderNo);
+                    u.searchParams.set('order_no', orderNo);
+                }
+                if (patientId) {
+                    u.searchParams.set('patient_id', patientId);
+                }
+                out = u.toString();
+            } catch (e) {
+                // keep fallback output
+            }
+        }
+
+        return out;
     }
 
     function applyRadRisReportingSelection(itemId, meta) {
@@ -82,7 +154,7 @@
         }
         const dicomBtn = document.getElementById('rad-ris-dicom-open');
         if (dicomBtn) {
-            dicomBtn.disabled = !itemId || !getPacsViewerTemplate();
+            dicomBtn.disabled = !canOpenPacs(radRisReportingCtx);
         }
         const printA = document.getElementById('rad-ris-reporting-print-selected');
         if (printA) {
@@ -160,6 +232,192 @@
         }
     }
 
+    function escapeRadRisHtml(str) {
+        if (str === null || str === undefined) {
+            return '';
+        }
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    function escapeRadRisAttr(str) {
+        if (str === null || str === undefined) {
+            return '';
+        }
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
+
+    function radRisGenerateParamFlag(value, minVal, maxVal, critLow, critHigh) {
+        if (value === '' || value === null || value === undefined) {
+            return null;
+        }
+        const val = parseFloat(String(value).replace(/,/g, ''));
+        if (Number.isNaN(val)) {
+            return null;
+        }
+        const n = function (s) {
+            if (s === '' || s === null || s === undefined) {
+                return null;
+            }
+            const x = parseFloat(String(s));
+            return Number.isNaN(x) ? null : x;
+        };
+        const cLo = n(critLow);
+        const cHi = n(critHigh);
+        const mn = n(minVal);
+        const mx = n(maxVal);
+        const styles = {
+            normal: { label: '✓ Normal', color: '#2e7d32', bg: '#e8f5e9' },
+            low: { label: '↓ Low', color: '#e65100', bg: '#fff3e0' },
+            high: { label: '↑ High', color: '#e65100', bg: '#fff3e0' },
+            critical_low: { label: '↓↓ Critical', color: '#c62828', bg: '#ffebee' },
+            critical_high: { label: '↑↑ Critical', color: '#c62828', bg: '#ffebee' }
+        };
+        let flag = 'normal';
+        if (cLo !== null && val < cLo) {
+            flag = 'critical_low';
+        } else if (cHi !== null && val > cHi) {
+            flag = 'critical_high';
+        } else if (mn !== null && mx !== null) {
+            if (val < mn) {
+                flag = 'low';
+            } else if (val > mx) {
+                flag = 'high';
+            } else {
+                flag = 'normal';
+            }
+        } else if (mn !== null && val < mn) {
+            flag = 'low';
+        } else if (mx !== null && val > mx) {
+            flag = 'high';
+        } else {
+            flag = 'normal';
+        }
+        return Object.assign({ flag: flag }, styles[flag] || styles.normal);
+    }
+
+    function updateRadRisParamFlagDisplay(input) {
+        const row = input.closest('tr');
+        if (!row) {
+            return;
+        }
+        const paramId = input.getAttribute('data-param-id');
+        const flagBox = row.querySelector('.rad-ris-rpt-flag-display');
+        if (!flagBox) {
+            return;
+        }
+        const minV = row.querySelector('.rad-ris-param-min')?.value;
+        const maxV = row.querySelector('.rad-ris-param-max')?.value;
+        const cLo = row.querySelector('.rad-ris-param-crit-low')?.value;
+        const cHi = row.querySelector('.rad-ris-param-crit-high')?.value;
+        const info = radRisGenerateParamFlag(input.value, minV, maxV, cLo, cHi);
+        if (info) {
+            flagBox.innerHTML =
+                '<span style="display:inline-block;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700;border:1px solid ' +
+                info.color +
+                ';color:' +
+                info.color +
+                ';background:' +
+                info.bg +
+                ';">' +
+                escapeRadRisHtml(info.label) +
+                '</span>';
+        } else {
+            flagBox.innerHTML = '';
+        }
+    }
+
+    function bindRadRisParameterResultInputs() {
+        const form = document.getElementById('radRisRptForm');
+        if (!form) {
+            return;
+        }
+        form.querySelectorAll('.rad-ris-rpt-result-value').forEach(function (input) {
+            if (input._radRisFlagBound) {
+                return;
+            }
+            input._radRisFlagBound = true;
+            input.addEventListener('input', function () {
+                updateRadRisParamFlagDisplay(input);
+            });
+            input.addEventListener('change', function () {
+                updateRadRisParamFlagDisplay(input);
+            });
+        });
+    }
+
+    function renderRadRisReportParameters(params) {
+        const wrap = document.getElementById('rad-ris-rpt-parameters-wrap');
+        const tbody = document.getElementById('rad-ris-rpt-parameters-body');
+        const countEl = document.getElementById('rad-ris-rpt-parameters-count');
+        if (!wrap || !tbody) {
+            return;
+        }
+        const list = params || [];
+        if (!list.length) {
+            wrap.classList.add('d-none');
+            tbody.innerHTML = '';
+            if (countEl) {
+                countEl.textContent = '';
+            }
+            return;
+        }
+        wrap.classList.remove('d-none');
+        if (countEl) {
+            countEl.textContent = '(' + list.length + ')';
+        }
+        tbody.innerHTML = '';
+        list.forEach(function (p) {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td class="align-middle">' +
+                escapeRadRisHtml(p.parameter_name) +
+                '<input type="hidden" class="rad-ris-param-min" value="' +
+                escapeRadRisAttr(p.min_value) +
+                '">' +
+                '<input type="hidden" class="rad-ris-param-max" value="' +
+                escapeRadRisAttr(p.max_value) +
+                '">' +
+                '<input type="hidden" class="rad-ris-param-crit-low" value="' +
+                escapeRadRisAttr(p.critical_low) +
+                '">' +
+                '<input type="hidden" class="rad-ris-param-crit-high" value="' +
+                escapeRadRisAttr(p.critical_high) +
+                '">' +
+                '</td>' +
+                '<td class="text-center align-middle rad-ris-text-sm">' +
+                escapeRadRisHtml(p.unit_name) +
+                '</td>' +
+                '<td class="text-center align-middle rad-ris-text-sm text-muted">' +
+                escapeRadRisHtml(p.normal_range) +
+                '</td>' +
+                '<td class="align-middle"><input type="text" class="form-control form-control-sm rad-ris-rpt-result-value" name="result_value[' +
+                p.id +
+                ']" data-param-id="' +
+                p.id +
+                '" value="' +
+                escapeRadRisAttr(p.result_value) +
+                '" autocomplete="off"></td>' +
+                '<td class="text-center align-middle"><div class="rad-ris-rpt-flag-display" data-param-id="' +
+                p.id +
+                '"></div></td>' +
+                '<td class="align-middle"><input type="text" class="form-control form-control-sm" name="remarks[' +
+                p.id +
+                ']" value="' +
+                escapeRadRisAttr(p.remarks) +
+                '" autocomplete="off"></td>';
+            tbody.appendChild(tr);
+        });
+        bindRadRisParameterResultInputs();
+        tbody.querySelectorAll('.rad-ris-rpt-result-value').forEach(function (inp) {
+            updateRadRisParamFlagDisplay(inp);
+        });
+    }
+
     function fillRadRisReportForm(data) {
         radRisReportStatusNorm = data.status_norm || '';
         document.getElementById('rad-ris-rpt-item-id').value = data.id || '';
@@ -207,6 +465,7 @@
         }
         document.getElementById('rad-ris-rpt-addendum').value = '';
         document.getElementById('radRisRptSaveAction').value = 'save';
+        renderRadRisReportParameters(data.parameters);
     }
 
     function loadRadRisReportPanel(itemId, meta) {
@@ -226,7 +485,7 @@
                 fillRadRisReportForm(data);
                 const dbtn = document.getElementById('rad-ris-dicom-open');
                 if (dbtn) {
-                    dbtn.disabled = !getPacsViewerTemplate();
+                    dbtn.disabled = !canOpenPacs(radRisReportingCtx);
                 }
             })
             .catch(function () {
@@ -237,12 +496,49 @@
     function bindReportingPanel() {
         document.getElementById('rad-ris-dicom-open')?.addEventListener('click', function () {
             const tpl = getPacsViewerTemplate();
-            if (!tpl || !radRisReportingCtx.itemId) {
-                radRisToast('Configure PACS URL in .env or select a study from the queue.', 'warning');
+            if (!radRisReportingCtx.itemId) {
+                radRisToast('Select a study from pending queue first.', 'warning');
+                return;
+            }
+            if (!tpl) {
+                radRisToast('Set RADIOLOGY_PACS_WEB_VIEWER_URL in .env and reload page.', 'warning');
+                return;
+            }
+            if (!isHttpUrl(tpl)) {
+                radRisToast('PACS URL must start with http:// or https://', 'warning');
+                return;
+            }
+            const resolveUrl = getPacsResolveUrl(radRisReportingCtx.itemId);
+            if (resolveUrl) {
+                fetch(resolveUrl, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function (r) {
+                        return r.json();
+                    })
+                    .then(function (res) {
+                        const resolved = res && res.url ? String(res.url) : '';
+                        if (resolved && isHttpUrl(resolved)) {
+                            window.open(resolved, '_blank', 'noopener,noreferrer');
+                            return;
+                        }
+                        const fallback = buildPacsViewerUrl(tpl, radRisReportingCtx);
+                        if (!fallback || !isHttpUrl(fallback)) {
+                            radRisToast('PACS URL template is invalid.', 'warning');
+                            return;
+                        }
+                        window.open(fallback, '_blank', 'noopener,noreferrer');
+                    })
+                    .catch(function () {
+                        const fallback = buildPacsViewerUrl(tpl, radRisReportingCtx);
+                        if (!fallback || !isHttpUrl(fallback)) {
+                            radRisToast('PACS URL template is invalid.', 'warning');
+                            return;
+                        }
+                        window.open(fallback, '_blank', 'noopener,noreferrer');
+                    });
                 return;
             }
             const url = buildPacsViewerUrl(tpl, radRisReportingCtx);
-            if (!url || url === tpl) {
+            if (!url || !isHttpUrl(url)) {
                 radRisToast('PACS URL template is invalid.', 'warning');
                 return;
             }

@@ -65,6 +65,10 @@ class RadiologyParameterController extends BaseHospitalController
             'name' => 'required|string|max:255',
             'range' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'min_value' => 'nullable|numeric',
+            'max_value' => 'nullable|numeric',
+            'critical_low' => 'nullable|numeric',
+            'critical_high' => 'nullable|numeric',
         ]);
 
         $validator->after(function ($validator) use ($request) {
@@ -92,6 +96,10 @@ class RadiologyParameterController extends BaseHospitalController
                 'name' => $request->name,
                 'range' => $request->range,
                 'description' => $request->description,
+                'min_value' => $request->filled('min_value') ? $request->min_value : null,
+                'max_value' => $request->filled('max_value') ? $request->max_value : null,
+                'critical_low' => $request->filled('critical_low') ? $request->critical_low : null,
+                'critical_high' => $request->filled('critical_high') ? $request->critical_high : null,
             ]
         );
 

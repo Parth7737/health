@@ -693,7 +693,7 @@ class DiagnosticWorklistController extends BaseHospitalController
         $this->authorizeItem($item, 'radiology');
 
         return view('hospital.diagnostics.radiology-worklist.form', [
-            'item' => $item->load(['order.patient', 'order.visitable', 'patientCharge']),
+            'item' => $item->load(['order.patient', 'order.visitable', 'patientCharge', 'parameters.parameterable.unit']),
         ]);
     }
 
@@ -788,6 +788,10 @@ class DiagnosticWorklistController extends BaseHospitalController
             'report_radiologist_id' => 'nullable|integer|exists:users,id',
             'report_category' => 'nullable|string|max:64',
             'addendum_text' => 'nullable|string|max:20000',
+            'result_value' => 'nullable|array',
+            'result_value.*' => 'nullable|string|max:500',
+            'remarks' => 'nullable|array',
+            'remarks.*' => 'nullable|string|max:2000',
         ]);
 
         if ($validator->fails()) {
@@ -810,6 +814,9 @@ class DiagnosticWorklistController extends BaseHospitalController
         if (! in_array($action, ['save', 'draft', 'finalize', 'addendum'], true)) {
             $action = 'save';
         }
+
+        $resultValues = $request->input('result_value', []);
+        $remarks = $request->input('remarks', []);
 
         if ($action === 'addendum') {
             $add = trim((string) $request->input('addendum_text', ''));
@@ -853,6 +860,7 @@ class DiagnosticWorklistController extends BaseHospitalController
                 $item->status = 'examination';
             }
             $item->save();
+            $this->syncRadiologyOrderItemParameters($item, $resultValues, $remarks);
 
             return response()->json([
                 'status' => true,
@@ -881,10 +889,20 @@ class DiagnosticWorklistController extends BaseHospitalController
             if (trim((string) $request->input('report_category', '')) === '') {
                 $missing[] = 'report category';
             }
+            $item->load('parameters');
+            if ($item->parameters->isNotEmpty()) {
+                foreach ($item->parameters as $p) {
+                    $rv = $resultValues[$p->id] ?? null;
+                    if (! filled(is_string($rv) ? trim($rv) : $rv)) {
+                        $missing[] = 'all test parameter results';
+                        break;
+                    }
+                }
+            }
             if ($missing !== []) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'Complete before finalizing: ' . implode(', ', $missing) . '.',
+                    'message' => 'Complete before finalizing: ' . implode(', ', array_unique($missing)) . '.',
                 ], 422);
             }
             $item->update([
@@ -899,6 +917,7 @@ class DiagnosticWorklistController extends BaseHospitalController
                 'status' => 'completed',
                 'reported_at' => $item->reported_at ?? now(),
             ]);
+            $this->syncRadiologyOrderItemParameters($item, $resultValues, $remarks);
 
             return response()->json([
                 'status' => true,
@@ -920,8 +939,42 @@ class DiagnosticWorklistController extends BaseHospitalController
             'status' => $hasFinalReportData ? 'completed' : $item->status,
             'reported_at' => $hasFinalReportData ? ($item->reported_at ?? now()) : $item->reported_at,
         ]);
+        $this->syncRadiologyOrderItemParameters($item, $resultValues, $remarks);
 
         return response()->json(['status' => true, 'message' => 'Radiology report updated successfully.']);
+    }
+
+    protected function syncRadiologyOrderItemParameters(DiagnosticOrderItem $item, array $resultValues, array $remarks): void
+    {
+        if ($item->department !== 'radiology') {
+            return;
+        }
+        $item->loadMissing('parameters.parameterable');
+        foreach ($item->parameters as $parameter) {
+            $rawVal = $resultValues[$parameter->id] ?? null;
+            $resultValue = is_string($rawVal) ? trim($rawVal) : $rawVal;
+            if ($resultValue === '') {
+                $resultValue = null;
+            }
+            $resultFlag = null;
+            $def = $parameter->parameterable;
+            if ($resultValue !== null && $def && is_numeric($resultValue)) {
+                $resultFlag = PathologyFlagService::generateFlag(
+                    $resultValue,
+                    $def->min_value ?? null,
+                    $def->max_value ?? null,
+                    $def->critical_low ?? null,
+                    $def->critical_high ?? null
+                );
+            }
+            $rawRemark = $remarks[$parameter->id] ?? null;
+            $remarkVal = is_string($rawRemark) ? trim($rawRemark) : $rawRemark;
+            $parameter->update([
+                'result_value' => $resultValue,
+                'result_flag' => $resultFlag,
+                'remarks' => ($remarkVal === '' || $remarkVal === null) ? null : $remarkVal,
+            ]);
+        }
     }
 
     public function printPathology(DiagnosticOrderItem $item)
@@ -950,7 +1003,7 @@ class DiagnosticWorklistController extends BaseHospitalController
             ->first();
 
         return view('hospital.diagnostics.radiology-worklist.print', [
-            'item' => $item->load(['order.patient', 'order.visitable', 'patientCharge', 'reportRadiologist']),
+            'item' => $item->load(['order.patient', 'order.visitable', 'patientCharge', 'reportRadiologist', 'parameters.parameterable.unit']),
             'hospital' => auth()->user()?->hospital,
             'printTemplate' => $printTemplate,
         ]);

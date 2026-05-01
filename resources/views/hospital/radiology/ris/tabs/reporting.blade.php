@@ -9,7 +9,8 @@
                         <i class="fa-solid fa-x-ray" aria-hidden="true"></i>
                         <div class="rad-ris-text-sm rad-ris-mt-4">PACS / DICOM viewer placeholder</div>
                         <div class="rad-ris-text-sm rad-ris-mt-4" id="rad-ris-dicom-hint">
-                           
+                            Configure <code>RADIOLOGY_PACS_WEB_VIEWER_URL</code> in <code>.env</code> and click <strong>Open viewer</strong>.
+                            Supported placeholders: <code>{accession}</code>, <code>{order_no}</code>, <code>{patient_id}</code>.
                         </div>
                         <button type="button" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm rad-ris-mt-4" id="rad-ris-dicom-open" disabled>
                             <i class="fa-solid fa-external-link-alt"></i> Open viewer
@@ -62,6 +63,29 @@
                             <label for="rad-ris-rpt-technique">Technique</label>
                             <textarea class="form-control" id="rad-ris-rpt-technique" name="report_technique" rows="2" placeholder="Protocol / technique…"></textarea>
                         </div>
+
+                        <div class="form-group mb-3 d-none" id="rad-ris-rpt-parameters-wrap">
+                            <label class="d-flex align-items-center gap-2">
+                                Study parameters / measurements
+                                <span class="rad-ris-text-sm rad-ris-text-muted rad-ris-fw-400" id="rad-ris-rpt-parameters-count"></span>
+                            </label>
+                            <div class="table-responsive rad-ris-rpt-param-table-wrap">
+                                <table class="table table-sm mb-0 rad-ris-rpt-param-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Parameter</th>
+                                            <th class="text-center" style="width:72px;">Unit</th>
+                                            <th class="text-center" style="width:120px;">Normal range</th>
+                                            <th class="text-center" style="width:108px;">Result</th>
+                                            <th class="text-center" style="width:112px;">Flag</th>
+                                            <th>Remarks</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rad-ris-rpt-parameters-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
                         <div class="form-group mb-3">
                             <label for="rad-ris-rpt-findings">Findings</label>
                             <textarea class="form-control" id="rad-ris-rpt-findings" name="report_text" rows="6" placeholder="Findings…"></textarea>

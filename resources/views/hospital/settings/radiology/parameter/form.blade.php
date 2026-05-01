@@ -20,8 +20,28 @@
             </select>
         </div>
         <div class="col-md-12 mt-2">
-            <label class="form-label">Range</label>
-            <input type="text" name="range" id="range" value="{{ @$data->range }}" class="form-control">
+            <label class="form-label">Range (text)</label>
+            <input type="text" name="range" id="range" value="{{ @$data->range }}" class="form-control" placeholder="e.g. 10–15 mm">
+        </div>
+        <div class="row mt-2">
+            <div class="col-md-6">
+                <label class="form-label">Min (normal)</label>
+                <input type="number" step="0.0001" name="min_value" id="min_value" value="{{ @$data->min_value }}" class="form-control" placeholder="Optional — for numeric auto-flag">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Max (normal)</label>
+                <input type="number" step="0.0001" name="max_value" id="max_value" value="{{ @$data->max_value }}" class="form-control">
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-md-6">
+                <label class="form-label">Critical low</label>
+                <input type="number" step="0.0001" name="critical_low" id="critical_low" value="{{ @$data->critical_low }}" class="form-control">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Critical high</label>
+                <input type="number" step="0.0001" name="critical_high" id="critical_high" value="{{ @$data->critical_high }}" class="form-control">
+            </div>
         </div>
         <div class="col-md-12 mt-2">
             <label class="form-label">Description</label>

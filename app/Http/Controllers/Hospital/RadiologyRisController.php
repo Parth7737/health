@@ -8,11 +8,13 @@ use App\Models\DiagnosticOrderItem;
 use App\Models\OpdPatient;
 use App\Models\HeaderFooter;
 use App\Models\RadiologyCategory;
+use App\Models\RadiologyPacsStudy;
 use App\Models\RadiologyTest;
 use App\Models\Staff;
 use App\Models\User;
 use App\Support\SafeReportHtml;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
@@ -49,6 +51,7 @@ class RadiologyRisController extends BaseHospitalController
                 'reportItem' => route('hospital.radiology.ris.report-item', ['item' => '__ITEM__']),
                 'workflowAdvance' => route('hospital.radiology.ris.workflow-advance', ['item' => '__ITEM__']),
                 'completedPdf' => route('hospital.radiology.ris.completed-pdf', ['item' => '__ITEM__']),
+                'pacsResolve' => route('hospital.radiology.ris.pacs-resolve', ['item' => '__ITEM__']),
             ],
         ]);
     }
@@ -263,7 +266,7 @@ class RadiologyRisController extends BaseHospitalController
         abort_if($item->department !== 'radiology', 404);
         abort_if(optional($item->order)->hospital_id != $this->hospital_id, 403);
 
-        $item->load(['order.patient', 'order.orderedByUser', 'order.visitable', 'testable', 'reportRadiologist']);
+        $item->load(['order.patient', 'order.orderedByUser', 'order.visitable', 'testable', 'reportRadiologist', 'parameters.parameterable.unit']);
 
         $order = $item->order;
         $patient = $order?->patient;
@@ -321,6 +324,33 @@ class RadiologyRisController extends BaseHospitalController
                 ->values();
         }
 
+        $parameterRows = $item->parameters->sortBy('sort_order')->values()->map(function ($p) {
+            $def = $p->parameterable;
+            $minVal = $def->min_value ?? null;
+            $maxVal = $def->max_value ?? null;
+            $critLow = $def->critical_low ?? null;
+            $critHigh = $def->critical_high ?? null;
+            $unitName = $def?->unit?->name ?? ($p->unit_name ?? '');
+            $rangeText = $p->normal_range ?? '';
+            if ($minVal !== null && $maxVal !== null) {
+                $rangeText = number_format((float) $minVal, 2) . ' - ' . number_format((float) $maxVal, 2);
+            }
+
+            return [
+                'id' => (int) $p->id,
+                'parameter_name' => (string) $p->parameter_name,
+                'unit_name' => (string) ($unitName !== '' ? $unitName : '-'),
+                'normal_range' => (string) ($rangeText !== '' ? $rangeText : '-'),
+                'result_value' => (string) ($p->result_value ?? ''),
+                'remarks' => (string) ($p->remarks ?? ''),
+                'result_flag' => $p->result_flag,
+                'min_value' => $minVal !== null ? (string) $minVal : '',
+                'max_value' => $maxVal !== null ? (string) $maxVal : '',
+                'critical_low' => $critLow !== null ? (string) $critLow : '',
+                'critical_high' => $critHigh !== null ? (string) $critHigh : '',
+            ];
+        })->all();
+
         $norm = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
         if ($norm === 'in_progress') {
             $norm = 'examination';
@@ -351,6 +381,7 @@ class RadiologyRisController extends BaseHospitalController
             'report_radiologist_id' => $item->report_radiologist_id ? (int) $item->report_radiologist_id : null,
             'report_is_draft' => (bool) ($item->report_is_draft ?? false),
             'radiologists' => $radiologists->all(),
+            'parameters' => $parameterRows,
         ]);
     }
 
@@ -380,7 +411,7 @@ class RadiologyRisController extends BaseHospitalController
         abort_if(optional($item->order)->hospital_id != $this->hospital_id, 403);
         abort_unless(strtolower((string) $item->status) === 'completed', 404);
 
-        $item->load(['order.patient', 'order.orderedByUser', 'order.visitable', 'reportRadiologist', 'patientCharge']);
+        $item->load(['order.patient', 'order.orderedByUser', 'order.visitable', 'reportRadiologist', 'patientCharge', 'parameters.parameterable.unit']);
         $printTemplate = HeaderFooter::query()
             ->where('type', 'radiology')
             ->first();
@@ -755,6 +786,171 @@ class RadiologyRisController extends BaseHospitalController
             'slots' => $slots,
             'cells' => $cells,
         ]);
+    }
+
+    /**
+     * Resolve PACS viewer URL from indexed PACS studies first, then fallback template.
+     */
+    public function pacsResolve(DiagnosticOrderItem $item): JsonResponse
+    {
+        abort_if($item->department !== 'radiology', 404);
+        abort_if(optional($item->order)->hospital_id != $this->hospital_id, 403);
+
+        $item->loadMissing('order.patient');
+        $orderNo = (string) ($item->order?->order_no ?? '');
+        $patientId = (string) (optional($item->order?->patient)->patient_id ?? optional($item->order?->patient)->mrn ?? '');
+
+        $study = RadiologyPacsStudy::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where(function ($q) use ($item, $orderNo) {
+                $q->where('diagnostic_order_item_id', $item->id);
+                if ($orderNo !== '') {
+                    $q->orWhere('accession_no', $orderNo);
+                }
+            })
+            ->latest('received_at')
+            ->latest('id')
+            ->first();
+
+        $template = trim((string) config('radiology.pacs_web_viewer_url_template', ''));
+        $url = '';
+
+        if ($study && filled($study->viewer_url)) {
+            $url = (string) $study->viewer_url;
+        } elseif ($template !== '') {
+            $studyUid = (string) ($study?->study_instance_uid ?? '');
+            $url = str_replace(
+                ['{accession}', '{order_no}', '{patient_id}', '{study_uid}'],
+                [rawurlencode($orderNo), rawurlencode($orderNo), rawurlencode($patientId), rawurlencode($studyUid)],
+                $template
+            );
+        }
+
+        return response()->json([
+            'status' => $url !== '',
+            'url' => $url,
+            'source' => $study?->source ?? ($template !== '' ? 'template' : null),
+            'study_uid' => $study?->study_instance_uid,
+            'message' => $url !== '' ? null : 'No PACS study mapped yet for this order.',
+        ]);
+    }
+
+    /**
+     * REST endpoint for PACS/modality bridge to ingest study metadata after C-STORE.
+     */
+    public function pacsIngest(Request $request): JsonResponse
+    {
+        if (! (bool) config('radiology.pacs_ingest_enabled', false)) {
+            return response()->json(['status' => false, 'message' => 'PACS ingest is disabled.'], 403);
+        }
+        if (! $this->hasValidPacsSecret($request)) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized PACS ingest request.'], 401);
+        }
+
+        $data = $request->validate([
+            'hospital_id' => 'required|integer|min:1',
+            'accession_no' => 'required|string|max:120',
+            'study_instance_uid' => 'required|string|max:128',
+            'patient_identifier' => 'nullable|string|max:120',
+            'modality' => 'nullable|string|max:32',
+            'viewer_url' => 'nullable|string|max:2000',
+            'source' => 'nullable|string|max:40',
+            'status' => 'nullable|string|max:32',
+            'payload' => 'nullable|array',
+        ]);
+
+        $item = DiagnosticOrderItem::query()
+            ->where('department', 'radiology')
+            ->whereHas('order', function ($q) use ($data) {
+                $q->where('hospital_id', (int) $data['hospital_id'])
+                    ->where('order_no', (string) $data['accession_no']);
+            })
+            ->latest('id')
+            ->first();
+
+        $study = RadiologyPacsStudy::query()->updateOrCreate(
+            ['study_instance_uid' => (string) $data['study_instance_uid']],
+            [
+                'hospital_id' => (int) $data['hospital_id'],
+                'diagnostic_order_item_id' => $item?->id,
+                'accession_no' => (string) $data['accession_no'],
+                'patient_identifier' => isset($data['patient_identifier']) ? (string) $data['patient_identifier'] : null,
+                'modality' => isset($data['modality']) ? strtoupper((string) $data['modality']) : null,
+                'status' => isset($data['status']) ? strtolower((string) $data['status']) : 'received',
+                'source' => isset($data['source']) ? strtolower((string) $data['source']) : 'modality',
+                'viewer_url' => isset($data['viewer_url']) ? (string) $data['viewer_url'] : null,
+                'payload' => $data['payload'] ?? null,
+                'received_at' => now(),
+            ]
+        );
+
+        return response()->json([
+            'status' => true,
+            'message' => 'PACS study ingested.',
+            'study_id' => $study->id,
+            'item_id' => $item?->id,
+        ]);
+    }
+
+    /**
+     * Worklist feed for MWL bridge services (JSON feed to convert into DICOM MWL).
+     */
+    public function pacsWorklistFeed(Request $request): JsonResponse
+    {
+        if (! (bool) config('radiology.pacs_ingest_enabled', false)) {
+            return response()->json(['status' => false, 'message' => 'PACS worklist feed is disabled.'], 403);
+        }
+        if (! $this->hasValidPacsSecret($request)) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized PACS worklist request.'], 401);
+        }
+
+        $hospitalId = (int) $request->input('hospital_id', 0);
+        abort_unless($hospitalId > 0, 422, 'hospital_id is required.');
+
+        $limit = min(300, max(10, (int) $request->input('limit', 120)));
+        $items = DiagnosticOrderItem::query()
+            ->with(['order.patient'])
+            ->where('department', 'radiology')
+            ->whereIn('status', ['ordered', 'in_progress', 'examination'])
+            ->whereHas('order', fn ($q) => $q->where('hospital_id', $hospitalId))
+            ->orderBy('created_at')
+            ->limit($limit)
+            ->get();
+
+        $rows = $items->map(function (DiagnosticOrderItem $item) {
+            $patient = $item->order?->patient;
+            return [
+                'item_id' => (int) $item->id,
+                'accession_no' => (string) ($item->order?->order_no ?? ''),
+                'modality' => (string) ($item->category_name ?? ''),
+                'study_description' => (string) ($item->test_name ?? ''),
+                'priority' => strtoupper(trim((string) ($item->priority ?? 'ROUTINE'))),
+                'scheduled_at' => optional($item->created_at)?->toIso8601String(),
+                'patient' => [
+                    'id' => (string) ($patient?->patient_id ?? $patient?->mrn ?? ''),
+                    'name' => (string) ($patient?->name ?? ''),
+                    'gender' => strtoupper(substr((string) ($patient?->gender ?? 'U'), 0, 1)),
+                    'age' => filled($patient?->age) ? (string) $patient->age : null,
+                    'dob' => null,
+                ],
+            ];
+        })->values();
+
+        return response()->json([
+            'status' => true,
+            'count' => $rows->count(),
+            'data' => $rows,
+        ]);
+    }
+
+    protected function hasValidPacsSecret(Request $request): bool
+    {
+        $expected = trim((string) config('radiology.pacs_shared_secret', ''));
+        if ($expected === '') {
+            return false;
+        }
+        $provided = (string) $request->header('X-PACS-SECRET', $request->input('secret', ''));
+        return hash_equals($expected, trim($provided));
     }
 
     protected function resolveVisitLabel(DiagnosticOrderItem $item): string

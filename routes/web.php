@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Hospital\RadiologyRisController;
 use App\Http\Controllers\{ RegisterController, HomeController, CaptchaController, LoginController,RoleController,PermissionController };
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use Illuminate\Support\Facades\Route;
@@ -116,6 +117,11 @@ Route::get('csrf-token', function() {
         'token' => csrf_token(),
     ]);
 })->name('csrf_token');
+
+Route::prefix('integration/radiology/pacs')->group(function () {
+    Route::post('ingest', [RadiologyRisController::class, 'pacsIngest'])->name('integration.radiology.pacs.ingest');
+    Route::get('worklist', [RadiologyRisController::class, 'pacsWorklistFeed'])->name('integration.radiology.pacs.worklist');
+});
 
 Route::get('/patient-profile', function () {
     return view('front.patient-profile');
