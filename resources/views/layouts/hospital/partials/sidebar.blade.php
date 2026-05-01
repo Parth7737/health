@@ -1,4 +1,4 @@
-﻿@php
+@php
     $roleName = auth()->user()->getRoleNames()->first() ?? 'Administrator';
     $userName = auth()->user()->name ?? 'Admin User';
     $initials = collect(explode(' ', trim($userName)))
@@ -104,7 +104,7 @@
 
         @can('view-radiology-report')
         <li class="sidebar-list">
-            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.radiology.worklist.*') ? 'active' : '' }}" href="{{ route('hospital.radiology.worklist.index') }}">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.radiology.*') ? 'active' : '' }}" href="{{ route('hospital.radiology.ris') }}">
                 <span class="nav-icon">🩻</span>
                 <span class="nav-label">Radiology / RIS</span>
             </a>

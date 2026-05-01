@@ -66,7 +66,7 @@
         </li>
 
         <li class="sidebar-list">
-            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.radiology.worklist.*') ? 'active' : '' }}" href="{{ route('hospital.radiology.worklist.index') }}">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.radiology.*') ? 'active' : '' }}" href="{{ route('hospital.radiology.ris') }}">
                 <span class="nav-icon">🩻</span>
                 <span class="nav-label">Radiology Orders</span>
             </a>

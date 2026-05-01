@@ -26,6 +26,11 @@
         .report-block { margin-top: 18px; padding: 18px 20px; border-radius: 14px; border: 1px solid #d6e6ea; background: linear-gradient(180deg, #fbfeff, #f4f9fb); }
         .report-block h3 { margin: 0 0 10px; font-size: 15px; color: #13547a; text-transform: uppercase; letter-spacing: 0.5px; }
         .report-block p { margin: 0; line-height: 1.7; white-space: pre-line; }
+        .html-body { line-height: 1.65; font-size: 14px; color: #16324f; }
+        .html-body p { margin: 0 0 8px; white-space: normal; }
+        .html-body ul, .html-body ol { margin: 6px 0 10px; padding-left: 22px; }
+        .html-body table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+        .html-body th, .html-body td { border: 1px solid #cfd8e6; padding: 6px 8px; }
         .summary-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
         .summary-box { padding: 14px 16px; border-radius: 12px; background: #f4f8fb; border: 1px solid #d6e6ea; }
         .summary-box strong { display: block; font-size: 12px; color: #60748a; margin-bottom: 6px; }
@@ -104,19 +109,52 @@
             </div>
 
             <div class="report-block">
-                <h3>Summary</h3>
-                <p>{{ $item->report_summary ?? '-' }}</p>
+                <h3>Clinical indication</h3>
+                <div class="html-body">
+                    @php $c = \App\Support\SafeReportHtml::sanitize($item->clinical_indication); @endphp
+                    @if($c === '')
+                        <p>—</p>
+                    @else
+                        {!! $c !!}
+                    @endif
+                </div>
             </div>
 
             <div class="report-block">
-                <h3>Narrative Report</h3>
-                <p>{{ $item->report_text ?? '-' }}</p>
+                <h3>Technique</h3>
+                <p>{{ filled($item->report_technique) ? $item->report_technique : '—' }}</p>
+            </div>
+
+            <div class="report-block">
+                <h3>Findings</h3>
+                <div class="html-body">
+                    @php $f = \App\Support\SafeReportHtml::sanitize($item->report_text); @endphp
+                    @if($f === '')
+                        <p>—</p>
+                    @else
+                        {!! $f !!}
+                    @endif
+                </div>
             </div>
 
             <div class="report-block">
                 <h3>Impression</h3>
-                <p>{{ $item->report_impression ?? '-' }}</p>
+                <div class="html-body">
+                    @php $im = \App\Support\SafeReportHtml::sanitize($item->report_impression); @endphp
+                    @if($im === '')
+                        <p>—</p>
+                    @else
+                        {!! $im !!}
+                    @endif
+                </div>
             </div>
+
+            @if(filled($item->report_summary))
+                <div class="report-block">
+                    <h3>Summary</h3>
+                    <div class="html-body">{!! \App\Support\SafeReportHtml::sanitize($item->report_summary) !!}</div>
+                </div>
+            @endif
         </div>
 
         @if(!empty($printTemplate?->footer_text))

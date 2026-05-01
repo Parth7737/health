@@ -24,6 +24,7 @@ class DiagnosticOrderItem extends Model
         'reported_at' => 'datetime',
         'critical_doctor_called_at' => 'datetime',
         'critical_acknowledged_at' => 'datetime',
+        'report_is_draft' => 'boolean',
     ];
 
     public function order(): BelongsTo
@@ -54,5 +55,10 @@ class DiagnosticOrderItem extends Model
     public function sampleCollectedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sample_collected_by');
+    }
+
+    public function reportRadiologist(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'report_radiologist_id');
     }
 }

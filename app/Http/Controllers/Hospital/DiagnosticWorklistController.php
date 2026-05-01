@@ -15,6 +15,7 @@ use App\Models\Staff;
 use App\Services\ChargeLedgerService;
 use App\Services\PathologyFlagService;
 use App\Services\PatientTimelineService;
+use App\Support\SafeReportHtml;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -778,25 +779,146 @@ class DiagnosticWorklistController extends BaseHospitalController
         $this->authorizeItem($item, 'radiology');
 
         $validator = Validator::make($request->all(), [
+            'save_action' => 'nullable|in:save,draft,finalize,addendum',
             'report_summary' => 'nullable|string',
             'report_impression' => 'nullable|string',
             'report_text' => 'nullable|string',
+            'clinical_indication' => 'nullable|string|max:65000',
+            'report_technique' => 'nullable|string|max:65000',
+            'report_radiologist_id' => 'nullable|integer|exists:users,id',
+            'report_category' => 'nullable|string|max:64',
+            'addendum_text' => 'nullable|string|max:20000',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 422);
         }
 
-        $hasFinalReportData = filled($request->report_summary)
-            || filled($request->report_impression)
-            || filled($request->report_text);
+        foreach (['clinical_indication', 'report_text', 'report_impression', 'report_summary'] as $richKey) {
+            if ($request->has($richKey)) {
+                $request->merge([
+                    $richKey => SafeReportHtml::sanitize($request->input($richKey)),
+                ]);
+            }
+        }
+
+        $richHasText = static function (?string $html): bool {
+            return trim(strip_tags(html_entity_decode((string) ($html ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'))) !== '';
+        };
+
+        $action = strtolower((string) $request->input('save_action', 'save'));
+        if (! in_array($action, ['save', 'draft', 'finalize', 'addendum'], true)) {
+            $action = 'save';
+        }
+
+        if ($action === 'addendum') {
+            $add = trim((string) $request->input('addendum_text', ''));
+            if ($add === '') {
+                return response()->json(['status' => false, 'message' => 'Enter addendum text to append.'], 422);
+            }
+            $norm = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
+            if ($norm !== 'completed') {
+                return response()->json(['status' => false, 'message' => 'Addendum is only allowed on finalized (completed) reports.'], 422);
+            }
+            $stamp = '<p><em>--- Addendum ' . e(now()->format('d-m-Y H:i')) . ' ---</em></p>';
+            $addBlock = '<p>' . nl2br(e($add)) . '</p>';
+            $item->report_text = rtrim((string) ($item->report_text ?? '')) . $stamp . $addBlock;
+            $item->report_text = SafeReportHtml::sanitize($item->report_text);
+            if ($request->filled('report_impression')) {
+                $item->report_impression = SafeReportHtml::sanitize($request->report_impression);
+            }
+            if ($request->filled('report_summary')) {
+                $item->report_summary = SafeReportHtml::sanitize($request->report_summary);
+            }
+            $item->save();
+
+            return response()->json(['status' => true, 'message' => 'Addendum saved.', 'print_url' => route('hospital.radiology.worklist.print', $item->id)]);
+        }
+
+        $hasFinalReportData = $richHasText($request->report_summary)
+            || $richHasText($request->report_impression)
+            || $richHasText($request->report_text);
+
+        if ($action === 'draft') {
+            $item->report_summary = $request->report_summary;
+            $item->report_impression = $request->report_impression;
+            $item->report_text = $request->report_text;
+            $item->clinical_indication = $request->clinical_indication;
+            $item->report_technique = $request->report_technique;
+            $item->report_radiologist_id = $request->report_radiologist_id;
+            $item->report_category = $request->report_category;
+            $item->report_is_draft = true;
+            $norm = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
+            if (in_array($norm, ['ordered', 'in_progress'], true)) {
+                $item->status = 'examination';
+            }
+            $item->save();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Draft saved. Study stays in workflow until you finalize.',
+                'item_status' => $item->status,
+            ]);
+        }
+
+        if ($action === 'finalize') {
+            $missing = [];
+            if (! $richHasText($request->clinical_indication)) {
+                $missing[] = 'clinical indication';
+            }
+            if (trim((string) $request->report_technique) === '') {
+                $missing[] = 'technique';
+            }
+            if (! $richHasText($request->report_text)) {
+                $missing[] = 'findings';
+            }
+            if (! $richHasText($request->report_impression)) {
+                $missing[] = 'impression / diagnosis';
+            }
+            if (! filled($request->input('report_radiologist_id'))) {
+                $missing[] = 'radiologist';
+            }
+            if (trim((string) $request->input('report_category', '')) === '') {
+                $missing[] = 'report category';
+            }
+            if ($missing !== []) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Complete before finalizing: ' . implode(', ', $missing) . '.',
+                ], 422);
+            }
+            $item->update([
+                'report_summary' => $request->report_summary,
+                'report_impression' => $request->report_impression,
+                'report_text' => $request->report_text,
+                'clinical_indication' => $request->clinical_indication,
+                'report_technique' => $request->report_technique,
+                'report_radiologist_id' => $request->report_radiologist_id,
+                'report_category' => $request->report_category,
+                'report_is_draft' => false,
+                'status' => 'completed',
+                'reported_at' => $item->reported_at ?? now(),
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Report finalized and marked completed.',
+                'print_url' => route('hospital.radiology.worklist.print', $item->id),
+                'pdf_url' => route('hospital.radiology.ris.completed-pdf', $item->id),
+                'item_status' => 'completed',
+            ]);
+        }
 
         $item->update([
             'report_summary' => $request->report_summary,
             'report_impression' => $request->report_impression,
             'report_text' => $request->report_text,
+            'clinical_indication' => $request->clinical_indication,
+            'report_technique' => $request->report_technique,
+            'report_radiologist_id' => $request->report_radiologist_id,
+            'report_category' => $request->report_category,
             'status' => $hasFinalReportData ? 'completed' : $item->status,
-            'reported_at' => $hasFinalReportData ? now() : $item->reported_at,
+            'reported_at' => $hasFinalReportData ? ($item->reported_at ?? now()) : $item->reported_at,
         ]);
 
         return response()->json(['status' => true, 'message' => 'Radiology report updated successfully.']);
@@ -828,7 +950,7 @@ class DiagnosticWorklistController extends BaseHospitalController
             ->first();
 
         return view('hospital.diagnostics.radiology-worklist.print', [
-            'item' => $item->load(['order.patient', 'order.visitable', 'patientCharge']),
+            'item' => $item->load(['order.patient', 'order.visitable', 'patientCharge', 'reportRadiologist']),
             'hospital' => auth()->user()?->hospital,
             'printTemplate' => $printTemplate,
         ]);
@@ -931,15 +1053,21 @@ class DiagnosticWorklistController extends BaseHospitalController
         $this->authorizeItem($item, 'radiology');
 
         $currentStatus = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
-        $nextStatus = $this->nextStatus($currentStatus, ['ordered', 'in_progress']);
-        if (!$nextStatus) {
-            return response()->json(['status' => false, 'message' => 'No further status transition available.'], 422);
+        if ($currentStatus === 'in_progress') {
+            $currentStatus = 'examination';
         }
 
-        $item->status = $nextStatus;
+        if ($currentStatus !== 'ordered') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Use the RIS worklist to move ordered studies to examination, then complete the report from the Reporting tab.',
+            ], 422);
+        }
+
+        $item->status = 'examination';
         $item->save();
 
-        return response()->json(['status' => true, 'message' => 'Radiology status updated to ' . str_replace('_', ' ', $nextStatus) . '.']);
+        return response()->json(['status' => true, 'message' => 'Radiology status updated to examination.']);
     }
 
     protected function authorizeItem(DiagnosticOrderItem $item, string $department): void
@@ -1059,7 +1187,16 @@ class DiagnosticWorklistController extends BaseHospitalController
 
     protected function isPrintable(DiagnosticOrderItem $item): bool
     {
-        return strtolower(str_replace([' ', '-'], '_', (string) $item->status)) === 'completed';
+        $status = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
+        if ($status === 'completed') {
+            return true;
+        }
+
+        if ($item->department === 'radiology') {
+            return filled($item->report_summary) || filled($item->report_impression) || filled($item->report_text);
+        }
+
+        return false;
     }
 
     public function getTatAnalytics(Request $request)

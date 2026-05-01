@@ -1,3 +1,4 @@
+@props(['routes' => []])
 <script>
-    window.Routes = {!! json_encode($routes ?? []) !!};
+    window.Routes = @json($routes);
 </script>
