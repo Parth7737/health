@@ -1,3 +1,6 @@
+@php
+    $risNormStatus = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
+@endphp
 <div class="modal-header">
     <h5 class="modal-title">Radiology Report | {{ $item->test_name }}</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -5,6 +8,7 @@
 
 <form method="POST" id="saveReportForm">
     <input type="hidden" name="item_id" value="{{ $item->id }}">
+    <input type="hidden" name="save_action" id="radRisSaveAction" value="save">
     <div class="modal-body">
         <div class="row g-2">
             <div class="col-md-4">
@@ -53,10 +57,23 @@
                     </div>
                 </div>
             @endif
+
+            @if($risNormStatus === 'completed')
+                <div class="col-md-12">
+                    <label class="form-label">Addendum (appends to narrative after finalization)</label>
+                    <textarea class="form-control" name="addendum_text" rows="2" placeholder="Additional note — saved only when you use Save addendum"></textarea>
+                </div>
+            @endif
         </div>
     </div>
-    <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save</button>
+    <div class="modal-footer flex-wrap gap-2">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <a href="{{ route('hospital.radiology.worklist.print', $item) }}" target="_blank" rel="noopener" class="btn btn-outline-success"><i class="fa-solid fa-print"></i> Print</a>
+        <button type="button" class="btn btn-light border" id="radRisReportDraftBtn"><i class="fa-solid fa-floppy-disk"></i> Save draft</button>
+        @if($risNormStatus === 'completed')
+            <button type="button" class="btn btn-warning text-dark" id="radRisReportAddendumBtn"><i class="fa-solid fa-plus"></i> Save addendum</button>
+        @endif
+        <button type="button" class="btn btn-primary" id="radRisReportFinalizeBtn"><i class="fa-solid fa-circle-check"></i> Finalize report</button>
+        <button type="submit" class="btn btn-outline-primary" id="radRisReportLegacySaveBtn">Save</button>
     </div>
 </form>

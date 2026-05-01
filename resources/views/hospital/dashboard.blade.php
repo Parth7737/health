@@ -36,7 +36,7 @@ District Hospital Dehradun &mdash; Real-Time Operations Overview | <span id="liv
             <a href="{{ route('hospital.ipd-patient.index') }}" class="quick-tile"><span class="qt-icon">&#x1F6CF;&#xFE0F;</span><span class="qt-label">IPD Admit</span></a>
             <a href="{{ route('hospital.pharmacy.sale.index') }}" class="quick-tile"><span class="qt-icon">&#x1F48A;</span><span class="qt-label">Pharmacy</span></a>
             <a href="{{ route('hospital.pathology.worklist.index') }}" class="quick-tile"><span class="qt-icon">&#x1F9EA;</span><span class="qt-label">Lab / LIS</span></a>
-            <a href="{{ route('hospital.radiology.worklist.index') }}" class="quick-tile"><span class="qt-icon">&#x1FA7B;</span><span class="qt-label">Radiology</span></a>
+            <a href="{{ route('hospital.radiology.ris') }}" class="quick-tile"><span class="qt-icon">&#x1FA7B;</span><span class="qt-label">Radiology</span></a>
             <a href="{{ route('hospital.dashboard') }}" class="quick-tile"><span class="qt-icon">&#x1F4B3;</span><span class="qt-label">Billing</span></a>
             <a href="{{ route('hospital.dashboard') }}" class="quick-tile"><span class="qt-icon">&#x1F691;</span><span class="qt-label">Ambulance</span></a>
             <a href="{{ route('hospital.dashboard') }}" class="quick-tile"><span class="qt-icon">&#x1FA78;</span><span class="qt-label">Blood Bank</span></a>

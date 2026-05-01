@@ -233,6 +233,17 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
     
     // Radiology Worklist
     Route::group(['middleware' => ['permission:view-radiology-report'], 'prefix' => 'radiology', 'as' => 'radiology.'], function () {
+        Route::get('/', 'RadiologyRisController@index')->name('ris');
+        Route::get('ris/summary', 'RadiologyRisController@summary')->name('ris.summary');
+        Route::get('ris/modalities-board', 'RadiologyRisController@modalitiesBoard')->name('ris.modalities-board');
+        Route::post('ris/worklist/load', 'RadiologyRisController@worklistLoad')->name('ris.worklist-load');
+        Route::get('ris/report/{item}', 'RadiologyRisController@reportItemJson')->name('ris.report-item');
+        Route::post('ris/workflow/{item}', 'RadiologyRisController@advanceWorkflow')->name('ris.workflow-advance');
+        Route::get('ris/completed-pdf/{item}', 'RadiologyRisController@completedPdf')->name('ris.completed-pdf');
+        Route::get('ris/analytics', 'RadiologyRisController@analytics')->name('ris.analytics');
+        Route::get('ris/pending-queue', 'RadiologyRisController@pendingQueue')->name('ris.pending-queue');
+        Route::get('ris/protocols', 'RadiologyRisController@protocols')->name('ris.protocols');
+        Route::get('ris/schedule', 'RadiologyRisController@schedule')->name('ris.schedule');
         Route::get('worklist', 'DiagnosticWorklistController@radiologyIndex')->name('worklist.index');
         Route::post('worklist/load', 'DiagnosticWorklistController@loadRadiology')->name('worklist.load');
         Route::post('worklist/show-form/{item}', 'DiagnosticWorklistController@showRadiologyForm')->name('worklist.showform');
