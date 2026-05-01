@@ -725,6 +725,7 @@ class IpdPatientController extends BaseHospitalController
             'respiration' => 'nullable|string|max:50',
             'systolic_bp' => 'nullable|string|max:50',
             'diastolic_bp' => 'nullable|string|max:50',
+            'spo2' => 'nullable|string|max:50',
             'diabetes' => 'nullable|string|max:50',
             'bmi' => 'nullable|string|max:50',
             'family_history' => 'nullable|array',
@@ -761,6 +762,7 @@ class IpdPatientController extends BaseHospitalController
             'respiration' => $request->respiration,
             'systolic_bp' => $request->systolic_bp,
             'diastolic_bp' => $request->diastolic_bp,
+            'spo2' => $request->spo2,
             'diabetes' => $request->diabetes,
             'bmi' => $request->bmi,
             'family_history' => $familyHistoryValues->implode(', '),
@@ -1200,6 +1202,11 @@ class IpdPatientController extends BaseHospitalController
                     'pulse' => $allocation->pulse,
                     'temperature' => $allocation->temperature,
                     'respiration' => $allocation->respiration,
+                    'systolic_bp' => $allocation->systolic_bp,
+                    'diastolic_bp' => $allocation->diastolic_bp,
+                    'spo2' => $allocation->spo2,
+                    'diabetes' => $allocation->diabetes,
+                    'bmi' => $allocation->bmi,
                 ]
             );
 

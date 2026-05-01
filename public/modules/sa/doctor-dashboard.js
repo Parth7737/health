@@ -540,7 +540,7 @@
 
       listEl.innerHTML = selectedTests.map((test) => {
         const icon = test.type === 'radiology' ? '🩻' : '🧪';
-        const priorityText = test.type === 'pathology' ? ` [${escapeHtml(test.priority)}]` : '';
+        const priorityText = ` [${escapeHtml(test.priority)}]`;
         return `<span class="doctor-care-test-badge">${icon} ${escapeHtml(test.label)}${priorityText} <button type="button" class="doctor-care-test-remove" data-type="${test.type}" data-test-id="${escapeHtml(test.id)}">✕</button></span>`;
       }).join('');
     }
@@ -564,12 +564,8 @@
           return;
         }
 
-        if (orderType === 'pathology') {
-          priorityWrapEl.style.display = '';
-          priorityEl.value = state.diagnosticPriorityByType.pathology || 'Routine';
-        } else {
-          priorityWrapEl.style.display = 'none';
-        }
+        priorityWrapEl.style.display = '';
+        priorityEl.value = state.diagnosticPriorityByType[orderType] || 'Routine';
       }
 
       const typeOptions = Array.from(typeEl.options)
@@ -608,7 +604,10 @@
 
       if (priorityEl) {
         priorityEl.onchange = function () {
-          state.diagnosticPriorityByType.pathology = priorityEl.value || 'Routine';
+          const ot = typeEl.value;
+          if (ot) {
+            state.diagnosticPriorityByType[ot] = priorityEl.value || 'Routine';
+          }
           renderUnifiedDiagnosticBadges();
         };
       }
@@ -619,15 +618,16 @@
         }
 
         setDiagnosticOptionSelected(typeEl.value, testEl.value, true);
-        if (typeEl.value === 'pathology') {
-          const hiddenSelectEl = document.getElementById(`diagnostic_test_ids_${typeEl.value}`);
-          const selectedHiddenOption = hiddenSelectEl
-            ? Array.from(hiddenSelectEl.options || []).find((option) => String(option.value) === String(testEl.value))
-            : null;
-          if (selectedHiddenOption) {
-            selectedHiddenOption.dataset.selectedPriority = priorityEl ? (priorityEl.value || 'Routine') : 'Routine';
-          }
-          state.diagnosticPriorityByType.pathology = priorityEl ? (priorityEl.value || 'Routine') : 'Routine';
+        const orderType = typeEl.value;
+        const hiddenSelectEl = document.getElementById(`diagnostic_test_ids_${orderType}`);
+        const selectedHiddenOption = hiddenSelectEl
+          ? Array.from(hiddenSelectEl.options || []).find((option) => String(option.value) === String(testEl.value))
+          : null;
+        if (selectedHiddenOption) {
+          selectedHiddenOption.dataset.selectedPriority = priorityEl ? (priorityEl.value || 'Routine') : 'Routine';
+        }
+        if (orderType) {
+          state.diagnosticPriorityByType[orderType] = priorityEl ? (priorityEl.value || 'Routine') : 'Routine';
         }
         renderUnifiedDiagnosticBadges();
 
@@ -688,9 +688,7 @@
         .filter((option) => String(option.dataset.itemId || '').trim() === '')
         .map((option) => String(option.value));
 
-      const priority = orderType === 'pathology'
-        ? String(state.diagnosticPriorityByType.pathology || 'Routine')
-        : 'Routine';
+      const priority = String(state.diagnosticPriorityByType[orderType] || 'Routine');
 
       return {
         selectEl,

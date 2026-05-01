@@ -38,6 +38,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -1019,6 +1020,19 @@ class PatientManagementController extends BaseHospitalController
             ->orderByDesc('id')
             ->first();
 
+        $patient360CanIpdDischarge = false;
+        if ($activeIpdAllocation) {
+            $activeIpdAllocation = $this->findIpdAllocationForPatient360($activeIpdAllocation->id);
+            $activeIpdAllocation = $this->syncIpdBedChargeForPatient360($activeIpdAllocation, $chargeLedger);
+            $episodeAllocations = $this->resolveIpdEpisodeAllocationsForPatient360($activeIpdAllocation);
+            $episodeOutstanding = (float) $this->ipdEpisodeChargeQueryForPatient360($activeIpdAllocation, $episodeAllocations)
+                ->get()
+                ->sum(function (PatientCharge $charge) {
+                    return max(0, (float) $charge->amount - (float) $charge->paid_amount);
+                });
+            $patient360CanIpdDischarge = $episodeOutstanding <= 0;
+        }
+
         $latestOpdVisit = OpdPatient::query()
             ->where('hospital_id', $this->hospital_id)
             ->where('patient_id', $patient->id)
@@ -1038,6 +1052,7 @@ class PatientManagementController extends BaseHospitalController
                 'spo2',
                 'temperature',
                 'diabetes',
+                'height',
                 'weight',
                 'bmi',
                 'visit_type',
@@ -1445,6 +1460,7 @@ class PatientManagementController extends BaseHospitalController
         return view('hospital.patient-management.patient-360', [
             'patient' => $patient,
             'activeIpdAllocation' => $activeIpdAllocation,
+            'patient360CanIpdDischarge' => $patient360CanIpdDischarge,
             'latestOpdVisit' => $latestOpdVisit,
             'canPatient360NewOrder' => $canPatient360NewOrder,
             'patient360NewOrderBlockedReason' => $patient360NewOrderBlockedReason,
@@ -2689,5 +2705,156 @@ class PatientManagementController extends BaseHospitalController
             return null; // These go through TPA, not direct payment
         }
         return null;
+    }
+
+    /**
+     * Full allocation row for IPD actions (bed charge sync + episode billing).
+     */
+    private function findIpdAllocationForPatient360(int $allocationId): BedAllocation
+    {
+        return BedAllocation::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->with([
+                'patient',
+                'bed.room.ward.floor',
+                'bed.bedType.chargeMaster',
+                'consultantDoctor',
+                'department',
+                'tpa',
+                'sourceOpdPatient',
+                'admittedBy',
+                'dischargedBy',
+                'charges',
+            ])
+            ->findOrFail($allocationId);
+    }
+
+    /**
+     * Keeps bed charge line in sync (same rules as IpdPatientController::syncBedCharge).
+     */
+    private function syncIpdBedChargeForPatient360(BedAllocation $allocation, ChargeLedgerService $chargeLedger): BedAllocation
+    {
+        $allocation = $this->findIpdAllocationForPatient360($allocation->id);
+
+        $bedType = $allocation->bed?->bedType;
+        if (!$bedType) {
+            return $allocation;
+        }
+
+        $admissionDate = Carbon::parse($allocation->admission_date);
+        $endDate = $allocation->discharge_date ? Carbon::parse($allocation->discharge_date) : now();
+        $quantity = max(1, $admissionDate->copy()->startOfDay()->diffInDays($endDate->copy()->startOfDay()) + 1);
+        $chargeMaster = $bedType->chargeMaster;
+        $billingFrequency = $chargeMaster?->billing_frequency ?? 'per_day';
+        $calculationType = $chargeMaster?->calculation_type ?? 'fixed';
+        $effectiveQuantity = $billingFrequency === 'one_time' ? 1 : $quantity;
+
+        $chargeAttributes = [
+            'hospital_id' => $allocation->hospital_id,
+            'patient_id' => $allocation->patient_id,
+            'visitable_type' => BedAllocation::class,
+            'visitable_id' => $allocation->id,
+            'source_type' => BedAllocation::class,
+            'source_id' => $allocation->id,
+            'module' => 'ipd',
+            'particular' => 'Bed Charge - ' . ($allocation->bed?->getFullBedIdentifier() ?: 'IPD Bed'),
+            'charge_master_id' => $chargeMaster?->id,
+            'charge_category' => $chargeMaster?->category ?? 'bed_charge',
+            'calculation_type' => $calculationType,
+            'billing_frequency' => $billingFrequency,
+            'quantity' => $effectiveQuantity,
+            'payer_type' => $allocation->tpa_id ? 'tpa' : 'self',
+            'tpa_id' => $allocation->tpa_id,
+            'charged_at' => $allocation->admission_date,
+        ];
+
+        if (!$chargeMaster) {
+            $baseAmount = (float) $bedType->base_charge * $effectiveQuantity;
+            $chargeAttributes['unit_rate'] = (float) $bedType->base_charge;
+            $chargeAttributes['amount'] = $baseAmount;
+            $chargeAttributes['net_amount'] = $baseAmount;
+        }
+
+        $chargeLedger->upsertCharge($chargeAttributes);
+
+        return $allocation->fresh([
+            'patient',
+            'bed.room.ward.floor',
+            'bed.bedType.chargeMaster',
+            'consultantDoctor',
+            'department',
+            'tpa',
+            'sourceOpdPatient',
+            'admittedBy',
+            'dischargedBy',
+            'charges',
+        ]);
+    }
+
+    /**
+     * @see \App\Http\Controllers\Hospital\IpdPatientController::resolveEpisodeAllocations
+     */
+    private function resolveIpdEpisodeAllocationsForPatient360(BedAllocation $allocation): Collection
+    {
+        $history = BedAllocation::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('patient_id', $allocation->patient_id)
+            ->orderByDesc('admission_date')
+            ->orderByDesc('id')
+            ->get();
+
+        $index = $history->search(fn (BedAllocation $entry) => (int) $entry->id === (int) $allocation->id);
+        if ($index === false) {
+            return collect([$allocation]);
+        }
+
+        $episode = collect([$history[$index]]);
+        for ($i = $index + 1; $i < $history->count(); $i++) {
+            $candidate = $history[$i];
+            if ((string) $candidate->discharge_status !== 'transferred') {
+                break;
+            }
+            $episode->push($candidate);
+        }
+
+        return $episode->sortBy('admission_date')->values();
+    }
+
+    /**
+     * @see \App\Http\Controllers\Hospital\IpdPatientController::episodeChargeQuery
+     */
+    private function ipdEpisodeChargeQueryForPatient360(BedAllocation $allocation, Collection $episodeAllocations)
+    {
+        $allocationIds = $episodeAllocations->pluck('id')->all();
+        $diagnosticItemIds = DiagnosticOrderItem::query()
+            ->whereHas('order', function ($query) use ($allocationIds) {
+                $query->where('visitable_type', BedAllocation::class)
+                    ->whereIn('visitable_id', $allocationIds);
+            })
+            ->pluck('id')
+            ->all();
+
+        return PatientCharge::query()
+            ->where('patient_id', $allocation->patient_id)
+            ->where(function ($query) use ($allocation, $allocationIds, $diagnosticItemIds) {
+                $query->where(function ($bedQuery) use ($allocationIds) {
+                    $bedQuery->where('visitable_type', BedAllocation::class)
+                        ->whereIn('visitable_id', $allocationIds);
+                });
+
+                if ((int) $allocation->source_opd_patient_id > 0) {
+                    $query->orWhere(function ($opdQuery) use ($allocation) {
+                        $opdQuery->where('visitable_type', OpdPatient::class)
+                            ->where('visitable_id', (int) $allocation->source_opd_patient_id);
+                    });
+                }
+
+                if (!empty($diagnosticItemIds)) {
+                    $query->orWhere(function ($diagQuery) use ($diagnosticItemIds) {
+                        $diagQuery->where('source_type', DiagnosticOrderItem::class)
+                            ->whereIn('source_id', $diagnosticItemIds);
+                    });
+                }
+            });
     }
 }

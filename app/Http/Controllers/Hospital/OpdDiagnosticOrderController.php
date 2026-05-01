@@ -79,7 +79,7 @@ class OpdDiagnosticOrderController extends BaseHospitalController
 
         $this->authorizeOrderType($orderType);
 
-        $priorityValue = $orderType === 'pathology' ? (string) $request->input('priority', 'Routine') : 'Routine';
+        $priorityValue = (string) $request->input('priority', 'Routine');
 
         $validator = Validator::make($request->all(), [
             'order_type' => 'required|in:pathology,radiology',

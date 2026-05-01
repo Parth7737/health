@@ -44,7 +44,18 @@
     $rbsText = $isIpdActive ? (data_get($contextRecord, 'diabetes') ?: '-') : (data_get($contextRecord, 'diabetes') ?: '-');
     $weightRaw = $isIpdActive ? data_get($contextRecord, 'weight') : data_get($contextRecord, 'weight');
     $weightText = filled($weightRaw) ? ((string) $weightRaw . ' kg') : '-';
-    $bmiText = data_get($contextRecord, 'bmi') ?: '-';
+    $bmiText = data_get($contextRecord, 'bmi');
+    if (! filled($bmiText)) {
+        $hM = (float) (data_get($contextRecord, 'height') ?: 0);
+        $wKg = (float) (preg_replace('/[^\d.]/', '', (string) ($weightRaw ?? '')) ?: 0);
+        if ($hM >= 0.5 && $hM <= 3.0 && $wKg >= 20 && $wKg <= 400) {
+            $calcBmi = $wKg / ($hM * $hM);
+            if ($calcBmi >= 5 && $calcBmi <= 80) {
+                $bmiText = number_format($calcBmi, 1);
+            }
+        }
+    }
+    $bmiText = filled($bmiText) ? (string) $bmiText : '-';
 
     $p360VisitStatusRaw = strtolower((string) ($isIpdActive ? data_get($activeIpdAllocation, 'status') : data_get($latestOpdVisit, 'status')));
     if ($isIpdActive) {
@@ -68,30 +79,40 @@
 <div class="container-fluid px-0">
     <div class="opd-content-wrap">
         <!-- Patient Header -->
-        <div style="background:linear-gradient(135deg,#071221,#0a1628);padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.08)">
-            <div class="flex items-center gap-4 flex-wrap">
-                <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1565c0,#00695c);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;flex-shrink:0;border:2px solid rgba(255,255,255,.2)">{{ $initials }}</div>
-                <div class="flex-1">
-                    <div style="font-size:18px;font-weight:800;color:#e8f2fb;letter-spacing:-.02em">{{ $patientName }}</div>
-                    <div style="font-size:11.5px;color:#6a8fa8;margin-top:2px">
-                        MRN: {{ $displayMrn }} &nbsp;·&nbsp;
-                        ABHA: {{ $displayAbha }} &nbsp;·&nbsp;
-                        {{ $ageText }}, {{ $patient->gender ?? '-' }} &nbsp;·&nbsp;
-                        Blood Group: {{ $patient->blood_group ?: '-' }} &nbsp;·&nbsp;
-                        {{ $dateLabel }}: {{ $dateText }}
+        <div class="p360-patient-banner" style="background:linear-gradient(135deg,#071221,#0a1628);padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.08)">
+            <div class="p360-banner-row1">
+                <div class="p360-banner-avatar">{{ $initials }}</div>
+                <div class="p360-banner-patient">
+                    <div class="p360-banner-name">{{ $patientName }}</div>
+                    <div class="p360-banner-meta">
+                        <div class="p360-meta-line">
+                            <span>MRN: <strong class="p360-meta-strong">{{ $displayMrn }}</strong></span>
+                            <span class="p360-meta-sep" aria-hidden="true">·</span>
+                            <span>ABHA: <strong class="p360-meta-strong">{{ $displayAbha }}</strong></span>
+                        </div>
+                        <div class="p360-meta-line">
+                            <span>{{ $ageText }}, {{ $patient->gender ?? '-' }}</span>
+                            <span class="p360-meta-sep" aria-hidden="true">·</span>
+                            <span>Blood: <strong class="p360-meta-strong">{{ $patient->blood_group ?: '—' }}</strong></span>
+                            <span class="p360-meta-sep" aria-hidden="true">·</span>
+                            <span>{{ $dateLabel }}: <strong class="p360-meta-strong">{{ $dateText }}</strong></span>
+                        </div>
                     </div>
                 </div>
-                <div class="flex gap-2 flex-wrap">
+            </div>
+            <div class="p360-banner-row2">
+                <div class="p360-banner-badges" aria-label="Visit context">
                     @if($isIpdActive)
-                        <span class="badge badge-danger" style="font-size:11px">IPD - {{ $wardName }} Bed {{ $bedCode }}</span>
-                        <span class="badge badge-primary">Admission: {{ $activeIpdAllocation->admission_no ?: '-' }}</span>
-                        <span class="badge {{ $p360VisitStatusBadgeClass }}" style="font-size:11px">Status: {{ $p360VisitStatusLabel }}</span>
+                        <span class="badge badge-danger p360-badge-chip">IPD — {{ $wardName }} · Bed {{ $bedCode }}</span>
+                        <span class="badge badge-primary p360-badge-chip" title="{{ e($activeIpdAllocation->admission_no ?: '') }}">Adm: {{ \Illuminate\Support\Str::limit($activeIpdAllocation->admission_no ?: '—', 20, '…') }}</span>
+                        <span class="badge {{ $p360VisitStatusBadgeClass }} p360-badge-chip">Status: {{ $p360VisitStatusLabel }}</span>
                     @else
-                        <span class="badge badge-primary" style="font-size:11px">OPD - Visit {{ data_get($latestOpdVisit, 'case_no') ?: '-' }}</span>
-                        <span class="badge badge-warning">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? str_pad((int) data_get($latestOpdVisit, 'token_no'), 3, '0', STR_PAD_LEFT) : '-' }}</span>
-                        <span class="badge {{ $p360VisitStatusBadgeClass }}" style="font-size:11px">Status: {{ $p360VisitStatusLabel }}</span>
+                        <span class="badge badge-primary p360-badge-chip">OPD — Visit {{ data_get($latestOpdVisit, 'case_no') ?: '—' }}</span>
+                        <span class="badge badge-warning p360-badge-chip">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? str_pad((int) data_get($latestOpdVisit, 'token_no'), 3, '0', STR_PAD_LEFT) : '—' }}</span>
+                        <span class="badge {{ $p360VisitStatusBadgeClass }} p360-badge-chip">Status: {{ $p360VisitStatusLabel }}</span>
                     @endif
-                    <!-- <button class="btn btn-ghost btn-sm" style="color:#d0e8fb;border-color:rgba(255,255,255,.15)" onclick="window.print()">🖨 Print</button> -->
+                </div>
+                <div class="p360-banner-actions">
                     <button
                         type="button"
                         class="btn btn-primary btn-sm"
@@ -108,6 +129,26 @@
                             title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}"
                         @endif
                     >+ New Order</button>
+                    @if($isIpdActive && $activeIpdAllocation)
+                        @can('edit-patient-management')
+                            <button
+                                type="button"
+                                class="btn btn-warning btn-sm p360-transfer-ipd-btn"
+                                data-url="{{ route('hospital.ipd-patient.transfer.showform', ['allocation' => $activeIpdAllocation->id]) }}"
+                            >Transfer Bed</button>
+                            <button
+                                type="button"
+                                class="btn btn-sm p360-discharge-ipd-btn {{ ($patient360CanIpdDischarge ?? false) ? 'btn-success' : 'btn-secondary' }}"
+                                data-url="{{ route('hospital.ipd-patient.discharge.showform', ['allocation' => $activeIpdAllocation->id]) }}"
+                                @if(!($patient360CanIpdDischarge ?? false))
+                                    disabled
+                                    aria-disabled="true"
+                                    style="opacity:.55;cursor:not-allowed"
+                                @endif
+                                title="{{ ($patient360CanIpdDischarge ?? false) ? 'Discharge patient' : 'Clear outstanding bill before discharge' }}"
+                            >{{ ($patient360CanIpdDischarge ?? false) ? 'Discharge' : 'Clear Bill To Discharge' }}</button>
+                        @endcan
+                    @endif
                 </div>
             </div>
 
@@ -737,6 +778,114 @@
     background: #f7fafd;
 }
 
+/* Patient 360 — banner: identity row + toolbar row (badges / actions) */
+.p360-patient-banner .p360-banner-row1 {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+}
+.p360-patient-banner .p360-banner-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1565c0, #00695c);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 800;
+    flex-shrink: 0;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+.p360-patient-banner .p360-banner-patient {
+    flex: 1;
+    min-width: 0;
+}
+.p360-patient-banner .p360-banner-name {
+    font-size: 18px;
+    font-weight: 800;
+    color: #e8f2fb;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+.p360-patient-banner .p360-banner-meta {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #8aa9c4;
+    line-height: 1.55;
+}
+.p360-patient-banner .p360-meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 0;
+    margin-bottom: 4px;
+}
+.p360-patient-banner .p360-meta-line:last-child {
+    margin-bottom: 0;
+}
+.p360-patient-banner .p360-meta-sep {
+    color: #4a6880;
+    padding: 0 8px;
+    user-select: none;
+}
+.p360-patient-banner .p360-meta-strong {
+    color: #c8dff2;
+    font-weight: 600;
+}
+.p360-patient-banner .p360-banner-row2 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px 16px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.p360-patient-banner .p360-banner-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    flex: 1 1 200px;
+    min-width: 0;
+}
+.p360-patient-banner .p360-badge-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 6px;
+    max-width: 100%;
+}
+.p360-patient-banner .p360-banner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 1 auto;
+}
+@media (max-width: 640px) {
+    .p360-patient-banner .p360-meta-sep {
+        display: none;
+    }
+    .p360-patient-banner .p360-meta-line span {
+        display: block;
+        width: 100%;
+    }
+    .p360-patient-banner .p360-banner-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+    .p360-patient-banner .p360-banner-actions .btn {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+}
+
 /* Force patient.html button look for this page */
 .opd-content-wrap .btn {
     display: inline-flex !important;
@@ -798,10 +947,12 @@
 @endsection
 
 @push('styles')
+@include('layouts.partials.flatpickr-css')
 <link rel="stylesheet" type="text/css" href="{{asset('public/front/assets/css/gov.css')}}">
 @endpush
 
 @push('scripts')
+@include('layouts.partials.flatpickr-js')
 <script src="{{ asset('public/modules/sa/opd-care-shared.js') }}"></script>
 <script>
 /* ── Page tab switching ─────────────────────────────────────── */
@@ -880,6 +1031,7 @@ window.Patient360Config = {
         spo2:         @json(data_get($contextRecord, 'spo2') ?? data_get($contextRecord, 'spo2_percentage')),
         temperature:  @json(data_get($contextRecord, 'temperature')),
         weight:       @json(data_get($contextRecord, 'weight')),
+        bmi:          @json(data_get($contextRecord, 'bmi')),
         rbs:          @json(data_get($contextRecord, 'diabetes'))
     }
 };

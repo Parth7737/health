@@ -34,6 +34,8 @@
 
     // --- Init ---
     function init() {
+        initIpdBedActions();
+
         var modalEl = doc.getElementById('p360Modal');
         if (!modalEl) { return; }
 
@@ -106,13 +108,8 @@
     }
 
     function ensureUnifiedLayoutStyles() {
-        if (doc.getElementById('p360UnifiedLayoutStyle')) {
-            return;
-        }
-
-        var styleEl = doc.createElement('style');
-        styleEl.id = 'p360UnifiedLayoutStyle';
-        styleEl.textContent = ''
+        var styleEl = doc.getElementById('p360UnifiedLayoutStyle');
+        var css = ''
             + '.doctor-care-unified-modal{background:#fff;min-height:100%;padding:0;}'
             + '.doctor-care-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}'
             + '.doctor-care-col-stack{display:grid;gap:14px;}'
@@ -125,26 +122,39 @@
             + '.doctor-care-section-title{display:inline-flex;align-items:center;gap:5px;}'
             + '.doctor-care-head-action{font-size:11px;font-weight:700;border-radius:4px;line-height:1;padding:5px 9px;height:24px;}'
             + '.doctor-care-unified-modal .prescription-workspace,.doctor-care-unified-modal .prescription-meta-card{background:transparent;border:0;border-radius:0;padding:0;}'
-            + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid{display:none !important;gap:6px !important;margin-bottom:8px;grid-auto-flow:column !important;}'
-            + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid{min-width:unset !important;}'
-            + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open{display:grid !important;}'
-            + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid>div{min-width:0 !important;grid-column:auto !important;}'
-            + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-items-shell{overflow-x:auto;}'
+            + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid:not(.is-open){display:none !important;}'
+            + '#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open{display:grid !important;grid-template-columns:3fr 1.6fr 2fr 2fr 2fr 1fr auto !important;grid-auto-flow:row !important;gap:10px !important;align-items:start !important;margin-bottom:12px;}'
+            + '#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open > div{grid-column:auto !important;min-width:0;}'
+            + '@media (max-width:1399.98px) and (min-width:992px){#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open{grid-template-columns:3fr 1.6fr 2fr 2fr 2fr 1fr auto !important;grid-auto-flow:row !important;}#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open > div{grid-column:auto !important;}}'
+            + '#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open .form-control,#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open .form-select{height:42px !important;min-height:42px !important;font-size:13px !important;box-sizing:border-box !important;}'
+            + '#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open .select2-container .select2-selection--single{height:42px !important;min-height:42px !important;display:flex;align-items:center;box-sizing:border-box !important;}'
+            + '#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open .select2-container .select2-selection__rendered{line-height:40px !important;padding-left:10px;padding-right:20px;}'
+            + '#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open .prescription-entry-actions .d-flex{align-items:center;min-height:42px;}'
+            + '#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open #addPrescriptionItemRow{width:42px !important;height:42px !important;min-width:42px !important;min-height:42px !important;border-radius:8px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;padding:0 !important;line-height:1 !important;}'
+            + '#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open #cancelPrescriptionItemEdit:not(.d-none){width:42px !important;height:42px !important;min-width:42px !important;min-height:42px !important;border-radius:8px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;padding:0 !important;line-height:1 !important;}'
+            + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-items-shell{display:grid !important;gap:12px !important;overflow-x:auto;-webkit-overflow-scrolling:touch;}'
             + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot #prescriptionItemsTable{border:1px solid #d6e4f1;border-radius:7px;overflow:hidden;font-size:11px;}'
             + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot #prescriptionItemsTable thead th{background:#edf3f9;color:#56718d;border-color:#d6e4f1;text-transform:uppercase;font-size:10px;font-weight:700;letter-spacing:.02em;padding:7px 8px;}'
             + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot #prescriptionItemsTable tbody td{border-color:#e4edf6;padding:7px 8px;font-size:11px;}'
             + '.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-notes-grid{display:none;}'
             + '.doctor-care-test-block{border:1px solid #d6e4f1;border-radius:8px;background:#f8fbff;padding:10px;margin-bottom:10px;display:none;}'
             + '.doctor-care-test-block.is-open{display:block;}'
-            + '.doctor-care-test-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end;}'
-            + '.doctor-care-test-grid .doctor-care-form-group{margin-bottom:0;}'
+            + '.doctor-care-unified-modal .doctor-care-test-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;}'
+            + '.doctor-care-unified-modal .doctor-care-test-grid .doctor-care-form-group{margin-bottom:0;}'
             + '.doctor-care-test-added{padding:8px 10px;min-height:40px;font-size:12px;color:#6a84a0;border:1px solid #d6e4f1;border-radius:6px;background:#fff;display:flex;flex-wrap:wrap;gap:6px;}'
             + '.doctor-care-empty-text{color:#7a93ad;}'
             + '.doctor-care-test-badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;background:#e7f1ff;color:#0f56a5;border:1px solid #bfd7f5;font-size:11px;font-weight:600;padding:3px 10px;}'
             + '.doctor-care-test-remove{border:0;background:transparent;color:#0f56a5;font-size:11px;line-height:1;padding:0;cursor:pointer;font-weight:700;}'
             + '.doctor-care-hidden-slot{display:none;}'
-            + '@media (max-width:991.98px){.doctor-care-grid{grid-template-columns:1fr;}.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid,.doctor-care-unified-modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open{min-width:0;grid-template-columns:1fr !important;}.doctor-care-test-grid{grid-template-columns:1fr;}}';
+            + '@media (max-width:991.98px){.doctor-care-grid{grid-template-columns:1fr;}#p360Modal #doctorUnifiedPrescriptionSlot .prescription-entry-grid.is-open{min-width:880px;grid-template-columns:3fr 1.6fr 2fr 2fr 2fr 1fr auto !important;grid-auto-flow:row !important;}.doctor-care-unified-modal .doctor-care-test-grid{grid-template-columns:1fr;}}';
 
+        if (styleEl) {
+            styleEl.textContent = css;
+            return;
+        }
+        styleEl = doc.createElement('style');
+        styleEl.id = 'p360UnifiedLayoutStyle';
+        styleEl.textContent = css;
         doc.head.appendChild(styleEl);
     }
 
@@ -318,6 +328,77 @@
         }
     }
 
+    /** Parse weight as kg from input (digits and one decimal). */
+    function parseWeightKgForBmi(raw) {
+        if (raw == null || String(raw).trim() === '') {
+            return null;
+        }
+        var w = parseFloat(String(raw).replace(/,/g, '.').replace(/[^\d.]/g, ''));
+        if (isNaN(w) || w < 1 || w > 500) {
+            return null;
+        }
+        return w;
+    }
+
+    /**
+     * Parse height: 50–300 treated as cm; 0.5–2.5 as metres.
+     * Avoids treating "5.5" as 5.5 m (common typo vs cm / feet).
+     */
+    function parseHeightMetersForBmi(raw) {
+        if (raw == null || String(raw).trim() === '') {
+            return null;
+        }
+        var h = parseFloat(String(raw).replace(/,/g, '.').replace(/[^\d.]/g, ''));
+        if (isNaN(h) || h <= 0) {
+            return null;
+        }
+        if (h >= 50 && h <= 300) {
+            return h / 100;
+        }
+        if (h >= 0.5 && h <= 2.5) {
+            return h;
+        }
+        return null;
+    }
+
+    /** Wire height/weight → BMI for IPD or OPD unified vitals inside the modal. */
+    function wireVitalsBmiAutoCalc() {
+        if (!els.body) {
+            return;
+        }
+        var form = els.body.querySelector('#doctorUnifiedIpdVitalsForm')
+            || els.body.querySelector('#doctorUnifiedVitalsForm');
+        if (!form || form.dataset.p360BmiWired === '1') {
+            return;
+        }
+        var hEl = form.querySelector('input[name="height"]');
+        var wEl = form.querySelector('input[name="weight"]');
+        var bEl = form.querySelector('input[name="bmi"]');
+        if (!hEl || !wEl || !bEl) {
+            return;
+        }
+        form.dataset.p360BmiWired = '1';
+
+        function recalc() {
+            var hm = parseHeightMetersForBmi(hEl.value);
+            var wkg = parseWeightKgForBmi(wEl.value);
+            if (hm == null || wkg == null) {
+                return;
+            }
+            var bmi = wkg / (hm * hm);
+            if (!isFinite(bmi) || bmi < 5 || bmi > 90) {
+                return;
+            }
+            bEl.value = String(Math.round(bmi * 10) / 10);
+        }
+
+        hEl.addEventListener('input', recalc);
+        hEl.addEventListener('change', recalc);
+        wEl.addEventListener('input', recalc);
+        wEl.addEventListener('change', recalc);
+        recalc();
+    }
+
     // --- Wire plugins after slots filled ---
     function wirePlugins() {
         if (els.body) {
@@ -331,7 +412,8 @@
 
         initSelect2();
         initPrescComposer();
-    bindPrescriptionEvents();
+        bindPrescriptionEvents();
+        wireVitalsBmiAutoCalc();
         ensureDiagnosticPriorityControl();
         bindDiagnosticPicker();
 
@@ -460,12 +542,21 @@
             .map(function (o) { return { id: String(o.value), label: o.textContent.trim() }; });
     }
 
-    function setOptionSelected(type, testId, shouldSelect) {
+    function setOptionSelected(type, testId, shouldSelect, prioritySnapshot) {
         var sel = doc.getElementById('diagnostic_test_ids_' + type);
         if (!sel) { return; }
         var opt = Array.from(sel.options).find(function (o) { return String(o.value) === String(testId); });
         if (!opt) { return; }
         opt.selected = !!shouldSelect;
+        if (shouldSelect) {
+            var pv = prioritySnapshot
+                || (doc.getElementById('doctorUnifiedTestPriority') || {}).value
+                || state.diagnosticPriority[type]
+                || 'Routine';
+            opt.dataset.selectedPriority = String(pv);
+        } else if (opt.dataset) {
+            delete opt.dataset.selectedPriority;
+        }
         if (win.jQuery && win.jQuery.fn.select2 && win.jQuery(sel).hasClass('select2-hidden-accessible')) {
             win.jQuery(sel).trigger('change');
         } else {
@@ -480,7 +571,12 @@
             if (!sel) { return; }
             Array.from(sel.selectedOptions || []).forEach(function (o) {
                 if (String(o.value || '').trim()) {
-                    tests.push({ type: type, id: String(o.value), label: o.textContent.trim() });
+                    tests.push({
+                        type:     type,
+                        id:       String(o.value),
+                        label:    o.textContent.trim(),
+                        priority: String(o.dataset.selectedPriority || state.diagnosticPriority[type] || 'Routine')
+                    });
                 }
             });
         });
@@ -497,7 +593,8 @@
         }
         listEl.innerHTML = tests.map(function (t) {
             var icon = t.type === 'radiology' ? '&#x1FA7B;' : '&#x1F9EA;';
-            return '<span class="doctor-care-test-badge">' + icon + ' ' + esc(t.label)
+            var pr = t.priority ? ' <span class="text-muted fw-normal">[' + esc(t.priority) + ']</span>' : '';
+            return '<span class="doctor-care-test-badge">' + icon + ' ' + esc(t.label) + pr
                 + ' <button type="button" class="doctor-care-test-remove" data-type="' + t.type
                 + '" data-test-id="' + esc(t.id) + '">&#x2715;</button></span>';
         }).join('');
@@ -509,7 +606,8 @@
         var typeEl  = doc.getElementById('doctorUnifiedTestType');
         var testEl  = doc.getElementById('doctorUnifiedTestSelect');
         var prioEl  = doc.getElementById('doctorUnifiedTestPriority');
-        var listEl  = doc.getElementById('labTestsAdded');
+        var listEl   = doc.getElementById('labTestsAdded');
+        var prioWrap = doc.getElementById('doctorUnifiedPriorityWrap');
         if (!addBtn || !blockEl || !typeEl || !testEl || !prioEl || !listEl) { return; }
 
         var typeValues = Array.from(typeEl.options)
@@ -524,6 +622,9 @@
 
         addBtn.onclick = function () {
             blockEl.classList.toggle('is-open');
+            if (prioWrap) {
+                prioWrap.style.display = '';
+            }
             if (!typeEl.value && typeValues.length === 1) { typeEl.value = typeValues[0]; }
             if (typeEl.value) { populateTests(typeEl.value); }
             if (typeEl.value) {
@@ -555,7 +656,7 @@
             }
 
             syncDiagnosticPriorityToForm(typeEl.value, prioEl.value);
-            setOptionSelected(typeEl.value, testEl.value, true);
+            setOptionSelected(typeEl.value, testEl.value, true, prioEl.value);
             renderBadges();
             testEl.value = '';
         };
@@ -721,35 +822,50 @@
                 var selEl     = doc.getElementById('diagnostic_test_ids_' + orderType);
                 if (!selEl) { continue; }
 
-                var newIds = Array.from(selEl.selectedOptions || [])
-                    .filter(function (o) { return String(o.value || '').trim() !== '' && String(o.dataset.itemId || '').trim() === ''; })
-                    .map(function (o) { return String(o.value); });
+                var newOpts = Array.from(selEl.selectedOptions || [])
+                    .filter(function (o) { return String(o.value || '').trim() !== '' && String(o.dataset.itemId || '').trim() === ''; });
 
-                if (!newIds.length) { continue; }
+                if (!newOpts.length) { continue; }
 
-                var priority = getDiagnosticPriority(orderType);
-                if (!priority) {
-                    throw new Error('Please select priority for ' + orderType + ' tests.');
-                }
+                var byPriority = {};
+                newOpts.forEach(function (o) {
+                    var pr = String(o.dataset.selectedPriority || state.diagnosticPriority[orderType] || getDiagnosticPriority(orderType) || 'Routine');
+                    if (!pr) {
+                        return;
+                    }
+                    if (!byPriority[pr]) {
+                        byPriority[pr] = [];
+                    }
+                    byPriority[pr].push(String(o.value));
+                });
 
                 var diagUrl  = state.mode === 'ipd'
                     ? rpl(cfg.routes.ipd.diagnosticStore, state.allocationId, '__ALLOCATION__')
                     : rpl(cfg.routes.opd.diagnosticStore, state.opdPatientId);
 
-                var diagBody = new FormData();
-                diagBody.append('order_type', orderType);
-                diagBody.append('priority', priority);
-                if (state.mode === 'opd') { diagBody.append('opd_patient_id', String(state.opdPatientId)); }
-                newIds.forEach(function (id) { diagBody.append('test_ids[]', id); });
+                var prKeys = Object.keys(byPriority);
+                for (var pi = 0; pi < prKeys.length; pi++) {
+                    var priority = prKeys[pi];
+                    var newIds   = byPriority[priority];
+                    if (!priority || !newIds.length) {
+                        throw new Error('Please select priority for ' + orderType + ' tests.');
+                    }
 
-                var diagRes  = await fetch(diagUrl, {
-                    method:  'POST',
-                    headers: { 'X-CSRF-TOKEN': cfg.csrf, 'X-Requested-With': 'XMLHttpRequest' },
-                    body:    diagBody
-                });
-                var diagData = await diagRes.json();
-                if (diagData.status === false || diagData.errors) {
-                    throw new Error(errMsg(diagData, 'Unable to save ' + orderType + ' order.'));
+                    var diagBody = new FormData();
+                    diagBody.append('order_type', orderType);
+                    diagBody.append('priority', priority);
+                    if (state.mode === 'opd') { diagBody.append('opd_patient_id', String(state.opdPatientId)); }
+                    newIds.forEach(function (id) { diagBody.append('test_ids[]', id); });
+
+                    var diagRes  = await fetch(diagUrl, {
+                        method:  'POST',
+                        headers: { 'X-CSRF-TOKEN': cfg.csrf, 'X-Requested-With': 'XMLHttpRequest' },
+                        body:    diagBody
+                    });
+                    var diagData = await diagRes.json();
+                    if (diagData.status === false || diagData.errors) {
+                        throw new Error(errMsg(diagData, 'Unable to save ' + orderType + ' order.'));
+                    }
                 }
             }
 
@@ -852,6 +968,157 @@
 
     function showLoader() { if (typeof win.loader === 'function') { win.loader('show'); } }
     function hideLoader() { if (typeof win.loader === 'function') { win.loader('hide'); } }
+
+    /**
+     * Transfer / discharge use the same IPD routes and partials as the legacy IPD profile;
+     * content is shown in the global #add-datamodal (Bootstrap 5 + Select2 + Flatpickr).
+     */
+    function initIpdBedActions() {
+        if (!win.jQuery) {
+            return;
+        }
+        var $ = win.jQuery;
+
+        function openIpdActionModal(html, sizeClass) {
+            var $modal = $('.add-datamodal');
+            var $ajax = $('#ajaxdata');
+            if (!$modal.length || !$ajax.length) {
+                return;
+            }
+            $ajax.html(html);
+            var $dialog = $modal.find('.modal-dialog');
+            $dialog
+                .removeClass('modal-sm modal-lg modal-xl modal-fullscreen modal-dialog-centered modal-dialog-scrollable')
+                .addClass((sizeClass || 'modal-lg') + ' modal-dialog-centered modal-dialog-scrollable');
+            $modal.modal('show');
+            wireIpdActionModal($modal);
+        }
+
+        function wireIpdActionModal($modalRoot) {
+            var $wrap = $modalRoot.closest('.add-datamodal');
+            if ($.fn.select2) {
+                $modalRoot.find('.select2-modal').each(function () {
+                    var $sel = $(this);
+                    if ($sel.hasClass('select2-hidden-accessible')) {
+                        $sel.select2('destroy');
+                    }
+                    $sel.select2({
+                        dropdownParent: $wrap.length ? $wrap : $modalRoot,
+                        width:            '100%'
+                    });
+                });
+                $modalRoot.find('.modal-body').off('scroll.p360IpdSelect2').on('scroll.p360IpdSelect2', function () {
+                    $modalRoot.find('.select2-hidden-accessible').each(function () {
+                        $(this).select2('close');
+                    });
+                });
+            }
+            var dpEl = doc.getElementById('ipd-discharge-date');
+            if (win.flatpickr && dpEl) {
+                if (dpEl._flatpickr) {
+                    dpEl._flatpickr.destroy();
+                }
+                win.flatpickr(dpEl, { enableTime: true, dateFormat: 'd-m-Y H:i' });
+            }
+        }
+
+        function ajaxFailMessage(xhr) {
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                return xhr.responseJSON.message;
+            }
+            if (xhr && xhr.responseText && typeof xhr.responseText === 'string') {
+                var t = xhr.responseText.trim();
+                if (t && t.charAt(0) !== '{') {
+                    return t.replace(/<[^>]+>/g, '').slice(0, 200);
+                }
+            }
+            return 'Unable to complete the request.';
+        }
+
+        function handleIpdFormValidationErrors(xhr, $form) {
+            if (xhr.status !== 422 || !xhr.responseJSON || !xhr.responseJSON.errors) {
+                notify('error', ajaxFailMessage(xhr));
+                return;
+            }
+            var errors = xhr.responseJSON.errors;
+            $form.find('.err').remove();
+            var msgs = [];
+            Object.keys(errors).forEach(function (field) {
+                var err = errors[field];
+                var msg = (err && err.message) ? err.message : '';
+                var code = (err && err.code) ? err.code : field;
+                if (msg) {
+                    msgs.push(msg);
+                }
+                var $field = $form.find('[name="' + code + '"]');
+                if (!$field.length) {
+                    $field = $form.find('[name="' + code + '[]"]');
+                }
+                if ($field.length) {
+                    if ($field.hasClass('select2-hidden-accessible') || $field.hasClass('select2-modal')) {
+                        $field.next('.select2-container').after('<div class="err text-danger small">' + esc(msg || 'Invalid') + '</div>');
+                    } else {
+                        $field.last().after('<div class="err text-danger small">' + esc(msg || 'Invalid') + '</div>');
+                    }
+                }
+            });
+            if (msgs.length) {
+                notify('error', msgs.join(' '));
+            }
+        }
+
+        $(doc).on('click', '.p360-transfer-ipd-btn, .p360-discharge-ipd-btn', function () {
+            var url = this.getAttribute('data-url');
+            if (!url) {
+                return;
+            }
+            if (this.disabled || this.getAttribute('aria-disabled') === 'true') {
+                return;
+            }
+            showLoader();
+            $.ajax({
+                url:     url,
+                type:    'POST',
+                data:    { _token: cfg.csrf },
+                success: function (response) {
+                    hideLoader();
+                    openIpdActionModal(response, 'modal-lg');
+                },
+                error: function (xhr) {
+                    hideLoader();
+                    notify('error', ajaxFailMessage(xhr));
+                }
+            });
+        });
+
+        $(doc).on('submit', '#transfer-ipd-form, #discharge-ipd-form', function (ev) {
+            var form = this;
+            if (!$(form).closest('.add-datamodal').length) {
+                return;
+            }
+            ev.preventDefault();
+            showLoader();
+            $(form).find('.err').remove();
+            $.ajax({
+                url:          $(form).attr('action'),
+                type:         'POST',
+                data:         $(form).serialize() + '&_token=' + encodeURIComponent(cfg.csrf),
+                dataType:     'json',
+                success:      function (response) {
+                    hideLoader();
+                    $('.add-datamodal').modal('hide');
+                    notify('success', (response && response.message) ? response.message : 'Completed successfully.');
+                    if (response && response.redirect_url) {
+                        win.location.href = response.redirect_url;
+                    }
+                },
+                error: function (xhr) {
+                    hideLoader();
+                    handleIpdFormValidationErrors(xhr, $(form));
+                }
+            });
+        });
+    }
 
     function applyOpenContextFocus() {
         if (state.openContext !== 'note') { return; }

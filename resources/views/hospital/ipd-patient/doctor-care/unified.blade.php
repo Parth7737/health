@@ -1,4 +1,31 @@
 <div class="doctor-care-unified-modal">
+    @include('hospital.doctor-care.partials.unified-shell-styles')
+
+    @php
+        $ipdPatient = $patient ?? null;
+        $ipdBed = $allocation->bed ?? null;
+        $ipdBedMeta = $ipdBed
+            ? ($ipdBed->bed_code . ' | ' . ($ipdBed->room?->ward?->ward_name ?? '-') . ' / ' . ($ipdBed->room?->room_number ?? '-'))
+            : 'Bed not assigned';
+        $ipdDept = $allocation->department?->name ?? '—';
+    @endphp
+
+    <div class="doctor-care-chip">
+        <div class="doctor-care-chip-left">
+            <div class="doctor-care-chip-avatar">{{ strtoupper(substr($ipdPatient?->name ?? 'P', 0, 1)) }}</div>
+            <div style="min-width:0;">
+                <p class="doctor-care-chip-name">{{ $ipdPatient?->name ?? '-' }} <span style="font-size:11px;font-weight:400;color:#6e86a1;">{{ $ipdPatient?->patient_id ? '- ' . $ipdPatient->patient_id : '' }}</span></p>
+                <p class="doctor-care-chip-meta">
+                    {{ ($ipdPatient?->age_years ?? 0) }} Yrs / {{ $ipdPatient?->gender ?? '-' }}
+                    | Admission: {{ $allocation->admission_no ?? '—' }}
+                    | {{ $ipdDept }}
+                    | {{ $ipdBedMeta }}
+                </p>
+            </div>
+        </div>
+        <div class="doctor-care-chip-right"></div>
+    </div>
+
     <div class="doctor-care-grid">
         <div class="doctor-care-col-stack">
             <div class="doctor-care-card">
@@ -69,17 +96,17 @@
                                     </select>
                                 </div>
                                 <div class="doctor-care-form-group">
-                                    <label>Test</label>
-                                    <select id="doctorUnifiedTestSelect" class="form-control">
-                                        <option value="">Select test</option>
-                                    </select>
-                                </div>
-                                <div class="doctor-care-form-group">
-                                    <label>Priority <span class="text-danger">*</span></label>
+                                    <label>Priority</label>
                                     <select id="doctorUnifiedTestPriority" class="form-control">
                                         <option value="Routine">Routine</option>
                                         <option value="Urgent">Urgent</option>
                                         <option value="STAT">STAT</option>
+                                    </select>
+                                </div>
+                                <div class="doctor-care-form-group">
+                                    <label>Test</label>
+                                    <select id="doctorUnifiedTestSelect" class="form-control">
+                                        <option value="">Select test</option>
                                     </select>
                                 </div>
                             </div>
@@ -107,16 +134,33 @@
                                 <input type="text" name="diastolic_bp" class="form-control" value="{{ data_get($allocation, 'diastolic_bp', '') }}" placeholder="e.g. 80">
                             </div>
                             <div class="doctor-care-form-group">
-                                <label>Pulse</label>
+                                <label>SpO2 (%)</label>
+                                <input type="text" name="spo2" class="form-control" value="{{ data_get($allocation, 'spo2', '') }}" placeholder="e.g. 98">
+                            </div>
+                            <div class="doctor-care-form-group">
+                                <label>Pulse (/min)</label>
                                 <input type="text" name="pulse" class="form-control" value="{{ data_get($allocation, 'pulse', '') }}" placeholder="e.g. 88">
                             </div>
                             <div class="doctor-care-form-group">
-                                <label>Temperature</label>
+                                <label>RR (/min)</label>
+                                <input type="text" name="respiration" class="form-control" value="{{ data_get($allocation, 'respiration', '') }}" placeholder="e.g. 16">
+                            </div>
+                            <div class="doctor-care-form-group">
+                                <label>Temperature (°F)</label>
                                 <input type="text" name="temperature" class="form-control" value="{{ data_get($allocation, 'temperature', '') }}" placeholder="e.g. 98.6">
                             </div>
                             <div class="doctor-care-form-group">
-                                <label>Weight</label>
+                                <label>Weight (kg)</label>
                                 <input type="text" name="weight" class="form-control" value="{{ data_get($allocation, 'weight', '') }}" placeholder="e.g. 74">
+                            </div>
+                            <div class="doctor-care-form-group">
+                                <label>Height</label>
+                                <input type="text" name="height" class="form-control" value="{{ data_get($allocation, 'height', '') }}" placeholder="cm e.g. 165 or m e.g. 1.65" title="Enter height in centimetres (50–300) or metres (0.5–2.5). BMI updates from height and weight.">
+                                <small class="text-muted" style="font-size:10px">BMI fills automatically from weight and height.</small>
+                            </div>
+                            <div class="doctor-care-form-group">
+                                <label>BMI</label>
+                                <input type="text" name="bmi" class="form-control" value="{{ data_get($allocation, 'bmi', '') }}" placeholder="e.g. 24.5">
                             </div>
                             <div class="doctor-care-form-group">
                                 <label>RBS / Diabetes</label>
