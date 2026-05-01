@@ -172,6 +172,57 @@
     @endif
 </div>
 
+@if($item->parameters->isNotEmpty())
+    <div class="narrative">
+        <h3>Parameters / measurements</h3>
+        <table class="html-body" style="width:100%; font-size:9px;">
+            <thead>
+                <tr>
+                    <th style="width:30%;">Parameter</th>
+                    <th style="width:12%;">Result</th>
+                    <th style="width:10%;">Unit</th>
+                    <th style="width:20%;">Normal range</th>
+                    <th style="width:12%;">Flag</th>
+                    <th style="width:16%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($item->parameters->sortBy('sort_order') as $parameter)
+                    @php
+                        $def = $parameter->parameterable;
+                        $minVal = $def?->min_value ?? null;
+                        $maxVal = $def?->max_value ?? null;
+                        $unitName = $def?->unit?->name ?? ($parameter->unit_name ?? '—');
+                        $rangeText = $parameter->normal_range ?? '—';
+                        if ($minVal !== null && $maxVal !== null) {
+                            $rangeText = number_format((float) $minVal, 2) . ' – ' . number_format((float) $maxVal, 2);
+                        }
+                        $flagLabel = '—';
+                        if ($parameter->result_flag) {
+                            $fc = [
+                                'normal' => 'Normal',
+                                'low' => 'Low',
+                                'high' => 'High',
+                                'critical_low' => 'Critical low',
+                                'critical_high' => 'Critical high',
+                            ];
+                            $flagLabel = $fc[$parameter->result_flag] ?? $parameter->result_flag;
+                        }
+                    @endphp
+                    <tr>
+                        <td>{{ $parameter->parameter_name }}</td>
+                        <td>{{ filled($parameter->result_value) ? $parameter->result_value : '—' }}</td>
+                        <td>{{ $unitName }}</td>
+                        <td>{{ $rangeText }}</td>
+                        <td>{{ $flagLabel }}</td>
+                        <td>{{ filled($parameter->remarks) ? $parameter->remarks : '—' }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+@endif
+
 <div class="narrative">
     <h3>Findings</h3>
     <div class="html-body">

@@ -9,6 +9,13 @@ class RadiologyParameter extends Model
 {
     protected $guarded = [];
 
+    protected $casts = [
+        'min_value' => 'decimal:4',
+        'max_value' => 'decimal:4',
+        'critical_low' => 'decimal:4',
+        'critical_high' => 'decimal:4',
+    ];
+
     /**
      * Boot the model and apply any global scopes.
      *

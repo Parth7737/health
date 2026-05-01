@@ -125,6 +125,57 @@
                 <p>{{ filled($item->report_technique) ? $item->report_technique : '—' }}</p>
             </div>
 
+            @if($item->parameters->isNotEmpty())
+                <div class="report-block">
+                    <h3>Parameters / measurements</h3>
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:#eef4fb;">
+                                <th style="border:1px solid #cfd8e6; padding:6px 8px; text-align:left;">Parameter</th>
+                                <th style="border:1px solid #cfd8e6; padding:6px 8px;">Result</th>
+                                <th style="border:1px solid #cfd8e6; padding:6px 8px;">Unit</th>
+                                <th style="border:1px solid #cfd8e6; padding:6px 8px;">Normal range</th>
+                                <th style="border:1px solid #cfd8e6; padding:6px 8px;">Flag</th>
+                                <th style="border:1px solid #cfd8e6; padding:6px 8px;">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($item->parameters->sortBy('sort_order') as $parameter)
+                                @php
+                                    $def = $parameter->parameterable;
+                                    $minVal = $def?->min_value ?? null;
+                                    $maxVal = $def?->max_value ?? null;
+                                    $unitName = $def?->unit?->name ?? ($parameter->unit_name ?? '—');
+                                    $rangeText = $parameter->normal_range ?? '—';
+                                    if ($minVal !== null && $maxVal !== null) {
+                                        $rangeText = number_format((float) $minVal, 2) . ' – ' . number_format((float) $maxVal, 2);
+                                    }
+                                    $flagLabel = '—';
+                                    if ($parameter->result_flag) {
+                                        $fc = [
+                                            'normal' => 'Normal',
+                                            'low' => 'Low',
+                                            'high' => 'High',
+                                            'critical_low' => 'Critical low',
+                                            'critical_high' => 'Critical high',
+                                        ];
+                                        $flagLabel = $fc[$parameter->result_flag] ?? $parameter->result_flag;
+                                    }
+                                @endphp
+                                <tr>
+                                    <td style="border:1px solid #cfd8e6; padding:6px 8px;">{{ $parameter->parameter_name }}</td>
+                                    <td style="border:1px solid #cfd8e6; padding:6px 8px;">{{ filled($parameter->result_value) ? $parameter->result_value : '—' }}</td>
+                                    <td style="border:1px solid #cfd8e6; padding:6px 8px;">{{ $unitName }}</td>
+                                    <td style="border:1px solid #cfd8e6; padding:6px 8px;">{{ $rangeText }}</td>
+                                    <td style="border:1px solid #cfd8e6; padding:6px 8px;">{{ $flagLabel }}</td>
+                                    <td style="border:1px solid #cfd8e6; padding:6px 8px;">{{ filled($parameter->remarks) ? $parameter->remarks : '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+
             <div class="report-block">
                 <h3>Findings</h3>
                 <div class="html-body">

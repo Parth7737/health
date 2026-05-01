@@ -61,4 +61,9 @@ class DiagnosticOrderItem extends Model
     {
         return $this->belongsTo(User::class, 'report_radiologist_id');
     }
+
+    public function pacsStudies(): HasMany
+    {
+        return $this->hasMany(RadiologyPacsStudy::class, 'diagnostic_order_item_id');
+    }
 }

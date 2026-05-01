@@ -1137,3 +1137,35 @@
 .rad-ris-scope .rad-ris-rpt-form-inner .cke_contents {
   border-top: 1px solid #e8eef5 !important;
 }
+
+/* Reporting — measurement / parameter grid (pathology-style) */
+.rad-ris-scope .rad-ris-rpt-param-table-wrap {
+  border: 1px solid var(--rad-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--rad-surface);
+}
+.rad-ris-scope .rad-ris-rpt-param-table {
+  margin-bottom: 0;
+  font-size: 12px;
+}
+.rad-ris-scope .rad-ris-rpt-param-table thead th {
+  background: #f4f8ff;
+  color: var(--rad-blue);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid #dce8f8;
+  vertical-align: middle;
+  padding: 8px 10px;
+}
+.rad-ris-scope .rad-ris-rpt-param-table tbody td {
+  vertical-align: middle;
+  padding: 8px 10px;
+  border-color: #e4ebf2;
+}
+.rad-ris-scope .rad-ris-rpt-param-table .form-control-sm {
+  border-radius: 6px;
+  border: 1px solid #cfd8e6;
+}

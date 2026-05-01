@@ -238,6 +238,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('ris/modalities-board', 'RadiologyRisController@modalitiesBoard')->name('ris.modalities-board');
         Route::post('ris/worklist/load', 'RadiologyRisController@worklistLoad')->name('ris.worklist-load');
         Route::get('ris/report/{item}', 'RadiologyRisController@reportItemJson')->name('ris.report-item');
+        Route::get('ris/pacs/resolve/{item}', 'RadiologyRisController@pacsResolve')->name('ris.pacs-resolve');
         Route::post('ris/workflow/{item}', 'RadiologyRisController@advanceWorkflow')->name('ris.workflow-advance');
         Route::get('ris/completed-pdf/{item}', 'RadiologyRisController@completedPdf')->name('ris.completed-pdf');
         Route::get('ris/analytics', 'RadiologyRisController@analytics')->name('ris.analytics');
