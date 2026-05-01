@@ -33,6 +33,7 @@ use App\Models\TpaOpdCharge;
 use App\Models\BusinessSetting;
 use App\Services\BedAllocationService;
 use App\Services\ChargeLedgerService;
+use App\Services\OpdTokenNoService;
 use App\Services\PatientTimelineService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -109,6 +110,52 @@ class PatientManagementController extends BaseHospitalController
 
         $totalActive = $opdToday + $ipdActive;
 
+        // Tab badge totals (no search/dept filters) — keeps counts accurate without loading each list on page init.
+        $tabAllPatients = Patient::query()
+            ->where('patients.hospital_id', $this->hospital_id)
+            ->count();
+
+        $tabOpdQueue = OpdPatient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereDate('appointment_date', $today)
+            ->count();
+
+        $tabBooking = OpdPatient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereDate('appointment_date', '>', $today)
+            ->whereNull('token_no')
+            ->count();
+
+        $tabIpd = BedAllocation::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereNull('discharge_date')
+            ->count();
+
+        $tabEmergencyOpd = OpdPatient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereDate('appointment_date', $today)
+            ->where('casualty', 'Yes')
+            ->count();
+
+        $tabEmergencyIpd = BedAllocation::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereNull('discharge_date')
+            ->where('admission_source', 'emergency')
+            ->count();
+
+        $tabEmergency = $tabEmergencyOpd + $tabEmergencyIpd;
+
+        $tabDischarged = Patient::query()
+            ->where('patients.hospital_id', $this->hospital_id)
+            ->whereExists(function ($sub) use ($today) {
+                $sub->select(DB::raw(1))
+                    ->from('bed_allocations')
+                    ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                    ->where('bed_allocations.hospital_id', $this->hospital_id)
+                    ->whereDate('bed_allocations.discharge_date', $today);
+            })
+            ->count();
+
         return response()->json([
             'opd_today'        => $opdToday,
             'ipd_active'       => $ipdActive,
@@ -116,6 +163,12 @@ class PatientManagementController extends BaseHospitalController
             'discharged_today' => $dischargedToday,
             'transferred_today' => $transferredToday,
             'total_active'     => $totalActive,
+            'tab_all_patients'  => $tabAllPatients,
+            'tab_opd_queue'     => $tabOpdQueue,
+            'tab_booking'       => $tabBooking,
+            'tab_ipd'           => $tabIpd,
+            'tab_emergency'     => $tabEmergency,
+            'tab_discharged'    => $tabDischarged,
         ]);
     }
 
@@ -408,7 +461,7 @@ class PatientManagementController extends BaseHospitalController
             $rows = $pageRows->map(function ($row) {
                 return [
                     'id'          => $row->id,
-                    'token'       => $row->token_no ? str_pad($row->token_no, 3, '0', STR_PAD_LEFT) : 'IPD-EMG',
+                    'token'       => $row->token_no ? OpdTokenNoService::formatShort($row->token_no) : 'IPD-EMG',
                     'case_no'     => $row->case_no,
                     'patient'     => $row->patient_name,
                     'mrn'         => $row->mrn,
@@ -444,6 +497,7 @@ class PatientManagementController extends BaseHospitalController
                 'opd_patients.booking_number',
                 'opd_patients.case_no',
                 'opd_patients.status',
+                'opd_patients.absent_flag',
                 'opd_patients.appointment_date',
                 'opd_patients.casualty',
                 'opd_patients.visit_type',
@@ -483,7 +537,7 @@ class PatientManagementController extends BaseHospitalController
 
         $queue = $query
             ->orderByRaw("CASE WHEN COALESCE(opd_patients.status,'waiting')='completed' THEN 1 ELSE 0 END ASC")
-            ->orderByRaw('COALESCE(opd_patients.token_no, 999999) ASC')
+            ->orderByRaw('(opd_patients.token_no IS NULL) ASC, opd_patients.token_no ASC')
             ->skip(($page - 1) * $perPage)
             ->take($perPage)
             ->get();
@@ -491,13 +545,18 @@ class PatientManagementController extends BaseHospitalController
         $rows = $queue->map(function ($row) {
             $appointmentDate = $row->appointment_date ? Carbon::parse($row->appointment_date) : null;
             $slotStart = $appointmentDate ? $this->resolveSlotStartDateTime($appointmentDate, $row->slot) : null;
-            $windowOpenAt = $slotStart ? $slotStart->copy()->subMinutes(max(0, (int) Helpers::getBeforeTime())) : null;
+            $lead = $this->opdTokenLeadMinutes($row->slot);
+            $windowOpenAt = $slotStart ? $slotStart->copy()->subMinutes($lead) : null;
             $isBooking = empty($row->token_no);
-            $canIssueNextToken = $isBooking && $windowOpenAt && now()->greaterThanOrEqualTo($windowOpenAt);
+            $canIssueNextToken = $isBooking && $appointmentDate && $this->shouldIssueOpdTokenAtReception(
+                $appointmentDate,
+                $row->slot,
+                (string) ($row->visit_type ?: 'OPD')
+            );
 
             return [
                 'id'               => $row->id,
-                'token'            => $row->token_no ? str_pad($row->token_no, 3, '0', STR_PAD_LEFT) : '-',
+                'token'            => $row->token_no ? OpdTokenNoService::formatShort($row->token_no) : '-',
                 'token_no'         => $row->token_no,
                 'booking_number'   => $row->booking_number,
                 'case_no'          => $row->case_no,
@@ -517,6 +576,7 @@ class PatientManagementController extends BaseHospitalController
                 'window_open_at'   => $windowOpenAt ? $windowOpenAt->toIso8601String() : null,
                 'can_issue_next_token' => (bool) $canIssueNextToken,
                 'is_emergency'     => $row->casualty === 'Yes',
+                'absent'           => (bool) $row->absent_flag,
             ];
         });
 
@@ -592,13 +652,18 @@ class PatientManagementController extends BaseHospitalController
         $rows = $queue->map(function ($row) {
             $appointmentDate = $row->appointment_date ? Carbon::parse($row->appointment_date) : null;
             $slotStart = $appointmentDate ? $this->resolveSlotStartDateTime($appointmentDate, $row->slot) : null;
-            $windowOpenAt = $slotStart ? $slotStart->copy()->subMinutes(max(0, (int) Helpers::getBeforeTime())) : null;
+            $lead = $this->opdTokenLeadMinutes($row->slot);
+            $windowOpenAt = $slotStart ? $slotStart->copy()->subMinutes($lead) : null;
             $isBooking = empty($row->token_no);
-            $canIssueNextToken = $isBooking && $windowOpenAt && now()->greaterThanOrEqualTo($windowOpenAt);
+            $canIssueNextToken = $isBooking && $appointmentDate && $this->shouldIssueOpdTokenAtReception(
+                $appointmentDate,
+                $row->slot,
+                (string) ($row->visit_type ?: 'OPD')
+            );
 
             return [
                 'id'               => $row->id,
-                'token'            => $row->token_no ? str_pad($row->token_no, 3, '0', STR_PAD_LEFT) : '-',
+                'token'            => $row->token_no ? OpdTokenNoService::formatShort($row->token_no) : '-',
                 'token_no'         => $row->token_no,
                 'booking_number'   => $row->booking_number,
                 'case_no'          => $row->case_no,
@@ -656,7 +721,7 @@ class PatientManagementController extends BaseHospitalController
                     return [
                         'status' => true,
                         'message' => 'Token already assigned.',
-                        'token' => str_pad((string) $opdPatient->token_no, 3, '0', STR_PAD_LEFT),
+                        'token' => OpdTokenNoService::formatShort($opdPatient->token_no),
                         'booking_number' => $opdPatient->booking_number,
                         'opd_patient_id' => $opdPatient->id,
                     ];
@@ -670,13 +735,21 @@ class PatientManagementController extends BaseHospitalController
 
                 $force = filter_var($request->input('force', false), FILTER_VALIDATE_BOOLEAN);
 
-                if (!$force && !$this->shouldAssignTokenNow($appointmentDate, $opdPatient->slot)) {
+                if (
+                    ! $force
+                    && ! $this->shouldIssueOpdTokenAtReception(
+                        $appointmentDate,
+                        $opdPatient->slot,
+                        (string) ($opdPatient->visit_type ?: 'OPD')
+                    )
+                ) {
                     $slotStart = $this->resolveSlotStartDateTime($appointmentDate, $opdPatient->slot);
-                    $windowOpenAt = $slotStart->copy()->subMinutes(max(0, (int) Helpers::getBeforeTime()));
+                    $lead = $this->opdTokenLeadMinutes($opdPatient->slot);
+                    $windowOpenAt = $slotStart->copy()->subMinutes($lead);
 
                     return [
                         'status' => false,
-                        'message' => 'Token can be issued only within configured pre-slot window.',
+                        'message' => 'Token is issued only for today’s visit when the slot time is near (booking stays without token until then).',
                         'window_open_at' => $windowOpenAt->toIso8601String(),
                     ];
                 }
@@ -690,7 +763,7 @@ class PatientManagementController extends BaseHospitalController
                 return [
                     'status' => true,
                     'message' => 'Next token assigned successfully.',
-                    'token' => str_pad((string) $tokenNo, 3, '0', STR_PAD_LEFT),
+                    'token' => OpdTokenNoService::formatShort($tokenNo),
                     'booking_number' => $opdPatient->booking_number,
                     'opd_patient_id' => $opdPatient->id,
                 ];
@@ -1962,7 +2035,7 @@ class PatientManagementController extends BaseHospitalController
 
                     if ($existingActive) {
                         $tokenOrBooking = $existingActive->token_no
-                            ? str_pad($existingActive->token_no, 3, '0', STR_PAD_LEFT)
+                            ? OpdTokenNoService::formatShort($existingActive->token_no)
                             : ($existingActive->booking_number ?: '-');
 
                         throw new \RuntimeException(
@@ -1977,7 +2050,11 @@ class PatientManagementController extends BaseHospitalController
 
                     $caseNo = $this->generateDailyCaseNo($appointmentDate);
                     $bookingNo = $this->generateDailyBookingNumber($appointmentDate);
-                    $tokenNo = $this->shouldAssignTokenNow($appointmentDate, $request->slot)
+                    $tokenNo = $this->shouldIssueOpdTokenAtReception(
+                        $appointmentDate,
+                        $request->slot,
+                        $visitType
+                    )
                         ? $this->generateSlotWiseTokenNo($appointmentDate, $request->slot)
                         : null;
 
@@ -2038,7 +2115,7 @@ class PatientManagementController extends BaseHospitalController
                         'event_key'   => 'opd.visit.created',
                         'title'       => 'OPD Visit Registered',
                         'description' => $tokenNo
-                            ? "Case {$caseNo} - Token " . str_pad($tokenNo, 3, '0', STR_PAD_LEFT)
+                            ? "Case {$caseNo} - Token " . OpdTokenNoService::formatForDisplay($tokenNo)
                             : "Case {$caseNo} - Booking {$bookingNo}",
                         'meta'        => [
                             'case_no' => $caseNo,
@@ -2048,7 +2125,7 @@ class PatientManagementController extends BaseHospitalController
                         'logged_at'   => $appointmentDate,
                     ]);
 
-                    $token = $tokenNo ? str_pad($tokenNo, 3, '0', STR_PAD_LEFT) : null;
+                    $token = $tokenNo ? OpdTokenNoService::formatShort($tokenNo) : null;
                 }
 
                 // ── 2b. IPD Admission ──────────────────────────────────────────
@@ -2058,7 +2135,7 @@ class PatientManagementController extends BaseHospitalController
                         $existingActive = $this->findBlockingOpdVisit($patient->id);
                         if ($existingActive) {
                             throw new \RuntimeException(
-                                'ACTIVE_OPD_CONFLICT:' . $existingActive->case_no . ':' . str_pad($existingActive->token_no, 3, '0', STR_PAD_LEFT)
+                                'ACTIVE_OPD_CONFLICT:' . $existingActive->case_no . ':' . OpdTokenNoService::formatShort($existingActive->token_no)
                             );
                         }
                     }
@@ -2246,7 +2323,11 @@ class PatientManagementController extends BaseHospitalController
 
                 $caseNo  = $this->generateDailyCaseNo($appointmentDate);
                 $bookingNumber = $this->generateDailyBookingNumber($appointmentDate);
-                $tokenNo = $this->shouldAssignTokenNow($appointmentDate, $request->slot)
+                $tokenNo = $this->shouldIssueOpdTokenAtReception(
+                    $appointmentDate,
+                    $request->slot,
+                    $visitType
+                )
                     ? $this->generateSlotWiseTokenNo($appointmentDate, $request->slot)
                     : null;
 
@@ -2306,7 +2387,7 @@ class PatientManagementController extends BaseHospitalController
                     'event_key'   => 'opd.visit.created',
                     'title'       => 'OPD Booking Created',
                     'description' => $tokenNo
-                        ? "Booking {$bookingNumber} - Case {$caseNo} - Token " . str_pad($tokenNo, 3, '0', STR_PAD_LEFT)
+                        ? "Booking {$bookingNumber} - Case {$caseNo} - Token " . OpdTokenNoService::formatForDisplay($tokenNo)
                         : "Booking {$bookingNumber} - Case {$caseNo}",
                     'meta'        => [
                         'case_no' => $caseNo,
@@ -2325,7 +2406,7 @@ class PatientManagementController extends BaseHospitalController
                     ? 'OPD booking created successfully and token assigned.'
                     : 'OPD booking created successfully. Token will be assigned at check-in.',
                 'booking_number' => $result['bookingNumber'],
-                'token' => $result['tokenNo'] ? str_pad((string) $result['tokenNo'], 3, '0', STR_PAD_LEFT) : null,
+                'token' => $result['tokenNo'] ? OpdTokenNoService::formatShort($result['tokenNo']) : null,
                 'case_no' => $result['caseNo'],
             ]);
         } catch (\Throwable $e) {
@@ -2521,7 +2602,7 @@ class PatientManagementController extends BaseHospitalController
     {
         if ($visitOrEncodedMessage instanceof OpdPatient) {
             $caseNo = $visitOrEncodedMessage->case_no ?: '—';
-            $tokenNo = str_pad((string) ($visitOrEncodedMessage->token_no ?? 0), 3, '0', STR_PAD_LEFT);
+            $tokenNo = OpdTokenNoService::formatShort($visitOrEncodedMessage->token_no);
             $slot = $visitOrEncodedMessage->slot ?: 'Booked';
 
             return "Patient ka OPD abhi active/booked hai (Case: {$caseNo}, Token: {$tokenNo}, Slot: {$slot}). OPD aur IPD dono ek sath allow nahi hain.";
@@ -2586,30 +2667,90 @@ class PatientManagementController extends BaseHospitalController
     }
 
     /**
-     * Token number sequence by date per hospital.
+     * OPD token: YYYYMMDD + slot band (M/A/E/N) + 3-digit seq (e.g. 20260501M007).
+     * Must run inside a DB transaction (row locks).
      */
-    private function generateSlotWiseTokenNo(Carbon $date, ?string $slot): int
+    private function generateSlotWiseTokenNo(Carbon $date, ?string $slot): string
     {
-        $last = OpdPatient::query()
-            ->lockForUpdate()
-            ->where('hospital_id', $this->hospital_id)
-            ->whereDate('appointment_date', $date->toDateString())
-            ->whereNotNull('token_no')
-            ->max('token_no');
-
-        return ((int) ($last ?? 0)) + 1;
+        return app(OpdTokenNoService::class)
+            ->nextSequentialToken($this->hospital_id, $date, $slot);
     }
 
     /**
-     * Assign token only when patient reaches within configured minutes before slot start.
+     * Whether to issue an OPD token at reception (register / issue token / issue next token).
+     *
+     * Rules (OPD / Daycare — not Emergency visit type):
+     * - Future calendar day → no token (status booking until check-in window).
+     * - Today only: token when current time is within the lead window before slot start.
+     *   Lead = max(hospital "before" minutes, slot duration from label e.g. "1:50 PM - 2:00 PM" → 10).
+     *   Example: at 1:50 PM, 2:00 PM slot with 10-min slots and before=20 → window opens 1:30 → token yes.
+     *   At 1:50 PM, 3:00 PM slot → window opens ~2:30 → token no.
+     *
+     * Emergency OPD (visit type) → always issue token at registration / issue.
      */
-    private function shouldAssignTokenNow(Carbon $appointmentDate, ?string $slot): bool
-    {
-        $beforeMinutes = max(0, (int) Helpers::getBeforeTime());
-        $slotStart = $this->resolveSlotStartDateTime($appointmentDate, $slot);
+    private function shouldIssueOpdTokenAtReception(
+        Carbon $appointmentDate,
+        ?string $slot,
+        ?string $visitType
+    ): bool {
+        if ($this->isEmergencyStyleOpdVisit($visitType)) {
+            return true;
+        }
 
-        // Token starts from (slot start - beforeMinutes) onwards.
-        return now()->greaterThanOrEqualTo($slotStart->copy()->subMinutes($beforeMinutes));
+        $now = now();
+
+        if (! $appointmentDate->isSameDay($now)) {
+            return false;
+        }
+
+        $slotStart = $this->resolveSlotStartDateTime($appointmentDate, $slot);
+        $leadMinutes = $this->opdTokenLeadMinutes($slot);
+
+        return $now->greaterThanOrEqualTo($slotStart->copy()->subMinutes($leadMinutes));
+    }
+
+    private function isEmergencyStyleOpdVisit(?string $visitType): bool
+    {
+        return strtoupper(trim((string) $visitType)) === 'EMERGENCY';
+    }
+
+    /**
+     * Minutes before slot start when token may be issued: max(global setting, doctor slot length).
+     */
+    private function opdTokenLeadMinutes(?string $slot): int
+    {
+        $fromSettings = max(0, (int) Helpers::getBeforeTime());
+        $fromSlot = (int) ($this->resolveSlotDurationMinutes($slot) ?? 0);
+
+        return max($fromSettings, $fromSlot);
+    }
+
+    /**
+     * Parse "09:40 AM - 10:00 AM" → minutes between start and end (exclusive wrap not handled).
+     */
+    private function resolveSlotDurationMinutes(?string $slot): ?int
+    {
+        if ($slot === null || trim((string) $slot) === '') {
+            return null;
+        }
+
+        $parts = array_map('trim', explode('-', (string) $slot));
+        if (count($parts) < 2) {
+            return null;
+        }
+
+        try {
+            $start = Carbon::createFromFormat('h:i A', $parts[0]);
+            $end = Carbon::createFromFormat('h:i A', $parts[1]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $startM = ((int) $start->format('H')) * 60 + (int) $start->format('i');
+        $endM = ((int) $end->format('H')) * 60 + (int) $end->format('i');
+        $diff = $endM - $startM;
+
+        return $diff > 0 ? $diff : null;
     }
 
     /**

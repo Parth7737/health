@@ -11,12 +11,12 @@ const TAB_IDS = {
 };
 
 const TAB_LOADERS = {
-  all: () => loadPatientsPage(),
-  opd: () => loadOPDCards(),
-  booking: () => loadBookingAppointments(),
-  ipd: () => loadIPDList(),
-  emergency: () => loadEmergencyList(),
-  discharged: () => loadDischargedList(),
+  all: (page) => loadPatientsPage(page),
+  opd: (page) => loadOPDCards(page),
+  booking: (page) => loadBookingAppointments(page),
+  ipd: (page) => loadIPDList(page),
+  emergency: (page) => loadEmergencyList(page),
+  discharged: (page) => loadDischargedList(page),
 };
 
 const pmState = {
@@ -29,7 +29,15 @@ const pmState = {
   discharged: { page: 1, perPage: 10, total: 0, lastPage: 1 },
 };
 
-let opdBookingTimerHandle = null;
+/** Lazy tab loads: list AJAX runs when the user opens a tab (not all at once on init). */
+const tabDataLoaded = {
+  all: false,
+  opd: false,
+  booking: false,
+  ipd: false,
+  emergency: false,
+  discharged: false,
+};
 
 async function pmFetch(url, options = {}) {
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
@@ -163,6 +171,7 @@ function switchPtTab(targetPaneId, triggerButton) {
   }[targetPaneId] || 'all';
 
   pmState.activeTab = tabKey;
+  void ensureTabDataLoaded(tabKey).catch((error) => notify('Load Failed', error.message, 'error'));
 }
 
 function updateBadgeCount(tabKey, total) {
@@ -187,6 +196,41 @@ function updateStatsCards(data) {
     if (node) {
       node.textContent = Number(value || 0);
     }
+  });
+}
+
+/** Tab pill counts from stats (so badges stay correct before a tab’s list is loaded). */
+function updateTabBadgesFromStats(data) {
+  const map = {
+    all: data.tab_all_patients,
+    opd: data.tab_opd_queue,
+    booking: data.tab_booking,
+    ipd: data.tab_ipd,
+    emergency: data.tab_emergency,
+    discharged: data.tab_discharged,
+  };
+  Object.entries(map).forEach(([tabKey, value]) => {
+    if (value !== undefined && value !== null) {
+      updateBadgeCount(tabKey, value);
+    }
+  });
+}
+
+async function ensureTabDataLoaded(tabKey) {
+  if (!tabKey || tabDataLoaded[tabKey]) {
+    return;
+  }
+  const loader = TAB_LOADERS[tabKey];
+  if (!loader) {
+    return;
+  }
+  await loader(pmState[tabKey]?.page);
+  tabDataLoaded[tabKey] = true;
+}
+
+function resetTabLoadedFlags() {
+  Object.keys(tabDataLoaded).forEach((k) => {
+    tabDataLoaded[k] = false;
   });
 }
 
@@ -282,7 +326,15 @@ async function initPatientManagementDynamic() {
   window.PatientVisitModals?.init({ routes: PM_ROUTES, boot: PM_BOOT });
 
   bindPmEvents();
-  await refreshAllTabData({ resetPages: true });
+  await initPatientManagementFirstPaint();
+}
+
+/** Initial load: KPI + tab badges + “All patients” list only; other tabs load on first open. */
+async function initPatientManagementFirstPaint() {
+  resetAllPages();
+  resetTabLoadedFlags();
+  await Promise.all([loadDashboardStats(), loadPatientsPage(1)]);
+  tabDataLoaded.all = true;
 }
 
 function bindPmEvents() {
@@ -318,6 +370,7 @@ function bindPmEvents() {
 async function loadDashboardStats() {
   const data = await pmFetch(PM_ROUTES.stats);
   updateStatsCards(data || {});
+  updateTabBadgesFromStats(data || {});
 }
 
 async function loadPatientsPage(page = pmState.all.page) {
@@ -386,88 +439,9 @@ async function searchPatients() {
   await loadPatientsPage(1);
 }
 
-function formatCountdown(totalSeconds) {
-  const safe = Math.max(0, Math.floor(Number(totalSeconds || 0)));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  const seconds = safe % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
-  }
-  return `${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
-}
-
-function stopOpdBookingTimer() {
-  if (opdBookingTimerHandle) {
-    clearInterval(opdBookingTimerHandle);
-    opdBookingTimerHandle = null;
-  }
-}
-
-function refreshOpdBookingTimers() {
-  const nodes = document.querySelectorAll('[data-opd-booking-timer]');
-  const nowMs = Date.now();
-
-  nodes.forEach((node) => {
-    const windowOpenAt = node.getAttribute('data-window-open-at');
-    const hasToken = node.getAttribute('data-has-token') === '1';
-    const issueBtn = node.parentElement?.querySelector('[data-issue-next-token-btn]');
-    const forceBtn = node.parentElement?.querySelector('[data-force-token-btn]');
-
-    if (hasToken) {
-      node.textContent = 'Token assigned';
-      if (issueBtn) issueBtn.style.display = 'none';
-      if (forceBtn) forceBtn.style.display = 'none';
-      return;
-    }
-
-    const windowMs = Date.parse(windowOpenAt || '');
-    if (Number.isNaN(windowMs)) {
-      node.textContent = 'Booking window unavailable';
-      if (issueBtn) issueBtn.style.display = 'none';
-      if (forceBtn) forceBtn.style.display = '';
-      return;
-    }
-
-    if (nowMs >= windowMs) {
-      node.textContent = 'Token window active';
-      if (issueBtn) issueBtn.style.display = '';
-      if (forceBtn) forceBtn.style.display = 'none';
-      return;
-    }
-
-    const diffSec = Math.floor((windowMs - nowMs) / 1000);
-    node.textContent = `Opens in ${formatCountdown(diffSec)}`;
-    if (issueBtn) issueBtn.style.display = 'none';
-    if (forceBtn) forceBtn.style.display = '';
-  });
-}
-
-function startOpdBookingTimer() {
-  stopOpdBookingTimer();
-  refreshOpdBookingTimers();
-  opdBookingTimerHandle = setInterval(refreshOpdBookingTimers, 1000);
-}
-
-async function forceIssueTokenForBooking(opdPatientId) {
+async function issueNextTokenForBooking(opdPatientId) {
   if (!PM_ROUTES.issueNextToken) {
     notify('Config Missing', 'Issue next token route is not configured.', 'error');
-    return;
-  }
-
-  const result = await Swal.fire({
-    title: 'Force Assign Token?',
-    text: 'This will forcefully assign the next token before the scheduled window. Use only in emergencies.',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Yes, Force Assign',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#e65c00',
-    cancelButtonColor: '#6c757d',
-  });
-
-  if (!result.isConfirmed) {
     return;
   }
 
@@ -480,48 +454,79 @@ async function forceIssueTokenForBooking(opdPatientId) {
       },
     });
 
-    notify('Success', response?.message || 'Token force-assigned successfully.', 'success');
-    await loadOPDCards(pmState.opd.page);
+    notify('Success', response?.message || 'Token assigned successfully.', 'success');
     await loadDashboardStats();
+    const tasks = [loadOPDCards(pmState.opd.page)];
+    if (tabDataLoaded.booking) {
+      tasks.push(loadBookingAppointments(pmState.booking.page));
+    }
+    await Promise.all(tasks);
   } catch (error) {
-    notify('Force Assign Failed', error.message || 'Unable to force-assign token.', 'error');
+    notify('Token Issue Failed', error.message || 'Unable to issue token right now.', 'error');
   }
 }
 
-async function issueNextTokenForBooking(opdPatientId) {
-  if (!PM_ROUTES.issueNextToken) {
-    notify('Config Missing', 'Issue next token route is not configured.', 'error');
-    return;
+function pmOpdQueueActionUrl(routeTemplate, opdPatientId) {
+  if (!routeTemplate || String(routeTemplate).indexOf('__ID__') === -1) {
+    return '';
+  }
+  return String(routeTemplate).replace('__ID__', String(opdPatientId));
+}
+
+function renderOpdQueueCardFooter(patient) {
+  const id = Number(patient.id);
+  const st = String(patient.status || '').toLowerCase();
+  const isWaiting = st === 'waiting';
+  const parts = [];
+
+  if (!patient.token_no) {
+    parts.push(`<button type="button" class="btn btn-primary btn-sm" style="width:100%" onclick="pmIssueNextToken(${id})">🎫 Issue Token</button>`);
   }
 
-  const result = await Swal.fire({
-    title: 'Issue Next Token?',
-    text: 'This will assign the next token to this booking.',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Yes, Issue Token',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#3085d6',
-    cancelButtonColor: '#d33',
-  });
-
-  if (!result.isConfirmed) {
-    return;
+  if (isWaiting) {
+    if (patient.absent) {
+      parts.push(`<button type="button" class="btn btn-primary btn-sm" style="width:100%" onclick="pmMarkOpdPresent(${id})">✓ Mark Present</button>`);
+    } else {
+      parts.push(`<button type="button" class="btn btn-danger btn-sm" style="width:100%" onclick="pmMarkOpdAbsent(${id})">🙅 Not Present</button>`);
+    }
   }
 
+  if (parts.length === 0) {
+    return '<div class="fs-11 text-muted">—</div>';
+  }
+
+  return `<div style="display:flex;flex-direction:column;gap:8px;width:100%">${parts.join('')}</div>`;
+}
+
+async function pmMarkOpdAbsent(opdPatientId) {
+  const url = pmOpdQueueActionUrl(PM_ROUTES.opdQueueSkip, opdPatientId);
+  if (!url) {
+    notify('Config Missing', 'Mark not present route is not configured.', 'error');
+    return;
+  }
   try {
-    const response = await pmFetch(PM_ROUTES.issueNextToken, {
-      method: 'POST',
-      body: {
-        opd_patient_id: opdPatientId,
-      },
-    });
-
-    notify('Success', response?.message || 'Token assigned successfully.', 'success');
-    await loadOPDCards(pmState.opd.page);
+    await pmFetch(url, { method: 'POST', body: {} });
+    notify('Updated', 'Patient marked as not present.', 'success');
     await loadDashboardStats();
+    await loadOPDCards(pmState.opd.page);
   } catch (error) {
-    notify('Token Issue Failed', error.message || 'Unable to issue token right now.', 'error');
+    notify('Not Present', error.message || 'Unable to update.', 'error');
+  }
+}
+
+async function pmMarkOpdPresent(opdPatientId) {
+  const url = pmOpdQueueActionUrl(PM_ROUTES.opdQueueUndoSkip, opdPatientId);
+  if (!url) {
+    notify('Config Missing', 'Mark present route is not configured.', 'error');
+    return;
+  }
+  try {
+    await pmFetch(url, { method: 'POST', body: {} });
+    notify('Updated', 'Patient marked as present.', 'success');
+    await loadDashboardStats();
+    await loadOPDCards(pmState.opd.page);
+  } catch (error) {
+    notify('Mark Present', error.message || 'Unable to update.', 'error');
   }
 }
 
@@ -584,7 +589,7 @@ async function loadOPDCards(page = pmState.opd.page) {
         const chipDisplay = patient.token_no ? `${tokenDisplay}` : tokenDisplay;
 
         return `
-        <div style="background:var(--surface);border:1.5px solid var(--border-light);border-radius:12px;padding:14px;transition:.2s" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border-light)'">
+        <div style="background:var(--surface);border:1.5px solid var(--border-light);border-radius:12px;padding:14px;transition:.2s;opacity:${patient.absent && String(patient.status || '').toLowerCase() === 'waiting' ? '0.72' : '1'}" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border-light)'">
           <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px;align-items:flex-start">
             <span class="badge badge-${patient.token_no ? 'blue' : 'gray'}">${chipDisplay}</span>
             <span class="badge badge-${statusBadge}">${statusLabel}</span>
@@ -597,18 +602,12 @@ async function loadOPDCards(page = pmState.opd.page) {
           <div class="fs-11 text-muted mt-2">⏱️ ${escapeHtml(patient.slot || '-')}</div>
 
           <div style="margin-top:8px;padding:8px;border:1px solid var(--border-light);border-radius:8px;background:var(--surface-2)">
-            <div class="fs-11 text-muted" data-opd-booking-timer="${escapeHtml(patient.id)}" data-window-open-at="${escapeHtml(patient.window_open_at || '')}" data-has-token="${patient.token_no ? '1' : '0'}">
-              ${patient.token_no ? 'Token assigned' : 'Checking token window...'}
-            </div>
-            <button class="btn btn-primary btn-xs" style="margin-top:6px;${patient.token_no ? 'display:none;' : ''}" data-issue-next-token-btn onclick="pmIssueNextToken(${Number(patient.id)})">
-              🎫 Issue Next Token
-            </button>
+            ${renderOpdQueueCardFooter(patient)}
           </div>
         </div>`;
       }).join('') || '<div class="empty-state"><div class="empty-title">No waiting/booking OPD patients for current filter</div></div>'}
     </div>`;
 
-  startOpdBookingTimer();
   renderPagination('opd', 'opdPagInfo', 'opdPagBtns', rows.length, 'records');
 }
 
@@ -648,21 +647,15 @@ async function loadBookingAppointments(page = pmState.booking.page) {
           <div class="fs-11 text-muted mt-2">⏱️ ${escapeHtml(patient.slot || '-')}</div>
 
           <div style="margin-top:8px;padding:8px;border:1px solid var(--border-light);border-radius:8px;background:var(--surface-2)">
-            <div class="fs-11 text-muted" data-opd-booking-timer="${escapeHtml(patient.id)}" data-window-open-at="${escapeHtml(patient.window_open_at || '')}" data-has-token="${patient.token_no ? '1' : '0'}">
-              ${patient.token_no ? 'Token assigned' : 'Checking token window...'}
-            </div>
-            <button class="btn btn-primary btn-xs" style="margin-top:6px;${patient.token_no ? 'display:none;' : ''}" data-issue-next-token-btn onclick="pmIssueNextToken(${Number(patient.id)})">
-              🎫 Issue Next Token
-            </button>
-            <button class="btn btn-danger btn-xs" style="margin-top:6px;${patient.token_no ? 'display:none;' : ''}" onclick="pmCancelFutureBooking(${Number(patient.id)})" title="Cancel this future booking">
-              🗑️ Cancel Booking
-            </button>
+            ${patient.token_no
+    ? '<div class="fs-11 text-muted">✓ Token assigned</div>'
+    : `<button type="button" class="btn btn-primary btn-sm" style="width:100%" onclick="pmIssueNextToken(${Number(patient.id)})">🎫 Issue Token</button>
+            <button type="button" class="btn btn-danger btn-xs" style="margin-top:6px;width:100%" onclick="pmCancelFutureBooking(${Number(patient.id)})" title="Cancel this future booking">🗑️ Cancel Booking</button>`}
           </div>
         </div>`;
       }).join('') || '<div class="empty-state"><div class="empty-title">No future booking appointments for current filter</div></div>'}
     </div>`;
 
-  startOpdBookingTimer();
   renderPagination('booking', 'bookingPagInfo', 'bookingPagBtns', rows.length, 'records');
 }
 
@@ -816,15 +809,17 @@ async function refreshAllTabData({ resetPages = false } = {}) {
     resetAllPages();
   }
 
-  await Promise.all([
-    loadDashboardStats(),
-    loadPatientsPage(pmState.all.page),
-    loadOPDCards(pmState.opd.page),
-    loadBookingAppointments(pmState.booking.page),
-    loadIPDList(pmState.ipd.page),
-    loadEmergencyList(pmState.emergency.page),
-    loadDischargedList(pmState.discharged.page),
-  ]);
+  resetTabLoadedFlags();
+  await loadDashboardStats();
+
+  const active = pmState.activeTab || 'all';
+  if (active === 'all') {
+    await loadPatientsPage(pmState.all.page);
+    tabDataLoaded.all = true;
+  } else {
+    await TAB_LOADERS[active](pmState[active].page);
+    tabDataLoaded[active] = true;
+  }
 }
 
 function pmGoToTabPage(tabKey, page) {
@@ -844,7 +839,9 @@ window.pmRefreshPatientDashboard = () => refreshAllTabData({ resetPages: true })
 window.pmGoToTabPage = pmGoToTabPage;
 window.pmIssueNextToken = issueNextTokenForBooking;
 window.pmCancelFutureBooking = cancelFutureBookingAppointment;
-window.pmForceIssueToken = forceIssueTokenForBooking;
+window.pmForceIssueToken = issueNextTokenForBooking;
+window.pmMarkOpdAbsent = pmMarkOpdAbsent;
+window.pmMarkOpdPresent = pmMarkOpdPresent;
 window.switchPtTab = switchPtTab;
 window.searchPatients = searchPatients;
 window.viewPatient360 = viewPatient360;

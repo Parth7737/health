@@ -911,6 +911,11 @@
 @endsection
 
 @push('scripts')
+@php
+  $pmOpdBindPlaceholder = 999999999;
+  $pmOpdQueueSkipUrl = str_replace((string) $pmOpdBindPlaceholder, '__ID__', route('hospital.patient-management.opd-queue-skip', ['opdPatient' => $pmOpdBindPlaceholder]));
+  $pmOpdQueueUndoSkipUrl = str_replace((string) $pmOpdBindPlaceholder, '__ID__', route('hospital.patient-management.opd-queue-undo-skip', ['opdPatient' => $pmOpdBindPlaceholder]));
+@endphp
 <script>
 window.PM_ROUTES = {
   stats: @json(route('hospital.patient-management.stats')),
@@ -932,6 +937,8 @@ window.PM_ROUTES = {
   issueNextToken: @json(route('hospital.patient-management.issue-next-token')),
   cancelBookingAppointment: @json(route('hospital.patient-management.cancel-booking-appointment')),
   ipdAdmit: @json(route('hospital.patient-management.ipd-admit')),
+  opdQueueSkip: @json($pmOpdQueueSkipUrl),
+  opdQueueUndoSkip: @json($pmOpdQueueUndoSkipUrl),
 };
 
 window.PM_BOOT = {

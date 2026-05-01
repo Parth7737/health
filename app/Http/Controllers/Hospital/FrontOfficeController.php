@@ -9,6 +9,7 @@ use App\Models\AppointmentPriority;
 use App\Models\OpdPatient;
 use App\Models\Patient;
 use App\Models\Staff;
+use App\Services\OpdTokenNoService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -310,7 +311,7 @@ class FrontOfficeController extends BaseHospitalController
                 'hr_department_id' => $doctor->hr_department_id,
                 'appointment_date' => $appointmentDateTime->format('Y-m-d H:i:s'),
                 'case_no' => $this->generateDailyCaseNo($appointmentDateTime),
-                'token_no' => $this->generateDailyTokenNo($appointmentDateTime),
+                'token_no' => $this->generateDailyTokenNo($appointmentDateTime, $appointment->appointment_slot),
                 'casualty' => 'No',
                 'mlc_patient' => 'No',
                 'tpa_id' => null,
@@ -478,31 +479,12 @@ class FrontOfficeController extends BaseHospitalController
         return $caseNo;
     }
 
-    private function generateDailyTokenNo(Carbon $appointmentDate): int
+    private function generateDailyTokenNo(Carbon $appointmentDate, ?string $slot = null): string
     {
-        $nextToken = 1;
-
-        $lastToken = OpdPatient::query()
-            ->where('hospital_id', $this->hospital_id)
-            ->whereDate('appointment_date', $appointmentDate->toDateString())
-            ->whereNotNull('token_no')
-            ->orderByDesc('id')
-            ->value('token_no');
-
-        if (!is_null($lastToken)) {
-            $nextToken = ((int) $lastToken) + 1;
-        }
-
-        while (
-            OpdPatient::query()
-                ->where('hospital_id', $this->hospital_id)
-                ->whereDate('appointment_date', $appointmentDate->toDateString())
-                ->where('token_no', $nextToken)
-                ->exists()
-        ) {
-            $nextToken++;
-        }
-
-        return $nextToken;
+        return app(OpdTokenNoService::class)->nextSequentialToken(
+            $this->hospital_id,
+            $appointmentDate,
+            $slot
+        );
     }
 }

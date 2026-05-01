@@ -78,6 +78,8 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::post('issue-next-token', 'PatientManagementController@issueNextToken')->name('issue-next-token');
         Route::post('cancel-booking-appointment', 'PatientManagementController@cancelBookingAppointment')->name('cancel-booking-appointment');
         Route::post('ipd-admit', 'PatientManagementController@ipdAdmit')->name('ipd-admit');
+        Route::post('opd/{opdPatient}/queue-skip', 'OpdPatientController@skipWaitingPatient')->name('opd-queue-skip');
+        Route::post('opd/{opdPatient}/queue-undo-skip', 'OpdPatientController@undoSkipWaitingPatient')->name('opd-queue-undo-skip');
     });
 
     // Billing & Finance

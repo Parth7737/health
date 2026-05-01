@@ -879,22 +879,26 @@ const QueueDesk = (function () {
                             </tr>
                         </thead>
                         <tbody>
-                            ${waiting.map((q) => `
-                                <tr class="${q.absent ? 'table-secondary opacity-50' : ''}">
+                            ${waiting.map((q) => {
+                                const qst = String(q.status || 'waiting').toLowerCase();
+                                const showAp = qst === 'waiting';
+                                const rowDim = showAp && q.absent;
+                                const actionCell = showAp
+                                    ? (q.absent
+                                        ? `<button type="button" class="btn btn-outline-success btn-xs py-0 px-2 queue-undo-skip-btn" data-id="${q.id}" title="Mark present"><i class="fa-solid fa-user-check"></i></button>`
+                                        : `<button type="button" class="btn btn-outline-danger btn-xs py-0 px-2 queue-skip-btn" data-id="${q.id}" title="Not present"><i class="fa-solid fa-user-slash"></i></button>`)
+                                    : '<span class="text-muted small">—</span>';
+                                return `
+                                <tr class="${rowDim ? 'table-secondary opacity-50' : ''}">
                                     <td><span class="fs-5 fw-bold text-primary">${escapeHtml(q.token)}</span></td>
                                     <td>
                                         <div class="fw-semibold">${escapeHtml(q.name)}</div>
                                         <div class="text-muted small">${escapeHtml(q.age_gender || '')}</div>
                                     </td>
                                     <td class="text-muted small">${escapeHtml(q.case_no)}</td>
-                                    <td class="text-end">
-                                        ${q.absent
-                                            ? `<button class="btn btn-outline-success btn-sm queue-undo-skip-btn" data-id="${q.id}"><i class="fa-solid fa-check me-1"></i>Mark Present</button>`
-                                            : `<button class="btn btn-outline-danger btn-sm queue-skip-btn" data-id="${q.id}"><i class="fa-solid fa-person-circle-question me-1"></i>Not Present</button>`
-                                        }
-                                    </td>
-                                </tr>
-                            `).join('')}
+                                    <td class="text-end">${actionCell}</td>
+                                </tr>`;
+                            }).join('')}
                         </tbody>
                     </table>
                 </div>
@@ -1005,8 +1009,17 @@ const QueueDesk = (function () {
                     </tr>
                 </thead>
                 <tbody>
-                    ${waiting.map((q) => `
-                        <tr class="${q.absent ? 'table-secondary opacity-50' : ''}">
+                    ${waiting.map((q) => {
+                        const qst = String(q.status || 'waiting').toLowerCase();
+                        const showAp = qst === 'waiting';
+                        const rowDim = showAp && q.absent;
+                        const actionCell = showAp
+                            ? (q.absent
+                                ? `<button type="button" class="btn btn-outline-success btn-xs py-0 px-2 queue-undo-skip-btn" data-id="${q.id}" title="Mark present"><i class="fa-solid fa-user-check"></i></button>`
+                                : `<button type="button" class="btn btn-outline-danger btn-xs py-0 px-2 queue-skip-btn" data-id="${q.id}" title="Not present"><i class="fa-solid fa-user-slash"></i></button>`)
+                            : '<span class="text-muted small">—</span>';
+                        return `
+                        <tr class="${rowDim ? 'table-secondary opacity-50' : ''}">
                             <td><span class="fs-5 fw-bold text-primary">${escapeHtml(q.token)}</span></td>
                             <td>
                                 <div class="fw-semibold">${escapeHtml(q.name)}</div>
@@ -1014,14 +1027,9 @@ const QueueDesk = (function () {
                             </td>
                             <td class="text-muted small">Dr. ${escapeHtml(q.doctor)}<br>${escapeHtml(q.dept)}</td>
                             <td class="text-muted small">${escapeHtml(q.case_no)}</td>
-                            <td class="text-end">
-                                ${q.absent
-                                    ? `<button class="btn btn-outline-success btn-sm queue-undo-skip-btn" data-id="${q.id}"><i class="fa-solid fa-check me-1"></i>Mark Present</button>`
-                                    : `<button class="btn btn-outline-danger btn-sm queue-skip-btn" data-id="${q.id}"><i class="fa-solid fa-person-circle-question me-1"></i>Not Present</button>`
-                                }
-                            </td>
-                        </tr>
-                    `).join('')}
+                            <td class="text-end">${actionCell}</td>
+                        </tr>`;
+                    }).join('')}
                 </tbody>
             </table>
         `;

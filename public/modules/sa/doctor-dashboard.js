@@ -1457,7 +1457,10 @@
       const waitingPreview = waiting.slice(0, QUEUE_PREVIEW_LIMIT);
       const completedPreview = completed.slice(0, QUEUE_PREVIEW_LIMIT);
       currentInRoom = currentList[0] || null;
-      const firstCallable = waiting.find((row) => !row.absent) || null;
+      const firstCallable = waiting.find((row) => {
+        const st = String(row.status || 'waiting').toLowerCase();
+        return !row.absent && st === 'waiting';
+      }) || null;
       const completedCount = Number(SNAPSHOT.stats?.completed_count || 0);
 
       if (newRxBtn) {
@@ -1548,8 +1551,10 @@
                 const waitText = formatWaitLabel(q);
                 const canCall = !currentInRoom && !q.absent && firstCallable && q.id === firstCallable.id;
 
+                const qst = String(q.status || 'waiting').toLowerCase();
+                const showAbsentControls = qst === 'waiting';
                 return `
-                  <tr class="${q.absent ? 'table-secondary opacity-75' : ''}">
+                  <tr class="${q.absent && showAbsentControls ? 'table-secondary opacity-75' : ''}">
                     <td><span class="badge badge-blue">${escapeHtml(q.token)}</span></td>
                     <td>
                       <div style="font-weight:700">${escapeHtml(q.name)}</div>
@@ -1559,13 +1564,13 @@
                     <td>${escapeHtml(q.complaint || 'General consultation')}</td>
                     <td style="color:${priority.cls === 'urgent' ? 'var(--danger)' : '#6f839a'}">${escapeHtml(waitText)}</td>
                     <td>
-                      <div style="display:flex;gap:4px;justify-content:flex-end">
+                      <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
                         ${canCall
                           ? `<button class="btn btn-secondary btn-xs queue-call-next-btn" data-doctor-id="${q.doctor_id || ''}">Call</button>`
                           : `<span class="badge badge-orange">Waiting</span>`}
-                        ${q.absent
-                          ? `<button class="btn btn-success btn-xs queue-undo-skip-btn" data-id="${q.id}">Present</button>`
-                          : `<button class="btn btn-danger btn-xs queue-skip-btn" data-id="${q.id}">Absent</button>`}
+                        ${showAbsentControls ? (q.absent
+                          ? `<button type="button" class="btn btn-outline-success btn-xs py-0 px-2 queue-undo-skip-btn" data-id="${q.id}" title="Mark present"><i class="fa-solid fa-user-check"></i></button>`
+                          : `<button type="button" class="btn btn-outline-danger btn-xs py-0 px-2 queue-skip-btn" data-id="${q.id}" title="Not present"><i class="fa-solid fa-user-slash"></i></button>`) : ''}
                       </div>
                     </td>
                   </tr>

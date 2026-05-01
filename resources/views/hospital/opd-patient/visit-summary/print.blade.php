@@ -400,7 +400,7 @@
                 <div class="meta">
                     <div><strong>Visit #{{ $visit->id }}</strong></div>
                     <div>Date: {{ optional($visit->appointment_date)->format('d-m-Y h:i A') ?? '-' }}</div>
-                    <div>Token: {{ $visit->token_no ? str_pad($visit->token_no, 3, '0', STR_PAD_LEFT) : ($visit->case_no ?? '-') }}</div>
+                    <div>Token: {{ $visit->token_no ? \App\Services\OpdTokenNoService::formatForDisplay($visit->token_no) : ($visit->case_no ?? '-') }}</div>
                     <div>Doctor: {{ $doctorFullName }}</div>
                 </div>
             </div>
@@ -532,7 +532,7 @@
                 </div>
                 <div class="meta">
                     <div><strong>Visit #{{ $visit->id }}</strong></div>
-                    <div>Token: {{ $visit->token_no ? str_pad($visit->token_no, 3, '0', STR_PAD_LEFT) : ($visit->case_no ?? '-') }}</div>
+                    <div>Token: {{ $visit->token_no ? \App\Services\OpdTokenNoService::formatForDisplay($visit->token_no) : ($visit->case_no ?? '-') }}</div>
                     <div>Patient: {{ $patient?->name ?? '-' }}</div>
                     <div>Doctor: {{ $doctorFullName }}</div>
                 </div>

@@ -25,6 +25,7 @@ use App\Models\Hospital;
 use App\Models\BusinessSetting;
 use App\Models\BedAllocation;
 use App\Services\ChargeLedgerService;
+use App\Services\OpdTokenNoService;
 use App\Services\PatientTimelineService;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
@@ -126,7 +127,7 @@ class OpdPatientController extends BaseHospitalController
                 DB::raw('CASE WHEN active_ipd.allocation_id IS NULL THEN 0 ELSE 1 END as has_active_ipd')
             )
             ->orderByRaw("CASE WHEN COALESCE(opd_patients.status, 'waiting') = 'completed' THEN 1 ELSE 0 END ASC")
-            ->orderByRaw('COALESCE(opd_patients.token_no, 999999) ASC')
+            ->orderByRaw('(opd_patients.token_no IS NULL) ASC, opd_patients.token_no ASC')
             ->orderBy('opd_patients.case_no', 'asc');
 
         return DataTables::of($data)
@@ -155,7 +156,7 @@ class OpdPatientController extends BaseHospitalController
                 return $row->patient_name ?? '-';
             })
             ->addColumn('token_no', function ($row) {
-                return $row->token_no ? str_pad($row->token_no, 3, '0', STR_PAD_LEFT) : '-';
+                return $row->token_no ? OpdTokenNoService::formatShort($row->token_no) : '-';
             })
             ->addColumn('patient_id', function ($row) {
                 return $row->patient_code ?? '-';
@@ -424,7 +425,7 @@ class OpdPatientController extends BaseHospitalController
                     ->first();
 
                 if ($existingActiveOPD) {
-                    throw new \Exception('DUPLICATE_OPD:' . $existingActiveOPD->case_no . ':' . str_pad($existingActiveOPD->token_no, 3, '0', STR_PAD_LEFT));
+                    throw new \Exception('DUPLICATE_OPD:' . $existingActiveOPD->case_no . ':' . OpdTokenNoService::formatShort($existingActiveOPD->token_no));
                 }
 
                 $opdPatient = OpdPatient::create([
@@ -434,7 +435,7 @@ class OpdPatientController extends BaseHospitalController
                     'hr_department_id' => $request->hr_department_id,
                     'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
                     'case_no' => $this->generateDailyCaseNo($appointmentDate),
-                    'token_no' => $this->generateDailyTokenNo($appointmentDate),
+                    'token_no' => $this->generateDailyTokenNo($appointmentDate, $request->slot),
                     'casualty' => $request->casualty ?? 'No',
                     'visit_type' => ($request->casualty ?? 'No') === 'Yes' ? 'Emergency' : 'OPD',
                     'mlc_patient' => $request->mlc_patient ?? 'No',
@@ -503,7 +504,7 @@ class OpdPatientController extends BaseHospitalController
                 $timelineService->logForOpdVisit($opdPatient, [
                     'event_key' => 'opd.visit.created',
                     'title' => 'OPD Visit Registered',
-                    'description' => 'Case ' . $opdPatient->case_no . ' with token ' . str_pad((string) $opdPatient->token_no, 3, '0', STR_PAD_LEFT) . ' has been created.',
+                    'description' => 'Case ' . $opdPatient->case_no . ' with token ' . OpdTokenNoService::formatForDisplay($opdPatient->token_no) . ' has been created.',
                     'meta' => [
                         'case_no' => $opdPatient->case_no,
                         'token_no' => $opdPatient->token_no,
@@ -1479,32 +1480,13 @@ class OpdPatientController extends BaseHospitalController
         return $caseNo;
     }
 
-    private function generateDailyTokenNo(Carbon $appointmentDate): int
+    private function generateDailyTokenNo(Carbon $appointmentDate, ?string $slot = null): string
     {
-        $nextToken = 1;
-
-        $lastToken = OpdPatient::query()
-            ->where('hospital_id', $this->hospital_id)
-            ->whereDate('appointment_date', $appointmentDate->toDateString())
-            ->whereNotNull('token_no')
-            ->orderByDesc('id')
-            ->value('token_no');
-
-        if (!is_null($lastToken)) {
-            $nextToken = ((int) $lastToken) + 1;
-        }
-
-        while (
-            OpdPatient::query()
-                ->where('hospital_id', $this->hospital_id)
-                ->whereDate('appointment_date', $appointmentDate->toDateString())
-                ->where('token_no', $nextToken)
-                ->exists()
-        ) {
-            $nextToken++;
-        }
-
-        return $nextToken;
+        return app(OpdTokenNoService::class)->nextSequentialToken(
+            $this->hospital_id,
+            $appointmentDate,
+            $slot
+        );
     }
 
     public function printSticker(Request $request, OpdPatient $opdPatient)
@@ -1590,7 +1572,7 @@ class OpdPatientController extends BaseHospitalController
 
         return DataTables::of($data)
             ->addColumn('token', function ($row) {
-                return 'T-' . str_pad((string) ($row->token_no ?? 0), 3, '0', STR_PAD_LEFT);
+                return OpdTokenNoService::formatShort($row->token_no);
             })
             ->addColumn('patient', function ($row) {
                 $name = e($row->patient_name ?: '-');
@@ -1674,7 +1656,7 @@ class OpdPatientController extends BaseHospitalController
         $waiting = (clone $baseQuery)
             ->where('status', 'waiting')
             ->orderBy('absent_flag')
-            ->orderBy('token_no')
+            ->orderByRaw('(opd_patients.token_no IS NULL) ASC, opd_patients.token_no ASC')
             ->get();
 
         $completedToday = (clone $baseQuery)
@@ -1725,7 +1707,7 @@ class OpdPatientController extends BaseHospitalController
                 'id' => $inRoomList->first()->id,
                 'patient_id' => $inRoomList->first()->patient_id,
                 'doctor_id' => $inRoomList->first()->doctor_id,
-                'token' => str_pad((string) $inRoomList->first()->token_no, 3, '0', STR_PAD_LEFT),
+                'token' => OpdTokenNoService::formatShort($inRoomList->first()->token_no),
                 'name' => $inRoomList->first()->patient?->name ?? '-',
                 'doctor' => trim(($inRoomList->first()->consultant?->first_name ?? '') . ' ' . ($inRoomList->first()->consultant?->last_name ?? '')) ?: '-',
                 'dept' => $inRoomList->first()->department?->name ?? '-',
@@ -1736,7 +1718,7 @@ class OpdPatientController extends BaseHospitalController
                     'id' => $row->id,
                     'patient_id' => $row->patient_id,
                     'doctor_id' => $row->doctor_id,
-                    'token' => str_pad((string) $row->token_no, 3, '0', STR_PAD_LEFT),
+                    'token' => OpdTokenNoService::formatShort($row->token_no),
                     'name' => $row->patient?->name ?? '-',
                     'doctor' => trim(($row->consultant?->first_name ?? '') . ' ' . ($row->consultant?->last_name ?? '')) ?: '-',
                     'dept' => $row->department?->name ?? '-',
@@ -1758,7 +1740,8 @@ class OpdPatientController extends BaseHospitalController
                     'id' => $row->id,
                     'patient_id' => $row->patient_id,
                     'doctor_id' => $row->doctor_id,
-                    'token' => str_pad((string) $row->token_no, 3, '0', STR_PAD_LEFT),
+                    'status' => $row->status,
+                    'token' => OpdTokenNoService::formatShort($row->token_no),
                     'name' => $row->patient?->name ?? '-',
                     'doctor' => $doctor,
                     'dept' => $row->department?->name ?? '-',
@@ -1776,7 +1759,7 @@ class OpdPatientController extends BaseHospitalController
                     'id' => $row->id,
                     'patient_id' => $row->patient_id,
                     'doctor_id' => $row->doctor_id,
-                    'token' => str_pad((string) $row->token_no, 3, '0', STR_PAD_LEFT),
+                    'token' => OpdTokenNoService::formatShort($row->token_no),
                     'name' => $row->patient?->name ?? '-',
                     'doctor' => $doctor,
                     'dept' => $row->department?->name ?? '-',
@@ -1833,7 +1816,6 @@ class OpdPatientController extends BaseHospitalController
         return response()->json([
             'status' => true,
             'message' => 'Next patient moved to in-room.',
-            'token' => str_pad((string) $nextWaiting->token_no, 3, '0', STR_PAD_LEFT),
         ]);
     }
 
@@ -1844,7 +1826,7 @@ class OpdPatientController extends BaseHospitalController
         }
 
         if ($opdPatient->status !== 'waiting') {
-            return response()->json(['status' => false, 'message' => 'Only waiting patient can be marked absent.'], 422);
+            return response()->json(['status' => false, 'message' => 'Only waiting patients can be marked not present.'], 422);
         }
 
         if (auth()->user()->hasRole('Doctor')) {
@@ -1863,6 +1845,14 @@ class OpdPatientController extends BaseHospitalController
     {
         if ($opdPatient->hospital_id !== $this->hospital_id) {
             return response()->json(['status' => false, 'message' => 'Unauthorized OPD record.'], 403);
+        }
+
+        if (! $opdPatient->absent_flag) {
+            return response()->json(['status' => false, 'message' => 'Patient is already marked present.'], 422);
+        }
+
+        if ($opdPatient->status !== 'waiting') {
+            return response()->json(['status' => false, 'message' => 'Present/absent can only be updated for waiting visits.'], 422);
         }
 
         if (auth()->user()->hasRole('Doctor')) {

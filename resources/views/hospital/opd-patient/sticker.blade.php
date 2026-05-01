@@ -172,7 +172,7 @@
             <div class="hospital-name">{{ $hospital->name ?? config('app.name') }}</div>
             <div class="token-box">
                 <div class="token-label">Token</div>
-                <div class="token-number">{{ $opdPatient->token_no ? str_pad($opdPatient->token_no, 3, '0', STR_PAD_LEFT) : '-' }}</div>
+                <div class="token-number">{{ $opdPatient->token_no ? \App\Services\OpdTokenNoService::formatShort($opdPatient->token_no) : '-' }}</div>
             </div>
         </div>
 

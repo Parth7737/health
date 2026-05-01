@@ -8,7 +8,7 @@
                 <p class="doctor-care-chip-name">{{ $patient?->name ?? '-' }} <span style="font-size:11px;font-weight:400;color:#6e86a1;">{{ $patient?->patient_id ? '- ' . $patient->patient_id : '' }}</span></p>
                 <p class="doctor-care-chip-meta">
                     {{ ($patient?->age_years ?? 0) }} Yrs / {{ $patient?->gender ?? '-' }}
-                    | Token: {{ str_pad((string) ($visit->token_no ?? ''), 3, '0', STR_PAD_LEFT) }}
+                    | Token: {{ \App\Services\OpdTokenNoService::formatShort($visit->token_no) }}
                     | {{ $visit->department?->name ?? 'General Medicine OPD' }}
                 </p>
             </div>

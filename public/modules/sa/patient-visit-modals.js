@@ -55,7 +55,6 @@
       this.initFlatpickr();
       this.initModalSelect2(this.token.form, this.token.modal);
       this.initModalSelect2(this.admit.form, this.admit.modal);
-      this.loadAvailableBeds();
       window.pmLoadBedOptions = () => this.loadAvailableBeds();
       window.loadBedOptions = () => this.loadAvailableBeds();
       window.issueToken = () => this.submitTokenForm();
@@ -251,6 +250,7 @@
             this.resetAdmitForm(true);
           } else {
             this.resetAdmitForm(false);
+            this.loadAvailableBeds();
           }
         });
         this.admitModalObserver.observe(this.admit.modal, { attributes: true, attributeFilter: ['class'] });

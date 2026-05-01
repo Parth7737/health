@@ -73,7 +73,7 @@ class OpdPatient extends Model
 
     protected $casts = [
         'appointment_date' => 'datetime',
-        'token_no' => 'integer',
+        'token_no' => 'string',
         'absent_flag' => 'boolean',
         'symptoms_type_id' => 'array',
         'symptoms' => 'array',

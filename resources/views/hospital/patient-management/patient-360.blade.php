@@ -108,7 +108,7 @@
                         <span class="badge {{ $p360VisitStatusBadgeClass }} p360-badge-chip">Status: {{ $p360VisitStatusLabel }}</span>
                     @else
                         <span class="badge badge-primary p360-badge-chip">OPD — Visit {{ data_get($latestOpdVisit, 'case_no') ?: '—' }}</span>
-                        <span class="badge badge-warning p360-badge-chip">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? str_pad((int) data_get($latestOpdVisit, 'token_no'), 3, '0', STR_PAD_LEFT) : '—' }}</span>
+                        <span class="badge badge-warning p360-badge-chip">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? \App\Services\OpdTokenNoService::formatForDisplay(data_get($latestOpdVisit, 'token_no')) : '—' }}</span>
                         <span class="badge {{ $p360VisitStatusBadgeClass }} p360-badge-chip">Status: {{ $p360VisitStatusLabel }}</span>
                     @endif
                 </div>

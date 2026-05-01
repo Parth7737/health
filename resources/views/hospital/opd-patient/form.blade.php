@@ -174,7 +174,7 @@
 
                         <div class="col-md-2">
                             <label class="form-label">Token</label>
-                            <input type="text" name="token_no" class="form-control" readonly placeholder="Auto Generated" value="{{ $data?->token_no ? str_pad($data->token_no, 3, '0', STR_PAD_LEFT) : '' }}">
+                            <input type="text" name="token_no" class="form-control" readonly placeholder="Auto Generated" value="{{ $data?->token_no ? \App\Services\OpdTokenNoService::formatForDisplay($data->token_no) : '' }}">
                         </div>
 
                         <div class="col-md-2">
