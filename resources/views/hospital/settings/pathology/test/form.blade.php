@@ -1,5 +1,9 @@
+
 @php
     $selectedParameterIds = isset($data) && $data ? $data->parameters->pluck('id')->map(function ($id) {
+        return (int) $id;
+    })->all() : [];
+    $selectedSampleTypeIds = isset($data) && $data ? $data->sampleTypes->pluck('id')->map(function ($id) {
         return (int) $id;
     })->all() : [];
 @endphp
