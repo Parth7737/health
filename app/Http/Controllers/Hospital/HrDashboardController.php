@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Hospital;
 use App\Http\Controllers\BaseHospitalController;
 use App\Models\HrAttendanceRecord;
 use App\Models\HrDepartment;
+use App\Models\HrDesignation;
 use App\Models\HrLeaveRequest;
 use App\Models\HrLeaveType;
 use App\Models\HrStaffLeaveBalance;
+use App\Models\HrRecruitmentApplication;
 use App\Models\HrPayrollRecord;
 use App\Models\HrRecruitmentVacancy;
 use App\Models\HrTrainingProgram;
@@ -71,6 +73,10 @@ class HrDashboardController extends BaseHospitalController
             return response()->json(['html' => '<div class="hrx-loading">You do not have permission to view attendance.</div>'], 403);
         }
 
+        if ($tab === 'recruitment' && !auth()->user()->can('view-hr-recruitment')) {
+            return response()->json(['html' => '<div class="hrx-loading">You do not have permission to view recruitment.</div>'], 403);
+        }
+
         $view = match ($tab) {
             'dashboard' => view('hospital.hr.dashboard.tabs.dashboard', $this->dashboardData()),
             'directory' => view('hospital.hr.dashboard.tabs.directory', $this->directoryData()),
@@ -91,11 +97,26 @@ class HrDashboardController extends BaseHospitalController
         $type = $request->string('type')->toString();
 
         $staffId = (int) $request->input('staff_id', 0);
+        $vacancyId = (int) $request->input('vacancy_id', 0);
         $attendanceDateInput = trim((string) $request->input('attendance_date', ''));
         try {
             $attendanceDate = $attendanceDateInput !== '' ? Carbon::parse($attendanceDateInput)->toDateString() : now()->toDateString();
         } catch (\Throwable $e) {
             $attendanceDate = now()->toDateString();
+        }
+
+        if ($type === 'recruitment-vacancy-form') {
+            if ($vacancyId > 0) {
+                if (!auth()->user()->can('edit-hr-recruitment')) {
+                    return response()->json(['status' => false, 'message' => 'You do not have permission to edit recruitment vacancies.'], 403);
+                }
+            } elseif (!auth()->user()->can('create-hr-recruitment')) {
+                return response()->json(['status' => false, 'message' => 'You do not have permission to post recruitment vacancies.'], 403);
+            }
+        }
+
+        if ($type === 'recruitment-vacancy-view' && !auth()->user()->can('view-hr-recruitment')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to view recruitment vacancies.'], 403);
         }
 
         $existingAttendance = null;
@@ -128,6 +149,16 @@ class HrDashboardController extends BaseHospitalController
             'leave-request-ajax' => view('hospital.hr.dashboard.modals.leave-request-ajax', [
                 'staffOptions' => Staff::query()->select('id', 'first_name', 'last_name', 'staff_id')->orderBy('first_name')->limit(300)->get(),
                 'leaveTypes' => HrLeaveType::query()->select('id', 'name')->orderBy('name')->get(),
+            ])->render(),
+            'recruitment-vacancy-form' => view('hospital.hr.dashboard.modals.recruitment-vacancy-form', [
+                'vacancy' => $vacancyId > 0 ? HrRecruitmentVacancy::query()->find($vacancyId) : null,
+                'departments' => HrDepartment::query()->select('id', 'name')->orderBy('name')->get(),
+                'designations' => HrDesignation::query()->select('id', 'name')->orderBy('name')->get(),
+            ])->render(),
+            'recruitment-vacancy-view' => view('hospital.hr.dashboard.modals.recruitment-vacancy-view', [
+                'vacancy' => HrRecruitmentVacancy::query()
+                    ->with(['department:id,name', 'designation:id,name', 'applications'])
+                    ->find($vacancyId),
             ])->render(),
             default => ''
         };
@@ -2014,19 +2045,226 @@ class HrDashboardController extends BaseHospitalController
         ];
     }
 
-    private function recruitmentData(): array
+    public function recruitmentVacanciesData(Request $request): JsonResponse
     {
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = max((int) $request->input('length', 10), 1);
+        $search = trim((string) $request->input('search_custom', ''));
+        $status = trim((string) $request->input('status_filter', ''));
+
         if (!Schema::hasTable('hr_recruitment_vacancies')) {
-            return ['vacancies' => collect()];
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
         }
 
-        $vacancies = HrRecruitmentVacancy::query()
-            ->with(['department:id,name'])
-            ->latest('id')
-            ->limit(100)
+        $baseQuery = HrRecruitmentVacancy::query()
+            ->leftJoin('hr_departments', 'hr_departments.id', '=', 'hr_recruitment_vacancies.department_id')
+            ->leftJoin('hr_designations', 'hr_designations.id', '=', 'hr_recruitment_vacancies.hr_designation_id')
+            ->select('hr_recruitment_vacancies.*')
+            ->selectRaw('COALESCE(hr_departments.name, "General") as department_name')
+            ->selectRaw('COALESCE(hr_designations.name, hr_recruitment_vacancies.title) as designation_name');
+
+        $totalRecords = (clone $baseQuery)->count('hr_recruitment_vacancies.id');
+
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $baseQuery->where(function ($q) use ($like) {
+                $q->where('hr_recruitment_vacancies.title', 'like', $like)
+                    ->orWhere('hr_departments.name', 'like', $like)
+                    ->orWhere('hr_designations.name', 'like', $like);
+            });
+        }
+
+        if ($status !== '') {
+            $baseQuery->whereRaw('LOWER(hr_recruitment_vacancies.status) = ?', [strtolower($status)]);
+        }
+
+        $filteredRecords = (clone $baseQuery)->count('hr_recruitment_vacancies.id');
+
+        $rows = $baseQuery
+            ->orderByDesc('hr_recruitment_vacancies.id')
+            ->skip($start)
+            ->take($length)
             ->get();
 
-        return ['vacancies' => $vacancies];
+        $canEditRecruitment = auth()->user()->can('edit-hr-recruitment');
+
+        $data = $rows->map(function ($row) use ($canEditRecruitment) {
+            $statusLower = strtolower((string) $row->status);
+            $statusClass = in_array($statusLower, ['open', 'in progress'], true)
+                ? 'orange'
+                : ($statusLower === 'closed' ? 'green' : 'blue');
+
+            $openRange = '-';
+            if ($row->open_from || $row->open_till) {
+                $openRange = (optional($row->open_from)->format('d M Y') ?: '-') . ' - ' . (optional($row->open_till)->format('d M Y') ?: '-');
+            }
+
+            $editBtn = $canEditRecruitment
+                ? '<button type="button" class="hrx-btn-lite hrx-recruitment-edit-btn hrx-recruitment-edit" data-vacancy-id="' . (int) $row->id . '" title="Edit"><i class="fa fa-edit"></i></button>'
+                : '';
+
+            return [
+                'id' => (int) $row->id,
+                'title' => '<span class="fw-700">' . e($row->designation_name ?: $row->title) . '</span>',
+                'department' => '<span class="hrx-badge recruitment-dept">' . e($row->department_name ?: 'General') . '</span>',
+                'required' => '<span class="fw-700">' . e((string) $row->required_positions) . '</span>',
+                'applicants' => e((string) ($row->applicants ?? 0)),
+                'shortlisted' => '<span style="color:#2e7d32;font-weight:700">' . e((string) ($row->shortlisted ?? 0)) . '</span>',
+                'status' => '<span class="hrx-badge ' . e($statusClass) . '">' . e($row->status ?: 'Open') . '</span>',
+                'open_range' => e($openRange),
+                'action' => '<div class="hrx-actions hrx-recruitment-table-actions">'
+                    . '<button type="button" class="hrx-btn-lite hrx-recruitment-view-btn hrx-recruitment-view" data-vacancy-id="' . (int) $row->id . '" title="View"><i class="fa fa-eye"></i></button>'
+                    . $editBtn
+                    . '</div>',
+            ];
+        })->values();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $totalRecords,
+            'recordsFiltered' => $filteredRecords,
+            'data' => $data,
+        ]);
+    }
+
+    public function storeRecruitmentVacancy(Request $request): JsonResponse
+    {
+        if (!Schema::hasTable('hr_recruitment_vacancies')) {
+            return response()->json(['status' => false, 'message' => 'Vacancy table not available. Run migrations first.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'id' => 'nullable|integer|exists:hr_recruitment_vacancies,id',
+            'hr_designation_id' => 'nullable|exists:hr_designations,id',
+            'department_id' => 'nullable|exists:hr_departments,id',
+            'title' => 'nullable|string|max:150',
+            'required_positions' => 'required|integer|min:1|max:999',
+            'status' => 'required|string|max:40',
+            'open_from' => 'nullable|date',
+            'open_till' => 'nullable|date|after_or_equal:open_from',
+            'description' => 'nullable|string|max:5000',
+            'is_published' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
+        }
+
+        $vacancyId = (int) $request->input('id', 0);
+        if ($vacancyId > 0 && !auth()->user()->can('edit-hr-recruitment')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to edit recruitment vacancies.'], 403);
+        }
+        if ($vacancyId === 0 && !auth()->user()->can('create-hr-recruitment')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to post recruitment vacancies.'], 403);
+        }
+
+        $vacancy = $vacancyId > 0
+            ? HrRecruitmentVacancy::query()->find($vacancyId)
+            : new HrRecruitmentVacancy();
+
+        if (!$vacancy) {
+            return response()->json(['status' => false, 'message' => 'Vacancy not found.'], 404);
+        }
+
+        $designation = null;
+        if ($request->filled('hr_designation_id')) {
+            $designation = HrDesignation::query()->find((int) $request->input('hr_designation_id'));
+        }
+
+        $vacancy->hospital_id = (int) $this->hospital_id;
+        $vacancy->hr_designation_id = $designation?->id;
+        $vacancy->department_id = $request->filled('department_id') ? (int) $request->input('department_id') : null;
+        $vacancy->title = $request->filled('title')
+            ? $request->string('title')->toString()
+            : ($designation?->name ?? 'Vacancy');
+        $vacancy->required_positions = (int) $request->input('required_positions');
+        $vacancy->status = $request->string('status')->toString();
+        $vacancy->open_from = $request->filled('open_from') ? Carbon::parse($request->input('open_from'))->toDateString() : null;
+        $vacancy->open_till = $request->filled('open_till') ? Carbon::parse($request->input('open_till'))->toDateString() : null;
+        $vacancy->last_date = $vacancy->open_till ?: $vacancy->last_date;
+        if (Schema::hasColumn('hr_recruitment_vacancies', 'description')) {
+            $vacancy->description = $request->filled('description') ? $request->string('description')->toString() : null;
+        }
+        if (Schema::hasColumn('hr_recruitment_vacancies', 'is_published')) {
+            $vacancy->is_published = $request->boolean('is_published', true);
+        }
+        $vacancy->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => $vacancyId > 0 ? 'Vacancy updated successfully.' : 'Vacancy posted successfully.',
+        ]);
+    }
+
+    public function updateRecruitmentApplicationStatus(Request $request): JsonResponse
+    {
+        if (!Schema::hasTable('hr_recruitment_applications')) {
+            return response()->json(['status' => false, 'message' => 'Applications table not found. Run migrations first.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'application_id' => 'required|integer|exists:hr_recruitment_applications,id',
+            'status' => 'required|in:Applied,Screening,Shortlisted,Interview,Selected,Rejected,Hired',
+            'status_note' => 'nullable|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
+        }
+
+        $app = HrRecruitmentApplication::query()->find((int) $request->input('application_id'));
+        if (!$app) {
+            return response()->json(['status' => false, 'message' => 'Application not found.'], 404);
+        }
+
+        $app->status = $request->string('status')->toString();
+        $app->status_note = $request->filled('status_note') ? $request->string('status_note')->toString() : null;
+        $app->reviewed_by = auth()->id();
+        $app->reviewed_at = now();
+        $app->save();
+
+        $this->refreshVacancyApplicantStats((int) $app->hr_recruitment_vacancy_id);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Application status updated successfully.',
+        ]);
+    }
+
+    private function refreshVacancyApplicantStats(int $vacancyId): void
+    {
+        if ($vacancyId <= 0 || !Schema::hasTable('hr_recruitment_applications')) {
+            return;
+        }
+
+        $vacancy = HrRecruitmentVacancy::withoutGlobalScopes()->find($vacancyId);
+        if (!$vacancy) {
+            return;
+        }
+
+        $applicants = HrRecruitmentApplication::withoutGlobalScopes()
+            ->where('hr_recruitment_vacancy_id', $vacancyId)
+            ->count();
+
+        $shortlisted = HrRecruitmentApplication::withoutGlobalScopes()
+            ->where('hr_recruitment_vacancy_id', $vacancyId)
+            ->whereIn('status', ['Shortlisted', 'Interview', 'Selected', 'Hired'])
+            ->count();
+
+        $vacancy->applicants = $applicants;
+        $vacancy->shortlisted = $shortlisted;
+        $vacancy->save();
+    }
+
+    private function recruitmentData(): array
+    {
+        return ['vacancies' => collect()];
     }
 
     private function trainingData(): array
@@ -2084,7 +2322,7 @@ class HrDashboardController extends BaseHospitalController
             ];
         }
 
-        if (Schema::hasTable('hr_recruitment_vacancies')) {
+        if (Schema::hasTable('hr_recruitment_vacancies') && auth()->user()->can('view-hr-recruitment')) {
             $openVacancies = HrRecruitmentVacancy::query()->where('status', 'Open')->count();
             $alerts[] = [
                 'type' => 'info',

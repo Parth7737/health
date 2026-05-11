@@ -34,11 +34,13 @@
                 <div class="hrx-value">INR {{ number_format((float) $stats['monthlyPayroll']) }}</div>
                 <div class="hrx-meta">Current month net payout</div>
             </div>
+            @can('view-hr-recruitment')
             <div class="hrx-stat-card red">
                 <div class="hrx-label">Vacancies</div>
                 <div class="hrx-value">{{ number_format($stats['vacancies']) }}</div>
                 <div class="hrx-meta">Open positions</div>
             </div>
+            @endcan
         </div>
 
         <div class="hrx-tabbar" id="hrxTabbar">
@@ -49,7 +51,9 @@
             @endif
             <button type="button" class="hrx-tab-btn" data-tab="payroll"><i class="fas fa-money-check-alt"></i>Payroll</button>
             <button type="button" class="hrx-tab-btn" data-tab="leave"><i class="fas fa-calendar-times"></i>Leave</button>
+            @can('view-hr-recruitment')
             <button type="button" class="hrx-tab-btn" data-tab="recruitment"><i class="fa fa-user-plus"></i>Recruitment</button>
+            @endcan
             <button type="button" class="hrx-tab-btn" data-tab="training"><i class="fa fa-graduation-cap"></i>Training</button>
             <button type="button" class="hrx-tab-btn" data-tab="reports"><i class="fa fa-bar-chart"></i>Reports</button>
         </div>
@@ -218,12 +222,55 @@
     .hrx-table { width:100%; border-collapse:collapse; }
     .hrx-table th { background:#f5f7fb; font-size:12px; color:#5a7894; text-align:left; padding:10px 12px; border-bottom:1px solid #ccd8e8; white-space:nowrap; }
     .hrx-table td { font-size:13px; color:#0d1b2a; padding:10px 12px; border-bottom:1px solid #eef3f8; }
+    .fw-700 { font-weight: 700; }
     .hrx-badge { display:inline-flex; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700; }
     .hrx-badge.green { background:#e8f5e9; color:#2e7d32; }
     .hrx-badge.red { background:#ffebee; color:#c62828; }
     .hrx-badge.orange { background:#fff3e0; color:#e65100; }
     .hrx-badge.blue { background:#e3f0ff; color:#1565c0; }
     .hrx-badge.purple { background:#f3e5f5; color:#4a148c; }
+    /* Recruitment tab: department pills (light lavender + deep purple) */
+    .hrx-badge.recruitment-dept {
+        background: #f3e8ff;
+        color: #582c83;
+        font-weight: 800;
+        padding: 5px 12px;
+        font-size: 12px;
+        letter-spacing: 0.01em;
+    }
+    /* Recruitment tab: action column — pill outline, purple border + icon */
+    .hrx-recruitment-table-actions {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+    }
+    .hrx-btn-lite.hrx-recruitment-view-btn,
+    .hrx-btn-lite.hrx-recruitment-edit-btn {
+        border-radius: 999px;
+        padding: 6px 14px;
+        min-width: 38px;
+        justify-content: center;
+        border: 1.5px solid #4a148c;
+        background: #fff;
+        color: #4a148c;
+        box-shadow: 0 1px 3px rgba(74, 20, 140, 0.08);
+    }
+    .hrx-btn-lite.hrx-recruitment-view-btn:hover,
+    .hrx-btn-lite.hrx-recruitment-edit-btn:hover {
+        background: #f3e8ff;
+        border-color: #3b0070;
+        color: #3b0070;
+    }
+    .hrx-btn-lite.hrx-recruitment-edit-btn {
+        border-color: #6a1b9a;
+        color: #6a1b9a;
+    }
+    .hrx-btn-lite.hrx-recruitment-edit-btn:hover {
+        background: #f3e5f5;
+        border-color: #4a148c;
+        color: #4a148c;
+    }
     .hrx-grid-two { display:grid; grid-template-columns:2fr 1fr; gap:16px; }
     .hrx-grid-two-even { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     .hrx-staff-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
@@ -247,6 +294,16 @@
         margin-left:0 !important;
     }
     #hrxLeaveRequestsTable_wrapper .dt-layout-end {
+        justify-content:flex-start !important;
+    }
+    #hrxRecruitmentTable_wrapper .dt-buttons { display:flex !important; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    #hrxRecruitmentTable_wrapper .dataTables_paginate,
+    #hrxRecruitmentTable_wrapper .dt-paging {
+        float:none !important;
+        text-align:left !important;
+        margin-left:0 !important;
+    }
+    #hrxRecruitmentTable_wrapper .dt-layout-end {
         justify-content:flex-start !important;
     }
     @media (max-width: 1200px) { .hrx-stats-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
@@ -287,6 +344,12 @@
         updateLeaveStatusUrl: @json(route('hospital.hr.dashboard.update-leave-status')),
         leaveRequestsDataUrl: @json(route('hospital.hr.dashboard.leave-requests-data')),
         staffLeaveBalanceUrl: @json(route('hospital.hr.dashboard.staff-leave-balance')),
+        recruitmentVacanciesDataUrl: @json(route('hospital.hr.dashboard.recruitment-vacancies-data')),
+        storeRecruitmentVacancyUrl: @json(route('hospital.hr.dashboard.store-recruitment-vacancy')),
+        updateRecruitmentApplicationStatusUrl: @json(route('hospital.hr.dashboard.update-recruitment-application-status')),
+        recruitmentCanView: @json(auth()->user()->can('view-hr-recruitment')),
+        recruitmentCanCreate: @json(auth()->user()->can('create-hr-recruitment')),
+        recruitmentCanEdit: @json(auth()->user()->can('edit-hr-recruitment')),
     };
 </script>
 <script src="{{ asset('public/modules/sa/hr-dashboard/tabs/dashboard.js') }}"></script>
