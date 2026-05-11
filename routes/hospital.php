@@ -332,6 +332,8 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::get('dashboard/tab/{tab}', 'HrDashboardController@tab')->name('dashboard.tab');
             Route::get('dashboard/directory-load', 'HrDashboardController@directoryLoad')->name('dashboard.directory-load');
             Route::get('dashboard/directory-list-data', 'HrDashboardController@directoryListData')->name('dashboard.directory-list-data');
+            Route::get('dashboard/leave-requests-data', 'HrDashboardController@leaveRequestsData')->name('dashboard.leave-requests-data');
+            Route::get('dashboard/staff-leave-balance', 'HrDashboardController@staffLeaveBalance')->name('dashboard.staff-leave-balance');
             Route::get('dashboard/payroll-list-data', 'HrDashboardController@payrollListData')
                 ->middleware('permission:view-payroll|view-staff')
                 ->name('dashboard.payroll-list-data');

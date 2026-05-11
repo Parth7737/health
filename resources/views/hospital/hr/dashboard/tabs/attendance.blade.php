@@ -74,6 +74,30 @@
   #hrx-panel-attendance .att-a { background:#ffebee; color:#c62828; }
   #hrx-panel-attendance .att-l { background:#fff3e0; color:#e65100; }
   #hrx-panel-attendance .att-h { background:#e3f0ff; color:#1565c0; }
+  /* Register badges: scoped to table so DataTables wrapper / font issues never hide codes */
+  #hrxRegisterTable .hrx-att-badge {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:22px;
+    height:22px;
+    padding:0 4px;
+    border-radius:6px;
+    font-size:11px;
+    font-weight:800;
+    line-height:1;
+    letter-spacing:0.02em;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    box-sizing:border-box;
+  }
+  #hrxRegisterTable .hrx-att-badge--present { background:#e8f5e9; color:#1b5e20; }
+  #hrxRegisterTable .hrx-att-badge--absent { background:#ffebee; color:#b71c1c; }
+  #hrxRegisterTable .hrx-att-badge--leave { background:#fff3e0; color:#bf360c; border:1px solid rgba(191,54,12,.25); }
+  #hrxRegisterTable .hrx-att-badge--holiday { background:#e3f0ff; color:#0d47a1; }
+  #hrxRegisterWrap {
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
   #hrx-panel-attendance .hrx-att-pager {
     display:flex;
     justify-content:space-between;
@@ -397,11 +421,18 @@
       <div id="hrxAttGridLoading" style="display:none;color:var(--muted);font-size:12px;padding:6px 0">
         <i class="fa fa-spinner fa-spin"></i> Loading attendance...
       </div>
-      <div class="hrx-daily-table-wrap">
-        <table id="hrxRegisterTable">
+      <div class="hrx-daily-table-wrap" id="hrxRegisterWrap">
+        <table id="hrxRegisterTable" class="hrx-register-table">
           <thead></thead>
           <tbody></tbody>
         </table>
+        <div id="hrxRegisterPager" class="hrx-att-pager" style="display:none;margin-top:8px;">
+          <span id="hrxRegisterPageInfo" class="hrx-att-page-info"></span>
+          <span style="display:flex;gap:6px;align-items:center">
+            <button type="button" class="btn btn-outline btn-sm hrx-att-pager-btn" id="hrxRegisterPrev">Previous</button>
+            <button type="button" class="btn btn-outline btn-sm hrx-att-pager-btn" id="hrxRegisterNext">Next</button>
+          </span>
+        </div>
       </div>
     </div>
   </div>

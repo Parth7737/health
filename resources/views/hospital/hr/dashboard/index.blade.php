@@ -239,6 +239,16 @@
     #hrxDirectoryListTable_wrapper .dt-layout-end {
         justify-content:flex-start !important;
     }
+    #hrxLeaveRequestsTable_wrapper .dt-buttons { display:flex !important; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    #hrxLeaveRequestsTable_wrapper .dataTables_paginate,
+    #hrxLeaveRequestsTable_wrapper .dt-paging {
+        float:none !important;
+        text-align:left !important;
+        margin-left:0 !important;
+    }
+    #hrxLeaveRequestsTable_wrapper .dt-layout-end {
+        justify-content:flex-start !important;
+    }
     @media (max-width: 1200px) { .hrx-stats-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 900px) { .hrx-grid-two, .hrx-grid-two-even { grid-template-columns:1fr; } }
 </style>
@@ -275,6 +285,8 @@
         storeAttendanceUrl: @json(route('hospital.hr.dashboard.store-attendance')),
         storeLeaveUrl: @json(route('hospital.hr.dashboard.store-leave')),
         updateLeaveStatusUrl: @json(route('hospital.hr.dashboard.update-leave-status')),
+        leaveRequestsDataUrl: @json(route('hospital.hr.dashboard.leave-requests-data')),
+        staffLeaveBalanceUrl: @json(route('hospital.hr.dashboard.staff-leave-balance')),
     };
 </script>
 <script src="{{ asset('public/modules/sa/hr-dashboard/tabs/dashboard.js') }}"></script>

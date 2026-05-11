@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\HrAttendanceRecord;
 use App\Models\HrLeaveRequest;
 use App\Models\HrPayrollComponent;
 use App\Models\HrPayrollRecord;
@@ -10,6 +11,7 @@ use App\Models\HrPayrollSetting;
 use App\Models\Staff;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class PayrollProcessingService
 {
@@ -78,10 +80,16 @@ class PayrollProcessingService
 
                 $grossPay = $basicPay + $allowancesTotal;
 
-                $leaveDays = $this->resolveApprovedLeaveDays($staff->id, $monthStart, $monthEnd);
+                $leaveDaysUnpaid = $this->resolveUnpaidLeaveDaysForPayroll(
+                    $staff->id,
+                    $hospitalId,
+                    $monthStart,
+                    $monthEnd
+                );
+                $leaveDaysTotal = $this->resolveApprovedLeaveDays($staff->id, $monthStart, $monthEnd);
                 $leaveDeduction = $this->resolveLeaveDeduction(
                     $basicPay,
-                    $leaveDays,
+                    $leaveDaysUnpaid,
                     (int) ($setting->standard_working_days ?? 30),
                     (float) ($setting->leave_deduction_per_day ?? 0)
                 );
@@ -91,12 +99,41 @@ class PayrollProcessingService
                         'label' => 'Leave Deduction',
                         'amount' => round($leaveDeduction, 2),
                         'meta' => [
-                            'leave_days' => $leaveDays,
+                            'leave_days_unpaid' => $leaveDaysUnpaid,
+                            'leave_days_total_approved' => $leaveDaysTotal,
                         ],
                     ];
                 }
 
-                $deductionsTotal = $componentDeductionsTotal + $leaveDeduction;
+                $attendanceSummary = $this->summarizeAttendanceDeductionUnits(
+                    $staff->id,
+                    $hospitalId,
+                    $monthStart,
+                    $monthEnd
+                );
+                $attendanceUnits = (float) $attendanceSummary['deduction_units'];
+                $attendanceDeduction = $this->resolveLeaveDeduction(
+                    $basicPay,
+                    $attendanceUnits,
+                    (int) ($setting->standard_working_days ?? 30),
+                    (float) ($setting->leave_deduction_per_day ?? 0)
+                );
+
+                if ($attendanceDeduction > 0) {
+                    $deductionItems[] = [
+                        'label' => 'Attendance Deduction',
+                        'amount' => round($attendanceDeduction, 2),
+                        'meta' => array_merge(
+                            [
+                                'source' => 'hr_attendance_records',
+                                'payroll_month' => $monthStart->format('Y-m'),
+                            ],
+                            $attendanceSummary
+                        ),
+                    ];
+                }
+
+                $deductionsTotal = $componentDeductionsTotal + $leaveDeduction + $attendanceDeduction;
                 $netPay = max(0, $grossPay - $deductionsTotal);
 
                 $record = HrPayrollRecord::query()->updateOrCreate(
@@ -175,6 +212,99 @@ class PayrollProcessingService
         }
 
         return $value;
+    }
+
+    /**
+     * Payroll units from attendance: full absent = 1, absent half = 0.5, present half = 0.5.
+     * Leave and Holiday rows are excluded (leave handled by Leave Deduction line).
+     *
+     * @return array{
+     *   deduction_units: float,
+     *   absent_full_days: float,
+     *   absent_half_day_units: float,
+     *   present_half_day_units: float,
+     *   rows_considered: int
+     * }
+     */
+    private function summarizeAttendanceDeductionUnits(
+        int $staffId,
+        int $hospitalId,
+        Carbon $monthStart,
+        Carbon $monthEnd
+    ): array {
+        if (!Schema::hasTable('hr_attendance_records')) {
+            return [
+                'deduction_units' => 0.0,
+                'absent_full_days' => 0.0,
+                'absent_half_day_units' => 0.0,
+                'present_half_day_units' => 0.0,
+                'rows_considered' => 0,
+            ];
+        }
+
+        $rows = HrAttendanceRecord::withoutGlobalScopes()
+            ->where('hospital_id', $hospitalId)
+            ->where('staff_id', $staffId)
+            ->whereDate('attendance_date', '>=', $monthStart->toDateString())
+            ->whereDate('attendance_date', '<=', $monthEnd->toDateString())
+            ->get(['status', 'day_type']);
+
+        $absentFull = 0.0;
+        $absentHalfUnits = 0.0;
+        $presentHalfUnits = 0.0;
+        $considered = 0;
+
+        foreach ($rows as $row) {
+            $status = (string) $row->status;
+            $isHalfDay = ((string) $row->day_type) === 'Half Day';
+
+            if ($status === 'Leave' || $status === 'Holiday') {
+                continue;
+            }
+
+            if ($status === 'Absent') {
+                $considered++;
+                if ($isHalfDay) {
+                    $absentHalfUnits += 0.5;
+                } else {
+                    $absentFull += 1.0;
+                }
+
+                continue;
+            }
+
+            if ($status === 'Present' && $isHalfDay) {
+                $considered++;
+                $presentHalfUnits += 0.5;
+            }
+        }
+
+        $units = $absentFull + $absentHalfUnits + $presentHalfUnits;
+
+        return [
+            'deduction_units' => round($units, 3),
+            'absent_full_days' => $absentFull,
+            'absent_half_day_units' => $absentHalfUnits,
+            'present_half_day_units' => $presentHalfUnits,
+            'rows_considered' => $considered,
+        ];
+    }
+
+    private function resolveUnpaidLeaveDaysForPayroll(int $staffId, int $hospitalId, Carbon $monthStart, Carbon $monthEnd): float
+    {
+        if (
+            Schema::hasTable('hr_leave_types')
+            && Schema::hasColumn('hr_leave_types', 'is_paid_time_off')
+        ) {
+            return app(HrLeaveBalanceService::class)->countUnpaidLeaveDaysInMonth(
+                $staffId,
+                $hospitalId,
+                $monthStart,
+                $monthEnd
+            );
+        }
+
+        return $this->resolveApprovedLeaveDays($staffId, $monthStart, $monthEnd);
     }
 
     private function resolveApprovedLeaveDays(int $staffId, Carbon $monthStart, Carbon $monthEnd): float

@@ -23,6 +23,8 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Name</th>
+                                    <th>Paid time off</th>
+                                    <th>Annual days</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>

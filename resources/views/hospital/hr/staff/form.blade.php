@@ -213,30 +213,7 @@
                 <textarea name="note" id="note" class="form-control" rows="3" placeholder="Additional note">{{ @$data->note }}</textarea>
             </div>
         </div>
-        <!-- Leaves Section -->
-        <div class="section-title mb-3 mt-4">
-            <h6 class="fw-bold text-default">Leaves</h6>
-        </div>
-        <div class="row g-2 mt-2">
-            <div class="col-md-3">
-                <label class="form-label">Paid Time Off (PTO) </label>
-                <input type="number" name="pto" id="pto" value="{{ @$data->pto }}" class="form-control" placeholder="PTO days per year">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Vacation </label>
-                <input type="number" name="vacation" id="vacation" value="{{ @$data->vacation }}" class="form-control" placeholder="Vacation days per year">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Family and Medical Leaves (FMLA) </label>
-                <input type="number" name="fmla" id="fmla" value="{{ @$data->fmla }}" class="form-control" placeholder="FMLA days per year">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Continuing Education Leaves </label>
-                <input type="number" name="education_leave" id="education_leave" value="{{ @$data->education_leave }}" class="form-control" placeholder="Education leave days per year">
-            </div>
-        </div>
-            
-        <!-- Leaves Section -->
+
         <div class="section-title mb-3 mt-4">
             <h6 class="fw-bold text-default">Bank Details</h6>
         </div>

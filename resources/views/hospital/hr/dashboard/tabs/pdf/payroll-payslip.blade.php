@@ -166,7 +166,29 @@
                     <table class="row" cellspacing="0" cellpadding="0">
                         @if(isset($deductionItems) && $deductionItems->count() > 0)
                             @foreach($deductionItems as $item)
-                                <tr><td>{{ $item->label }}</td><td>INR {{ number_format($item->amount, 2) }}</td></tr>
+                                @php
+                                    $meta = $item->meta ?? [];
+                                    $leaveUnpaid = isset($meta['leave_days_unpaid']) ? (float) $meta['leave_days_unpaid'] : null;
+                                    $leaveApprovedMonth = isset($meta['leave_days_total_approved']) ? (float) $meta['leave_days_total_approved'] : null;
+                                    $leaveLegacy = isset($meta['leave_days']) ? (float) $meta['leave_days'] : null;
+                                    $attUnits = isset($meta['deduction_units']) ? (float) $meta['deduction_units'] : null;
+                                    $attAbsentFull = isset($meta['absent_full_days']) ? (float) $meta['absent_full_days'] : null;
+                                    $attAbsentHalf = isset($meta['absent_half_day_units']) ? (float) $meta['absent_half_day_units'] : null;
+                                    $attPresentHalf = isset($meta['present_half_day_units']) ? (float) $meta['present_half_day_units'] : null;
+                                @endphp
+                                <tr>
+                                    <td>
+                                        {{ $item->label }}
+                                        @if($item->label === 'Leave Deduction' && $leaveUnpaid !== null)
+                                            <div style="font-size:8px;color:#5d7285;font-weight:400;margin-top:2px;">Unpaid leave days (this month): {{ number_format($leaveUnpaid, 1) }}@if($leaveApprovedMonth !== null) · Approved in month: {{ number_format($leaveApprovedMonth, 1) }}@endif</div>
+                                        @elseif($item->label === 'Leave Deduction' && $leaveLegacy !== null)
+                                            <div style="font-size:8px;color:#5d7285;font-weight:400;margin-top:2px;">Leave days: {{ number_format($leaveLegacy, 1) }}</div>
+                                        @elseif($item->label === 'Attendance Deduction' && $attUnits !== null)
+                                            <div style="font-size:8px;color:#5d7285;font-weight:400;margin-top:2px;">Units (month): {{ number_format($attUnits, 2) }}@if($attAbsentFull !== null) · Full absent: {{ number_format($attAbsentFull, 1) }}@endif@if($attAbsentHalf !== null && $attAbsentHalf > 0) · Half absent (units): {{ number_format($attAbsentHalf, 2) }}@endif@if($attPresentHalf !== null && $attPresentHalf > 0) · Half present (units): {{ number_format($attPresentHalf, 2) }}@endif</div>
+                                        @endif
+                                    </td>
+                                    <td>INR {{ number_format($item->amount, 2) }}</td>
+                                </tr>
                             @endforeach
                         @else
                             <tr><td>Total Deductions</td><td>INR {{ number_format($slipDeductions, 2) }}</td></tr>

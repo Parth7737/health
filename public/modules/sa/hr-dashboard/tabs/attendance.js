@@ -35,8 +35,12 @@ window.HRDashboardTabs.attendance = {
 
         var state = {
             weekStart: panel.getAttribute('data-week-start') || toDateInput(new Date()),
-            registerPerPage: 10
+            registerPerPage: 25,
+            registerDays: [],
+            registerAllRows: [],
+            registerPage: 1
         };
+        var registerWrap = document.getElementById('hrxRegisterWrap');
 
         function toDateInput(date) {
             var d = new Date(date);
@@ -92,44 +96,115 @@ window.HRDashboardTabs.attendance = {
             if (weekInput) weekInput.value = dateToWeekValue(monday);
         }
 
-        function renderRegisterTable(days, rows) {
-            if (!registerTableEl || !$.fn.DataTable) return;
+        function registerBadgeClass(cellClass) {
+            var k = String(cellClass || 'a').toLowerCase();
+            if (k === 'p') {
+                return 'hrx-att-badge hrx-att-badge--present';
+            }
+            if (k === 'h') {
+                return 'hrx-att-badge hrx-att-badge--holiday';
+            }
+            if (k === 'l') {
+                return 'hrx-att-badge hrx-att-badge--leave';
+            }
+            return 'hrx-att-badge hrx-att-badge--absent';
+        }
+
+        function destroyRegisterDataTableIfAny() {
+            var t = document.getElementById('hrxRegisterTable');
+            if (!t || typeof $ === 'undefined' || !$.fn.DataTable || !$.fn.DataTable.isDataTable(t)) {
+                return;
+            }
+            try {
+                $(t).DataTable().destroy();
+            } catch (e) { /* ignore */ }
+            $(t).removeClass('dataTable no-footer nowrap compact stripe hover row-border order-column');
+            var $w = $(t).closest('.dataTables_wrapper');
+            if ($w.length && registerWrap && t.parentNode !== registerWrap) {
+                registerWrap.insertBefore(t, registerWrap.firstChild);
+                $w.remove();
+            }
+        }
+
+        function buildRegisterRowHtml(row, days) {
+            var n = (days && days.length) ? days.length : 0;
+            var cells = row.cells || [];
+            var html = '<tr><td>' + escapeHtml(row.name != null ? String(row.name) : '') + '</td>';
+            var i;
+            for (i = 0; i < n; i++) {
+                var cell = cells[i] || { code: '—', class: 'a', title: '' };
+                var titleAttr = cell.title ? (' title="' + escapeHtml(cell.title) + '"') : '';
+                var rawCode = cell.code != null ? String(cell.code).trim() : '';
+                var displayCode = rawCode ? rawCode.toUpperCase() : '—';
+                var badgeClass = registerBadgeClass(cell['class']);
+                html += '<td><span class="' + badgeClass + '"' + titleAttr + '>' + escapeHtml(displayCode) + '</span></td>';
+            }
+            html += '</tr>';
+            return html;
+        }
+
+        function paintRegisterTable() {
+            destroyRegisterDataTableIfAny();
+            var tbl = document.getElementById('hrxRegisterTable');
+            if (!tbl) {
+                return;
+            }
+            var days = state.registerDays || [];
+            var all = state.registerAllRows || [];
+            var per = Math.max(1, parseInt(state.registerPerPage, 10) || 25);
+            var maxPage = all.length ? Math.ceil(all.length / per) : 1;
+            if (state.registerPage < 1) {
+                state.registerPage = 1;
+            }
+            if (state.registerPage > maxPage) {
+                state.registerPage = maxPage;
+            }
+            var page = state.registerPage;
+            var startIdx = (page - 1) * per;
+            var slice = all.slice(startIdx, startIdx + per);
 
             var theadHtml = '<tr><th>Name</th>';
-            (days || []).forEach(function (day) {
+            days.forEach(function (day) {
                 theadHtml += '<th>' + escapeHtml(day.label) + '</th>';
             });
             theadHtml += '</tr>';
 
             var tbodyHtml = '';
-            if (!rows || rows.length === 0) {
-                tbodyHtml = '<tr><td colspan="' + ((days || []).length + 1) + '" style="text-align:center;padding:14px">No staff found for selected filters/week</td></tr>';
+            if (!all.length) {
+                var colspan = Math.max(1, days.length + 1);
+                tbodyHtml = '<tr><td colspan="' + colspan + '" style="text-align:center;padding:14px">No staff found for selected filters/week</td></tr>';
             } else {
-                rows.forEach(function (row) {
-                    tbodyHtml += '<tr>';
-                    tbodyHtml += '<td>' + escapeHtml(row.name) + '</td>';
-                    (row.cells || []).forEach(function (cell) {
-                        tbodyHtml += '<td><span class="att-' + cell['class'] + '">' + escapeHtml(cell.code) + '</span></td>';
-                    });
-                    tbodyHtml += '</tr>';
+                slice.forEach(function (row) {
+                    tbodyHtml += buildRegisterRowHtml(row, days);
                 });
             }
 
-            $(registerTableEl).find('thead').html(theadHtml);
-            $(registerTableEl).find('tbody').html(tbodyHtml);
+            $(tbl).find('thead').html(theadHtml);
+            $(tbl).find('tbody').html(tbodyHtml);
 
-            if ($.fn.DataTable.isDataTable(registerTableEl)) {
-                $(registerTableEl).DataTable().destroy();
+            var pager = document.getElementById('hrxRegisterPager');
+            var info = document.getElementById('hrxRegisterPageInfo');
+            var prevBtn = document.getElementById('hrxRegisterPrev');
+            var nextBtn = document.getElementById('hrxRegisterNext');
+            if (pager && info && prevBtn && nextBtn) {
+                if (!all.length) {
+                    pager.style.display = 'none';
+                } else {
+                    pager.style.display = 'flex';
+                    var from = all.length ? startIdx + 1 : 0;
+                    var to = Math.min(startIdx + slice.length, all.length);
+                    info.textContent = 'Showing ' + from + ' to ' + to + ' of ' + all.length + ' staff';
+                    prevBtn.disabled = page <= 1;
+                    nextBtn.disabled = page >= maxPage;
+                }
             }
+        }
 
-            $(registerTableEl).DataTable({
-                searching: false,
-                lengthChange: false,
-                pageLength: state.registerPerPage,
-                ordering: false,
-                autoWidth: false,
-                dom: 't<"hrx-dt-footer"ip>'
-            });
+        function renderRegisterTable(days, rows) {
+            state.registerDays = days || [];
+            state.registerAllRows = rows || [];
+            state.registerPage = 1;
+            paintRegisterTable();
         }
 
         function escapeHtml(text) {
@@ -281,6 +356,28 @@ window.HRDashboardTabs.attendance = {
             nextWeekBtn.addEventListener('click', function () {
                 state.weekStart = addDays(state.weekStart, 7);
                 loadRegister(true);
+            });
+        }
+
+        destroyRegisterDataTableIfAny();
+
+        if (typeof $ !== 'undefined' && panel) {
+            $(panel).off('click.hrxRegPager').on('click.hrxRegPager', '#hrxRegisterPrev', function (e) {
+                e.preventDefault();
+                if (state.registerPage > 1) {
+                    state.registerPage -= 1;
+                    paintRegisterTable();
+                }
+            });
+            $(panel).on('click.hrxRegPager', '#hrxRegisterNext', function (e) {
+                e.preventDefault();
+                var all = state.registerAllRows || [];
+                var per = Math.max(1, parseInt(state.registerPerPage, 10) || 25);
+                var maxPage = all.length ? Math.ceil(all.length / per) : 1;
+                if (state.registerPage < maxPage) {
+                    state.registerPage += 1;
+                    paintRegisterTable();
+                }
             });
         }
 

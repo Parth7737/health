@@ -29,6 +29,11 @@ class HrAttendanceRecord extends Model
         return $this->belongsTo(Staff::class);
     }
 
+    public function leaveRequest()
+    {
+        return $this->belongsTo(HrLeaveRequest::class, 'hr_leave_request_id');
+    }
+
     public function getCombinedStatusLabelAttribute(): string
     {
         if (!empty($this->combined_status)) {

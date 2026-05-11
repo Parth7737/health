@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Hospital;
 
 use App\Http\Controllers\BaseHospitalController;
 use App\Models\HrLeaveType;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
@@ -38,7 +39,12 @@ class HrLeaveTypeController extends BaseHospitalController
     public function loaddata(Request $request)
     {
         $data = HrLeaveType::select('*');
-        return DataTables::of($data)
+        $dt = DataTables::of($data);
+        if (Schema::hasColumn('hr_leave_types', 'is_paid_time_off')) {
+            $dt->editColumn('is_paid_time_off', fn ($row) => $row->is_paid_time_off ? 'Yes' : 'No')
+                ->editColumn('annual_entitlement_days', fn ($row) => number_format((float) $row->annual_entitlement_days, 1));
+        }
+        return $dt
             ->addColumn('actions', function ($row) {
                 return view('hospital.settings.hr.leave-type.partials.actions', compact('row'))->render();
             })
@@ -60,18 +66,26 @@ class HrLeaveTypeController extends BaseHospitalController
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255|unique:hr_leave_types,name,' . $request->id . ',id,hospital_id,' . $this->hospital_id,
+            'is_paid_time_off' => 'nullable|boolean',
+            'annual_entitlement_days' => 'nullable|numeric|min:0|max:366',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 422);
         }
 
+        $payload = [
+            'hospital_id' => $this->hospital_id,
+            'name' => $request->name,
+        ];
+        if (Schema::hasColumn('hr_leave_types', 'is_paid_time_off')) {
+            $payload['is_paid_time_off'] = $request->boolean('is_paid_time_off');
+            $payload['annual_entitlement_days'] = (float) ($request->input('annual_entitlement_days', 0));
+        }
+
         HrLeaveType::updateOrCreate(
             ['id' => $request->id],
-            [
-                'hospital_id' => $this->hospital_id,
-                'name' => $request->name,
-            ]
+            $payload
         );
 
         $msg = $request->id ? 'Leave Type updated successfully.' : 'Leave Type created successfully.';
