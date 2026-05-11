@@ -1117,6 +1117,7 @@ class PatientManagementController extends BaseHospitalController
                 'mrn'        => $p->mrn ?: $p->patient_id,
                 'name'       => $p->full_name,
                 'phone'      => $p->phone,
+                'gender'     => $p->gender,
                 'age_sex'    => ($p->age_years ?? '-') . '/' . ($p->gender ? strtoupper(substr($p->gender, 0, 1)) : '-'),
                 'blood_group' => $p->blood_group ?: '-',
                 'dob'        => $p->date_of_birth ? Carbon::parse($p->date_of_birth)->format('d-m-Y') : null,
@@ -2995,16 +2996,18 @@ class PatientManagementController extends BaseHospitalController
         if ($visitOrEncodedMessage instanceof OpdPatient) {
             $caseNo = $visitOrEncodedMessage->case_no ?: '—';
             $tokenNo = OpdTokenNoService::formatShort($visitOrEncodedMessage->token_no);
-            $slot = $visitOrEncodedMessage->slot ?: 'Booked';
+            $slot = trim((string) ($visitOrEncodedMessage->slot ?? '')) ?: 'Booked';
 
-            return "Patient ka OPD abhi active/booked hai (Case: {$caseNo}, Token: {$tokenNo}, Slot: {$slot}). OPD aur IPD dono ek sath allow nahi hain.";
+            return "This patient has an active or booked OPD visit (Case: {$caseNo}, Token: {$tokenNo}, Slot: {$slot}). "
+                . 'OPD and IPD cannot be open at the same time. Complete or cancel the OPD visit before IPD admission.';
         }
 
         [, $caseNo, $tokenNo] = array_pad(explode(':', (string) $visitOrEncodedMessage), 3, null);
         $caseNo = $caseNo ?: '—';
         $tokenNo = $tokenNo ?: '—';
 
-        return "Patient ka OPD abhi active/booked hai (Case: {$caseNo}, Token: {$tokenNo}). OPD aur IPD dono ek sath allow nahi hain.";
+        return "This patient has an active or booked OPD visit (Case: {$caseNo}, Token: {$tokenNo}). "
+            . 'OPD and IPD cannot be open at the same time. Complete or cancel the OPD visit before IPD admission.';
     }
 
     /**

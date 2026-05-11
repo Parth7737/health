@@ -129,7 +129,12 @@
                         data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}"
                         data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}"
                         data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}"
-                        @if(!($canPatient360NewOrder ?? true))
+                        @if($canPatient360NewOrder ?? true)
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="bottom"
+                            data-bs-title="New order — keyboard: Alt+Shift+O"
+                            aria-keyshortcuts="Alt+Shift+O"
+                        @else
                             disabled
                             aria-disabled="true"
                             style="opacity:.55;cursor:not-allowed"
@@ -181,7 +186,7 @@
         <div style="background:#fff;border-bottom:2px solid #e2ecf4;padding:0 24px">
             <div class="tab-bar" style="border:none;margin:0">
                 <button class="tab-btn active" data-tab="tabTimeline" onclick="switchEMRTab('tabTimeline',this)">📅 Timeline</button>
-                <button class="tab-btn" data-tab="tabProfile" onclick="switchEMRTab('tabProfile',this)">🧾 Patient Details</button>
+                <button class="tab-btn" data-tab="tabProfile" onclick="switchEMRTab('tabProfile',this)">🧾 Details</button>
                 <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">📋 Orders</button>
                 <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">💊 Medications</button>
                 <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">📝 Clinical Notes</button>
@@ -540,7 +545,7 @@
             <!-- MEDICATIONS -->
             <div class="tab-pane" id="tabMeds">
                 <div class="card">
-                    <div class="card-header"><div class="card-title">💊 Current Medication Sheet</div><button type="button" class="btn btn-primary btn-sm" id="patient360PrescribeBtn" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if(!($canPatient360NewOrder ?? true)) disabled aria-disabled="true" style="opacity:.55;cursor:not-allowed" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Prescribe</button></div>
+                    <div class="card-header"><div class="card-title">💊 Current Medication Sheet</div><button type="button" class="btn btn-primary btn-sm" id="patient360PrescribeBtn" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if($canPatient360NewOrder ?? true) data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Alt+Shift+P — open prescription workspace from this page. Inside modal: Alt+S / Ctrl+S Save · Alt+B Close · Alt+D Add drug · Ctrl+Enter commit row · Alt+T lab test · Alt+1–9 sections" aria-keyshortcuts="Alt+Shift+P Alt+S Alt+B Alt+D Alt+T" @else disabled aria-disabled="true" style="opacity:.55;cursor:not-allowed" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Prescribe</button></div>
                     <div class="table-wrap">
                         <table>
                             <thead><tr><th>Drug</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Prescribed By</th><th>Visit</th><th>Start Date</th><th>Status</th></tr></thead>
@@ -804,7 +809,7 @@
             <!-- NOTES -->
             <div class="tab-pane" id="tabNotes">
                 <div class="card">
-                    <div class="card-header"><div class="card-title">Clinical Notes</div><button type="button" class="btn btn-primary btn-sm" id="patient360AddNoteBtn" data-open-context="note" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if(!($canPatient360NewOrder ?? true)) disabled aria-disabled="true" style="opacity:.55;cursor:not-allowed" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Add Note</button></div>
+                    <div class="card-header"><div class="card-title">Clinical Notes</div><button type="button" class="btn btn-primary btn-sm" id="patient360AddNoteBtn" data-open-context="note" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if($canPatient360NewOrder ?? true) data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Alt+Shift+N — open notes (SOAP) workspace from this page. Inside modal: Alt+S / Ctrl+S Save · Alt+B Close · Alt+D / Alt+T / Ctrl+Enter · Alt+1–9" aria-keyshortcuts="Alt+Shift+N Alt+S Alt+B Alt+D Alt+T" @else disabled aria-disabled="true" style="opacity:.55;cursor:not-allowed" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Add Note</button></div>
                     <div class="card-body">
                         @forelse(($clinicalNotes ?? collect()) as $note)
                             @php
@@ -850,7 +855,7 @@
                 <div class="p-4 text-center text-muted">Loading...</div>
             </div>
             <div class="modal-footer p360-modal-footer">
-                <button type="button" id="p360SaveBtn" class="btn btn-primary px-5" style="display:none">Save</button>
+                <button type="button" id="p360SaveBtn" class="btn btn-primary px-5" style="display:none" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Alt+S or Ctrl+S to save · Enter when Save is focused" aria-keyshortcuts="Alt+S Ctrl+S">Save</button>
             </div>
         </div>
     </div>
@@ -858,6 +863,11 @@
 
 {{-- Modal CSS in body so it loads AFTER bootstrap.css and wins on specificity --}}
 <style>
+/* Bootstrap tooltips above Patient 360 modal (Bootstrap 5 modal z-index ~1055) */
+.tooltip {
+    z-index: 1700;
+}
+
 #p360Modal { padding-right: 0 !important; }
 #p360Modal .modal-dialog {
     max-width: none !important;
@@ -898,6 +908,48 @@
     display: flex;
     justify-content: flex-end;
     background: #f7fafd;
+}
+
+/* New Order keyboard UX: make active field clearly visible in repeated prescription flow */
+#p360Modal .prescription-entry-grid .form-control:focus-visible,
+#p360Modal .prescription-entry-grid .form-select:focus-visible,
+#p360Modal .prescription-entry-grid .select2-container .select2-selection:focus-visible,
+#p360Modal #doctorUnifiedTestBlock .form-control:focus-visible,
+#p360Modal #doctorUnifiedTestBlock .form-select:focus-visible,
+#p360Modal #doctorUnifiedTestBlock .select2-container .select2-selection:focus-visible {
+    outline: 2px solid #1565c0 !important;
+    outline-offset: 2px !important;
+    border-color: #1565c0 !important;
+    box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.18) !important;
+}
+
+#p360Modal .prescription-entry-grid .select2-container .select2-selection,
+#p360Modal #doctorUnifiedTestBlock .select2-container .select2-selection {
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+/* Action buttons (edit/delete/remove): keyboard focus must be obvious */
+#p360Modal .prescription-icon-btn,
+#p360Modal .doctor-care-test-remove {
+    position: relative;
+}
+
+#p360Modal .prescription-icon-btn:focus-visible,
+#p360Modal .doctor-care-test-remove:focus-visible {
+    outline: 2px solid #1565c0 !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.2) !important;
+}
+
+/* Lab chip remove button was too tiny to notice on keyboard focus */
+#p360Modal .doctor-care-test-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    min-height: 22px;
+    border-radius: 6px;
+    padding: 0 4px;
 }
 
 /* Patient 360 — banner: identity row + toolbar row (badges / actions) */

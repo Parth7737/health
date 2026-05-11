@@ -504,6 +504,8 @@ ul, ol { list-style: none; }
   box-shadow: var(--shadow-card);
   transition: all var(--t-base);
   cursor: default;
+  /* Grid/flex: allow shrinking below long numeric content (e.g. ₹1,97,520) */
+  min-width: 0;
 }
 .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .stat-icon {
@@ -518,6 +520,7 @@ ul, ol { list-style: none; }
   font-size: 22px; font-weight: 800;
   color: var(--text);
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 .stat-label {
   font-size: 11.5px; font-weight: 500;

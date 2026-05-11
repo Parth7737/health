@@ -85,6 +85,10 @@
       this.modalObserver = null;
       this.elements = {};
       this.flatpickrRetryCount = 0;
+      this._shortcutHandler = (event) => this.handleRegistrationShortcuts(event);
+      this._focusTrapHandler = (event) => this.handleModalFocusTrap(event);
+      this._documentFocusContainHandler = (event) => this.handleDocumentFocusContain(event);
+      this._documentFocusContainBound = false;
     }
 
     init({ routes, boot }) {
@@ -182,6 +186,33 @@
           this.displayBedDetails();
           this.applyVisitDateVisibility(this.getVisitType());
         });
+
+        /* Select2 + dropdownParent(modal) often leaves focus on <body> after picking an option; restore for keyboard UX.
+           Skip fields whose handlers already move focus (district / doctor / slot). */
+        const skipSelect2FocusRestore = new Set(['reg_state', 'reg_dept', 'reg_doctor']);
+        jQuery(document).on('select2:select select2:clear', '#newPatientModal select.select2-hidden-accessible', function () {
+          const id = this.id;
+          if (!id || skipSelect2FocusRestore.has(id)) {
+            return;
+          }
+          const selectEl = this;
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              const modal = document.getElementById('newPatientModal');
+              if (!modal || modal.classList.contains('hidden')) {
+                return;
+              }
+              const selection = selectEl.nextElementSibling?.querySelector?.('.select2-selection');
+              if (!selection) {
+                return;
+              }
+              if (document.activeElement === selection) {
+                return;
+              }
+              selection.focus({ preventScroll: true });
+            });
+          });
+        });
       }
 
       this.elements.form.querySelectorAll('input, select, textarea').forEach((field) => {
@@ -195,6 +226,21 @@
           this.updateVisitType(radio.value);
         });
       });
+
+      this.elements.submitBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        this.submitRegistration();
+      });
+
+      this.elements.modal?.addEventListener('keydown', this._shortcutHandler, true);
+      this.elements.modal?.addEventListener('keydown', this._focusTrapHandler, true);
+
+      this.elements.form.addEventListener('keydown', (event) => this.handleRegistrationFormKeydown(event), true);
+
+      if (!this._documentFocusContainBound) {
+        this._documentFocusContainBound = true;
+        document.addEventListener('focusin', this._documentFocusContainHandler, true);
+      }
 
       this.bound = true;
     }
@@ -215,12 +261,31 @@
       this.modalObserver.observe(this.elements.modal, { attributes: true, attributeFilter: ['class'] });
     }
 
+    handleRegistrationShortcuts(event) {
+      if (!this.elements.modal || this.elements.modal.classList.contains('hidden')) {
+        return;
+      }
+      if (!event.altKey || event.repeat) {
+        return;
+      }
+      const key = String(event.key || '').toLowerCase();
+      if (key === 'n') {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.moveStep(1);
+      } else if (key === 'b') {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.moveStep(-1);
+      }
+    }
+
     handleModalOpened() {
+      this.stripStaleRegistrationTabIndex();
       this.ensureAppointmentDate();
       this.initFlatpickr();
       this.resetWizardState();
       this.syncVisibleSelect2();
-      this.applyTabIndexOrder();
       this.updateVisitType(this.getVisitType(), { syncSlots: false });
       this.focusRegistrationName();
     }
@@ -252,14 +317,14 @@
         altFormat: 'd-m-Y',
         dateFormat: 'Y-m-d',
         maxDate: 'today',
-        allowInput: false,
+        allowInput: true,
       });
       this.setupFlatpickrField('reg_appointment_date', {
         altInput: true,
         altFormat: 'd-m-Y',
         dateFormat: 'Y-m-d',
         minDate: 'today',
-        allowInput: false,
+        allowInput: true,
       });
     }
 
@@ -280,13 +345,41 @@
         });
       }
 
+      if (fieldId === 'reg_dob') {
+        onChange.push(() => this.calcAge());
+      }
+
       if (field._flatpickr) {
         field._flatpickr.destroy();
       }
 
+      const ensureAltInputEditable = (instance) => {
+        const alt = instance?.altInput;
+        if (!alt) {
+          return;
+        }
+        alt.removeAttribute('readonly');
+        alt.setAttribute('placeholder', 'DD-MM-YYYY');
+        alt.setAttribute('inputmode', 'numeric');
+        alt.setAttribute('autocomplete', 'off');
+      };
+
       window.flatpickr(field, {
         ...config,
+        clickOpens: true,
         onChange,
+        onReady(selectedDates, dateStr, instance) {
+          ensureAltInputEditable(instance);
+          if (typeof config.onReady === 'function') {
+            config.onReady(selectedDates, dateStr, instance);
+          }
+        },
+        onOpen(selectedDates, dateStr, instance) {
+          ensureAltInputEditable(instance);
+          if (typeof config.onOpen === 'function') {
+            config.onOpen(selectedDates, dateStr, instance);
+          }
+        },
       });
     }
 
@@ -343,15 +436,24 @@
 
     resetWizardState() {
       this.currentStep = 1;
-      this.setStep(this.currentStep);
+      this.setStep(this.currentStep, { focusFirst: false });
     }
 
-    setStep(stepNumber) {
+    setStep(stepNumber, options = {}) {
+      const focusFirst = options.focusFirst !== false;
       STEP_ORDER.forEach((number) => {
         const config = STEP_CONFIG[number];
         const pane = document.getElementById(config.paneId);
         const step = document.getElementById(config.stepId);
-        if (pane) pane.style.display = number === stepNumber ? 'block' : 'none';
+        if (pane) {
+          const isActive = number === stepNumber;
+          pane.style.display = isActive ? 'block' : 'none';
+          if (isActive) {
+            pane.removeAttribute('inert');
+          } else {
+            pane.setAttribute('inert', '');
+          }
+        }
         if (step) {
           step.classList.toggle('active', number === stepNumber);
           step.classList.toggle('done', number < stepNumber);
@@ -362,9 +464,11 @@
       this.elements.nextBtn.style.display = stepNumber < STEP_ORDER.length ? '' : 'none';
       this.elements.submitBtn.style.display = stepNumber === STEP_ORDER.length ? '' : 'none';
       this.syncVisibleSelect2();
-      this.applyTabIndexOrder();
       if (stepNumber === STEP_ORDER.length) {
         this.prepareStepFivePreview();
+      }
+      if (focusFirst) {
+        window.requestAnimationFrame(() => this.focusFirstInActivePane());
       }
     }
 
@@ -377,7 +481,7 @@
       }
 
       const nextStep = Math.max(1, Math.min(STEP_ORDER.length, this.currentStep + direction));
-      this.setStep(nextStep);
+      this.setStep(nextStep, { focusFirst: true });
     }
 
     async validateStep(stepNumber) {
@@ -523,72 +627,339 @@
       return text;
     }
 
-    applyTabIndexOrder() {
-      if (!this.elements.form) {
+    stripStaleRegistrationTabIndex() {
+      if (!this.elements.modal) {
         return;
       }
-
-      const activePane = this.elements.form.querySelector('[id^="regPane"]:not([style*="display:none"])');
-      const paneControls = Array.from(activePane?.querySelectorAll('input, select, textarea, button') || []);
-      const footerControls = Array.from(this.elements.form.querySelectorAll('.modal-footer button'));
-      const controls = Array.from(new Set([...paneControls, ...footerControls]))
-        .filter((node) => this.isTabbableControl(node));
-
-      let index = 1;
-      controls.forEach((node) => {
-        if (node.tagName === 'SELECT' && node.classList.contains('select2-hidden-accessible')) {
-          node.dataset.regTabindex = String(index);
-          node.setAttribute('tabindex', '-1');
-        } else {
-          node.setAttribute('tabindex', String(index));
-        }
-        if (node.tagName === 'SELECT') {
-          node.dataset.regTabindex = String(index);
-        }
-        index += 1;
-      });
-
-      this.syncSelect2TabOrder();
-    }
-
-    isTabbableControl(node) {
-      if (!node || node.disabled) return false;
-      if (node.type === 'hidden') return false;
-      if (!this.isVisibleElement(node)) return false;
-      return true;
-    }
-
-    isVisibleElement(node) {
-      if (!node || !(node instanceof HTMLElement)) return false;
-      return !!(node.offsetParent || node.getClientRects().length);
-    }
-
-    syncSelect2TabOrder() {
-      if (!(window.jQuery && jQuery.fn && jQuery.fn.select2)) {
-        return;
-      }
-
-      this.elements.form?.querySelectorAll('select[id]').forEach((selectNode) => {
-        const tabIndex = selectNode.dataset.regTabindex || selectNode.getAttribute('tabindex');
-        if (!tabIndex) {
+      this.elements.modal.querySelectorAll('[tabindex]').forEach((node) => {
+        if (!(node instanceof HTMLElement)) {
           return;
         }
-
-        const select2Selection = selectNode.nextElementSibling?.querySelector('.select2-selection');
-        if (select2Selection) {
-          select2Selection.setAttribute('tabindex', String(tabIndex));
+        if (node.matches('select.select2-hidden-accessible')) {
+          return;
         }
+        /* Select2 moves focus to .select2-selection; stripping tabindex makes it untabbable so Tab skips e.g. Gender/Blood. */
+        if (node.matches('.select2-selection, .select2-search__field')) {
+          return;
+        }
+        if (node.matches('[data-reg-keeps-tabindex]')) {
+          return;
+        }
+        node.removeAttribute('tabindex');
       });
+    }
+
+    isFocusableField(el) {
+      if (!el || !(el instanceof HTMLElement) || el.disabled) {
+        return false;
+      }
+      if (el.getAttribute('aria-hidden') === 'true') {
+        return false;
+      }
+      if (el.type === 'hidden') {
+        return false;
+      }
+      if (typeof el.checkVisibility === 'function') {
+        return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+      }
+      return !!(el.offsetParent || el.getClientRects().length);
+    }
+
+    /** Select2 / Flatpickr often render under <body>; don't fight their Tab while focus is there. */
+    isRegistrationDetachedOverlayFocus() {
+      const active = document.activeElement;
+      if (!active || !(active instanceof HTMLElement)) {
+        return false;
+      }
+      return !!(active.closest('.select2-dropdown') || active.closest('.flatpickr-calendar'));
+    }
+
+    /** All tabbable controls inside the registration modal (respects inert hidden steps). */
+    getModalFocusables() {
+      const modal = this.elements.modal;
+      if (!modal || modal.classList.contains('hidden')) {
+        return [];
+      }
+      const list = [];
+      const seen = new Set();
+      const candidates = modal.querySelectorAll(
+        'input:not([type="hidden"]), select, textarea, button, a[href], .select2-selection, #regSummary',
+      );
+      for (const el of candidates) {
+        if (!(el instanceof HTMLElement)) {
+          continue;
+        }
+        if (el.closest('[inert]')) {
+          continue;
+        }
+        if (el.id === 'regSummary') {
+          if (el.getAttribute('tabindex') === '0' && this.isFocusableField(el) && !seen.has(el)) {
+            seen.add(el);
+            list.push(el);
+          }
+          continue;
+        }
+        if (el.tagName === 'SELECT' && el.classList.contains('select2-hidden-accessible')) {
+          const selection = el.nextElementSibling?.querySelector?.('.select2-selection');
+          if (selection && this.isFocusableField(selection) && !seen.has(selection)) {
+            seen.add(selection);
+            seen.add(el);
+            list.push(selection);
+          }
+          continue;
+        }
+        if (el.classList.contains('select2-selection')) {
+          const prev = el.closest('.select2-container')?.previousElementSibling;
+          if (prev?.matches?.('select.select2-hidden-accessible')) {
+            continue;
+          }
+        }
+        if (!this.isFocusableField(el)) {
+          continue;
+        }
+        if (seen.has(el)) {
+          continue;
+        }
+        seen.add(el);
+        list.push(el);
+      }
+      return list;
+    }
+
+    handleModalFocusTrap(event) {
+      if (event.key !== 'Tab' || !this.elements.modal || this.elements.modal.classList.contains('hidden')) {
+        return;
+      }
+      if (this.isRegistrationDetachedOverlayFocus()) {
+        return;
+      }
+
+      const focusables = this.getModalFocusables();
+      if (!focusables.length) {
+        return;
+      }
+
+      const active = document.activeElement;
+      const idx = active instanceof HTMLElement ? focusables.indexOf(active) : -1;
+
+      if (event.shiftKey) {
+        if (idx <= 0) {
+          event.preventDefault();
+          event.stopPropagation();
+          focusables[focusables.length - 1].focus({ preventScroll: true });
+        }
+      } else if (idx === focusables.length - 1 || idx === -1) {
+        event.preventDefault();
+        event.stopPropagation();
+        focusables[0].focus({ preventScroll: true });
+      }
+    }
+
+    /** If focus lands outside the open registration modal (e.g. page header), pull it back inside. */
+    handleDocumentFocusContain(event) {
+      const modal = this.elements.modal;
+      if (!modal || modal.classList.contains('hidden')) {
+        return;
+      }
+      const t = event.target;
+      if (!(t instanceof HTMLElement)) {
+        return;
+      }
+      if (modal.contains(t)) {
+        return;
+      }
+      if (t.closest('.select2-dropdown')) {
+        return;
+      }
+      if (t.closest('.flatpickr-calendar')) {
+        return;
+      }
+      const otherOverlay = t.closest('.modal-overlay');
+      if (otherOverlay && otherOverlay !== modal) {
+        return;
+      }
+
+      const list = this.getModalFocusables();
+      if (!list.length) {
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        if (modal.classList.contains('hidden') || modal.contains(document.activeElement)) {
+          return;
+        }
+        const preferred = list.find((el) => el.id === 'reg_name') || list[0];
+        preferred.focus({ preventScroll: true });
+      });
+    }
+
+    /** Focusables inside the active step pane only (excludes modal footer). Tree order ≈ Tab order. */
+    getRegistrationPaneFocusables() {
+      const config = STEP_CONFIG[this.currentStep];
+      const pane = config ? document.getElementById(config.paneId) : null;
+      if (!pane) {
+        return [];
+      }
+      const list = [];
+      const seen = new Set();
+      const candidates = pane.querySelectorAll(
+        'input:not([type="hidden"]), select, textarea, button, a[href], .select2-selection, #regSummary',
+      );
+      for (const el of candidates) {
+        if (!(el instanceof HTMLElement)) {
+          continue;
+        }
+        if (el.id === 'regSummary') {
+          if (el.getAttribute('tabindex') === '0' && this.isFocusableField(el) && !seen.has(el)) {
+            seen.add(el);
+            list.push(el);
+          }
+          continue;
+        }
+        if (el.tagName === 'SELECT' && el.classList.contains('select2-hidden-accessible')) {
+          const selection = el.nextElementSibling?.querySelector?.('.select2-selection');
+          if (selection && this.isFocusableField(selection) && !seen.has(selection)) {
+            seen.add(selection);
+            seen.add(el);
+            list.push(selection);
+          }
+          continue;
+        }
+        if (el.classList.contains('select2-selection')) {
+          const prev = el.closest('.select2-container')?.previousElementSibling;
+          if (prev?.matches?.('select.select2-hidden-accessible')) {
+            continue;
+          }
+        }
+        if (!this.isFocusableField(el)) {
+          continue;
+        }
+        if (seen.has(el)) {
+          continue;
+        }
+        seen.add(el);
+        list.push(el);
+      }
+      return list;
+    }
+
+    handleRegistrationFormKeydown(event) {
+      if (event.key !== 'Enter' || event.isComposing) {
+        return;
+      }
+      if (!this.elements.modal || this.elements.modal.classList.contains('hidden')) {
+        return;
+      }
+      if (document.querySelector('#newPatientModal .select2-container--open')) {
+        return;
+      }
+      if (document.querySelector('.flatpickr-calendar.open')) {
+        return;
+      }
+
+      const active = document.activeElement;
+      if (!active || !(active instanceof HTMLElement)) {
+        return;
+      }
+
+      if (this.currentStep === STEP_ORDER.length) {
+        const summary = document.getElementById('regSummary');
+        if (
+          summary
+          && active !== this.elements.submitBtn
+          && (active === summary || summary.contains(active))
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          this.elements.submitBtn?.focus?.({ preventScroll: false });
+        }
+        return;
+      }
+
+      if (active.closest('.modal-footer')) {
+        return;
+      }
+
+      const aid = active.id;
+      if (aid === 'allergyInput' || aid === 'allergyAddBtn') {
+        return;
+      }
+
+      const paneFocusables = this.getRegistrationPaneFocusables();
+      if (!paneFocusables.length) {
+        return;
+      }
+      const last = paneFocusables[paneFocusables.length - 1];
+      if (active !== last) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      void this.moveStep(1);
+    }
+
+    focusFirstInActivePane() {
+      if (this.currentStep === STEP_ORDER.length) {
+        const summary = document.getElementById('regSummary');
+        if (summary) {
+          summary.focus({ preventScroll: false });
+          summary.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+          this.elements.submitBtn?.focus?.();
+        }
+        return;
+      }
+      const config = STEP_CONFIG[this.currentStep];
+      const pane = config ? document.getElementById(config.paneId) : null;
+      if (!pane) {
+        return;
+      }
+      const candidates = pane.querySelectorAll(
+        'input:not([type="hidden"]), select, textarea, button, [href], .select2-selection',
+      );
+      for (const el of candidates) {
+        if (el.tagName === 'SELECT' && el.classList.contains('select2-hidden-accessible')) {
+          const selection = el.nextElementSibling?.querySelector?.('.select2-selection');
+          if (selection) {
+            selection.focus();
+            return;
+          }
+          continue;
+        }
+        if (!this.isFocusableField(el)) {
+          continue;
+        }
+        if (el.classList.contains('select2-selection')) {
+          el.focus();
+          return;
+        }
+        el.focus();
+        return;
+      }
     }
 
     select2Selectors() {
       return Array.from(this.elements.form?.querySelectorAll('select[id]') || []).map((el) => `#${el.id}`);
     }
 
-    initSelect2(selectors = this.select2Selectors()) {
+    focusSelect2Selection(selectId) {
+      const id = String(selectId || '').replace(/^#/, '');
+      const select = document.getElementById(id);
+      const selection = select?.nextElementSibling?.querySelector?.('.select2-selection');
+      selection?.focus?.();
+    }
+
+    /**
+     * @param {string[]} selectors
+     * @param {{ force?: boolean, focusAfter?: string }} [options] force: destroy+rebind (e.g. after options HTML replaced). focusAfter: select id to focus after init.
+     */
+    initSelect2(selectors = this.select2Selectors(), options = {}) {
       if (!(window.jQuery && jQuery.fn && jQuery.fn.select2)) {
         return;
       }
+
+      const force = !!options.force;
+      const focusAfter = options.focusAfter;
 
       selectors.forEach((selector) => {
         const $field = jQuery(selector);
@@ -596,23 +967,29 @@
           return;
         }
         if ($field.hasClass('select2-hidden-accessible')) {
+          if (!force) {
+            return;
+          }
           $field.select2('destroy');
         }
         $field.select2({ width: '100%', dropdownParent: jQuery('#newPatientModal .modal') });
       });
 
-      this.syncSelect2TabOrder();
+      if (focusAfter) {
+        window.requestAnimationFrame(() => this.focusSelect2Selection(focusAfter));
+      }
     }
 
     syncVisibleSelect2() {
-      const activePane = document.querySelector('#newPatientModal [id^="regPane"]:not([style*="display:none"])');
+      const config = STEP_CONFIG[this.currentStep];
+      const activePane = config ? document.getElementById(config.paneId) : null;
       if (!activePane) {
-        this.initSelect2();
+        this.initSelect2(this.select2Selectors(), { force: false });
         return;
       }
       const selectors = Array.from(activePane.querySelectorAll('select[id]')).map((select) => `#${select.id}`);
       if (selectors.length) {
-        this.initSelect2(selectors);
+        this.initSelect2(selectors, { force: false });
       }
     }
 
@@ -664,13 +1041,13 @@
       }
       if (!stateId) {
         districtSelect.innerHTML = '<option value="">Select District</option>';
-        this.initSelect2(['#reg_district']);
+        this.initSelect2(['#reg_district'], { force: true });
         return;
       }
       try {
         const data = await window.pmFetch(`${districtUrl}?state_id=${encodeURIComponent(stateId)}`);
         window.pmRenderOptions?.(districtSelect, data || [], { placeholder: 'Select District' });
-        this.initSelect2(['#reg_district']);
+        this.initSelect2(['#reg_district'], { force: true, focusAfter: 'reg_district' });
       } catch (error) {
         sendmsg('error', `District Load Failed: ${error.message}`);
       }
@@ -686,7 +1063,7 @@
       const doctors = deptId ? await window.pmFetch(`${this.routes.loadDoctors}?dept_id=${encodeURIComponent(deptId)}`) : [];
       window.pmRenderOptions?.(doctorSelect, doctors || [], { placeholder: 'Select Doctor' });
       this.resetSlotOptions();
-      this.initSelect2(['#reg_doctor', '#reg_slot']);
+      this.initSelect2(['#reg_doctor', '#reg_slot'], { force: true, focusAfter: deptId ? 'reg_doctor' : undefined });
     }
 
     async loadRegistrationCharge() {
@@ -764,7 +1141,7 @@
       }
       if (!doctorId || !appointmentDate) {
         this.resetSlotOptions();
-        this.initSelect2(['#reg_slot']);
+        this.initSelect2(['#reg_slot'], { force: true });
         return;
       }
       const slots = await window.pmFetch(`${this.routes.loadDoctorSlots}?doctor_id=${encodeURIComponent(doctorId)}&date=${encodeURIComponent(appointmentDate)}`);
@@ -772,7 +1149,7 @@
       if (slots && slots.length) {
         slotSelect.value = slots[0].label;
       }
-      this.initSelect2(['#reg_slot']);
+      this.initSelect2(['#reg_slot'], { force: true, focusAfter: 'reg_slot' });
       if (window.jQuery && slotSelect.value) {
         jQuery(slotSelect).trigger('change.select2');
       }
@@ -791,13 +1168,14 @@
       if (slotGroup) slotGroup.style.display = this.shouldHideAppointmentDate(type) ? 'none' : '';
       if (feeGroup) feeGroup.style.display = type === 'IPD' ? 'none' : '';
       this.applyVisitDateVisibility(type);
-      if (type === 'IPD') {
+      /* Same bed list as IPD — Emergency also shows regIpdFields and needs beds loaded. */
+      if (type === 'IPD' || type === 'Emergency') {
         window.pmLoadBedOptions?.();
-      } else if (syncSlots) {
+      }
+      if (type !== 'IPD' && syncSlots) {
         this.loadRegistrationSlots();
       }
       this.loadRegistrationCharge();
-      this.syncVisibleSelect2();
     }
 
     getSelectedBedMeta() {
@@ -940,8 +1318,13 @@
         this.setFieldError(fieldId, error.message || 'Invalid value');
       });
       if (firstFieldId) {
-        this.setStep(this.stepForField(firstFieldId));
-        document.getElementById(firstFieldId)?.focus?.();
+        this.setStep(this.stepForField(firstFieldId), { focusFirst: false });
+        const target = document.getElementById(firstFieldId);
+        if (target?.classList?.contains('select2-hidden-accessible')) {
+          target.nextElementSibling?.querySelector?.('.select2-selection')?.focus?.();
+        } else {
+          target?.focus?.();
+        }
         return true;
       }
       return false;
@@ -1000,7 +1383,7 @@
     async submitRegistration() {
       const validations = await Promise.all(STEP_ORDER.slice(0, 4).map((stepNumber) => this.validateStep(stepNumber)));
       if (validations.includes(false)) {
-        this.setStep(STEP_ORDER[validations.findIndex((value) => value === false)]);
+        this.setStep(STEP_ORDER[validations.findIndex((value) => value === false)], { focusFirst: false });
         return;
       }
 

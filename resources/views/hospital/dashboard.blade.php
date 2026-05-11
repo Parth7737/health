@@ -15,7 +15,7 @@ District Hospital Dehradun &mdash; Real-Time Operations Overview | <span id="liv
       <div id="alertsBar" style="margin-bottom:16px"></div>
 
       <!-- KPI Stats -->
-      <div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
+      <div class="stats-grid dash-kpi-grid">
         <div class="stat-card stat-blue"><div class="stat-icon">&#x1F9D1;&#x200D;&#x2695;&#xFE0F;</div><div class="stat-info"><div class="stat-value" id="s-opd">&mdash;</div><div class="stat-label">Today OPD</div><div class="stat-change up">&#x2191; 12% vs yesterday</div></div></div>
         <div class="stat-card stat-teal"><div class="stat-icon">&#x1F6CF;&#xFE0F;</div><div class="stat-info"><div class="stat-value" id="s-ipd">&mdash;</div><div class="stat-label">IPD Admitted</div><div class="stat-change neutral">86% Bed Occupancy</div></div></div>
         <div class="stat-card stat-orange"><div class="stat-icon">&#x1F6A8;</div><div class="stat-info"><div class="stat-value" id="s-emergency">&mdash;</div><div class="stat-label">Emergency Cases</div><div class="stat-change up">&#x2191; 3 in last hour</div></div></div>
@@ -120,6 +120,22 @@ District Hospital Dehradun &mdash; Real-Time Operations Overview | <span id="liv
       </div>
 
 @endsection
+
+@push('styles')
+<style>
+  /* Dashboard KPI row: prevent intrinsic min-width from wide ₹ counts blowing the grid past the viewport */
+  .dash-kpi-grid {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  }
+  .dash-kpi-grid .stat-value {
+    font-size: clamp(0.95rem, 0.55rem + 1.1vw, 1.375rem);
+    line-height: 1.2;
+  }
+</style>
+@endpush
 
 @push('scripts')
 <script>

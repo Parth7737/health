@@ -4,15 +4,20 @@
 @section('page_subtitle', 'OPD / IPD Registration · Bed Allocation · Transfers · Discharge')
 
 @section('page_header_actions')
-<button class="btn btn-success btn-sm" onclick="openModal('newPatientModal')">➕ New Registration</button>
-<button class="btn btn-primary btn-sm" onclick="openModal('opdTokenModal')">🩺 OPD Token</button>
-<button class="btn btn-purple btn-sm" onclick="openModal('ipdAdmitModal')">🛏️ IPD Admit</button>
+<button class="btn btn-success btn-sm" type="button" onclick="openModal('newPatientModal')" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="New patient registration — keyboard: Alt+Shift+N" aria-keyshortcuts="Alt+Shift+N">➕ New Registration</button>
+<button class="btn btn-primary btn-sm" type="button" onclick="openModal('opdTokenModal')" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Issue OPD token — keyboard: Alt+Shift+T" aria-keyshortcuts="Alt+Shift+T">🩺 OPD Token</button>
+<button class="btn btn-purple btn-sm" type="button" onclick="openModal('ipdAdmitModal')" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="IPD admit — keyboard: Alt+Shift+I" aria-keyshortcuts="Alt+Shift+I">🛏️ IPD Admit</button>
 @endsection
 
 @push('styles')
 @include('layouts.partials.flatpickr-css')
 
 <style>
+  /* Bootstrap tooltips above custom modal overlay (z-index 1000) */
+  .tooltip {
+    z-index: 1200;
+  }
+
   #newPatientModal .modal {
     display: flex;
     flex-direction: column;
@@ -42,6 +47,83 @@
     margin-bottom: 12px;
   }
 
+  #newPatientModal #regSummary:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  #newPatientModal #regSummary:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+  }
+
+  /* Visit type: whole card shows focus; radios stay keyboard-friendly */
+  #newPatientModal #reg_visit_type.reg-visit-type-grid label.reg-visit-option {
+    position: relative;
+    user-select: none;
+  }
+  #newPatientModal #reg_visit_type.reg-visit-type-grid label.reg-visit-option:focus-within {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  #newPatientModal #reg_visit_type.reg-visit-type-grid input[type="radio"] {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    accent-color: var(--primary);
+  }
+
+  /* Medical history — chronic checkboxes: show which option has keyboard focus */
+  #newPatientModal #reg_chronic_conditions label.reg-chronic-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    margin: 0;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+  }
+  #newPatientModal #reg_chronic_conditions label.reg-chronic-option:focus-within {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-color: var(--border, #dee2e6);
+    background: var(--primary-light, #e8f2fc);
+  }
+  #newPatientModal #reg_chronic_conditions label.reg-chronic-option input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    margin: 0;
+    accent-color: var(--primary);
+  }
+  #newPatientModal #reg_chronic_conditions label.reg-chronic-option input[type="checkbox"]:focus-visible {
+    outline: none;
+  }
+
+  /*
+   * Wizard stepper (hims.css): .step-item { flex: 1 } forces equal-width columns so long
+   * step names overflow and paint over .step-line. Lines only need to flex between steps.
+   */
+  #regSteps.steps-bar .step-item {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  #regSteps.steps-bar .step-line {
+    flex: 1 1 1rem;
+    min-width: 0.75rem;
+    align-self: center;
+  }
+  #regSteps.steps-bar .step-info {
+    min-width: 0;
+    overflow: hidden;
+  }
+  #regSteps.steps-bar .step-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   #opdTokenModal .modal {
     display: flex;
     flex-direction: column;
@@ -65,6 +147,34 @@
   #opdTokenModal .modal-footer {
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.96);
+    overflow: visible;
+    padding-bottom: 12px;
+  }
+
+  /*
+   * hims.css sets .btn { outline: none } and only :focus-visible ring — programmatic focus()
+   * (Issue Token tab order) often does NOT get :focus-visible, so ring must apply on :focus.
+   */
+  #opdTokenModal .modal-footer .btn:focus,
+  #ipdAdmitModal .modal-footer .btn:focus {
+    outline: 3px solid #0d47a1 !important;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 7px rgba(25, 118, 210, 0.55) !important;
+    position: relative;
+    z-index: 2;
+  }
+
+  #opdTokenModal .modal-footer .btn.btn-success:focus,
+  #ipdAdmitModal .modal-footer .btn.btn-purple:focus {
+    outline-color: #ffca28 !important;
+    box-shadow: 0 0 0 2px #1b4332, 0 0 0 7px rgba(255, 224, 130, 0.95) !important;
+  }
+
+  #opdTokenModal .modal-footer .btn:focus-visible,
+  #ipdAdmitModal .modal-footer .btn:focus-visible {
+    outline: 3px solid #0d47a1 !important;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 7px rgba(25, 118, 210, 0.55) !important;
   }
 
   #ipdAdmitModal .modal {
@@ -90,12 +200,17 @@
   #ipdAdmitModal .modal-footer {
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.96);
+    overflow: visible;
+    padding-bottom: 12px;
   }
 
   #admit_search_results {
     margin-top: 8px;
     max-height: 220px;
     overflow-y: auto;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    background: #fff;
   }
 
   #admit_search_results:empty {
@@ -194,9 +309,16 @@
   }
 
   .tok-search-item:hover,
-  .tok-search-item:focus {
+  .tok-search-item:focus,
+  .tok-search-item.tok-search-item--active {
     background: var(--surface-2);
     outline: none;
+  }
+
+  #tok_gender:disabled {
+    opacity: 0.85;
+    cursor: not-allowed;
+    background: var(--surface-2);
   }
 
   .tok-search-name {
@@ -418,10 +540,10 @@
   </div>
 </div>
 
-<div class="modal-overlay hidden" id="newPatientModal" onclick="if(event.target===this)closeModal('newPatientModal')">
+<div class="modal-overlay hidden" id="newPatientModal" role="dialog" aria-modal="true" aria-labelledby="newPatientModalTitle" onclick="if(event.target===this)closeModal('newPatientModal')">
   <div class="modal modal-xl">
     <div class="modal-header">
-      <div class="modal-title">👤 New Patient Registration</div>
+      <div class="modal-title" id="newPatientModalTitle">👤 New Patient Registration</div>
       <button class="modal-close" onclick="closeModal('newPatientModal')">✕</button>
     </div>
     <form id="patientRegistrationForm" novalidate>
@@ -438,10 +560,10 @@
         <div class="step-item" id="step5"><div class="step-circle">5</div><div class="step-info"><div class="step-name">Confirm & Print</div></div></div>
       </div>
       <div id="regKeyboardHints" style="margin:10px 0 14px;padding:10px 12px;border:1px dashed var(--border-light);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
-        Keyboard: Tab/Shift+Tab to move fields · Enter to continue · Alt+N for Next · Alt+B for Back
+        Keyboard: <b>Tab</b> cycles inside this dialog (won’t jump to the page behind) · Shift+Tab same · <b>Enter</b> on the <b>last field of the step</b> (above the footer) goes to next step · Alt+N / Alt+B · Space on radios/checkboxes · Dates: DD-MM-YYYY or Down/Enter for calendar · <b>Confirm:</b> Tab to summary, then to <b>Register &amp; Print Slip</b> — Enter or Space to submit
       </div>
 
-      <div id="regPane1">
+      <div class="reg-pane" id="regPane1" data-reg-pane="1">
         <div class="form-row cols-3">
           <div class="form-group">
             <label class="form-label">Title</label>
@@ -512,7 +634,7 @@
         </div>
       </div>
 
-      <div id="regPane2" style="display:none">
+      <div class="reg-pane" id="regPane2" data-reg-pane="2" style="display:none" inert>
         <div class="form-row cols-3">
           <div class="form-group">
             <label class="form-label">Mobile Number <span class="req">*</span></label>
@@ -590,7 +712,7 @@
         </div>
       </div>
 
-      <div id="regPane3" style="display:none">
+      <div class="reg-pane" id="regPane3" data-reg-pane="3" style="display:none" inert>
         <div class="form-row cols-2">
           <div>
             <div class="form-group">
@@ -604,10 +726,10 @@
             </div>
             <div class="form-group">
               @php $diseases = App\Models\Disease::get(); @endphp
-              <label class="form-label">Chronic Conditions</label>
-              <div id="reg_chronic_conditions" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+              <label class="form-label" id="reg_chronic_conditions_label">Chronic Conditions</label>
+              <div id="reg_chronic_conditions" role="group" aria-labelledby="reg_chronic_conditions_label" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
                 @foreach($diseases as $disease)
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" name="diseases[]" value="{{ $disease->name }}"> {{ $disease->name }}</label>
+                <label class="reg-chronic-option"><input type="checkbox" name="diseases[]" value="{{ $disease->name }}" autocomplete="off"> {{ $disease->name }}</label>
                 @endforeach
               </div>
             </div>
@@ -643,23 +765,23 @@
         </div>
       </div>
 
-      <div id="regPane4" style="display:none">
+      <div class="reg-pane" id="regPane4" data-reg-pane="4" style="display:none" inert>
         <div class="form-row cols-2">
           <div>
             <div class="form-group">
-              <label class="form-label">Visit Type <span class="req">*</span></label>
-              <div id="reg_visit_type" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                <label style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" id="vtOPD">
-                  <input type="radio" name="visitType" value="OPD" checked/> <span>🩺 OPD</span>
+              <label class="form-label" id="reg_visit_type_label">Visit Type <span class="req">*</span></label>
+              <div id="reg_visit_type" class="reg-visit-type-grid" role="radiogroup" aria-labelledby="reg_visit_type_label" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <label class="reg-visit-option" style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" id="vtOPD">
+                  <input type="radio" name="visitType" value="OPD" checked autocomplete="off"/> <span>🩺 OPD</span>
                 </label>
-                <label style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" id="vtIPD">
-                  <input type="radio" name="visitType" value="IPD"/> <span>🛏️ IPD Admission</span>
+                <label class="reg-visit-option" style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" id="vtIPD">
+                  <input type="radio" name="visitType" value="IPD" autocomplete="off"/> <span>🛏️ IPD Admission</span>
                 </label>
-                <label style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" id="vtEM">
-                  <input type="radio" name="visitType" value="Emergency"/> <span>🚨 Emergency</span>
+                <label class="reg-visit-option" style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" id="vtEM">
+                  <input type="radio" name="visitType" value="Emergency" autocomplete="off"/> <span>🚨 Emergency</span>
                 </label>
-                <label style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" id="vtDaycare">
-                  <input type="radio" name="visitType" value="Daycare"/> <span>☀️ Daycare</span>
+                <label class="reg-visit-option" style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" id="vtDaycare">
+                  <input type="radio" name="visitType" value="Daycare" autocomplete="off"/> <span>☀️ Daycare</span>
                 </label>
               </div>
             </div>
@@ -730,9 +852,9 @@
         </div>
       </div>
 
-      <div id="regPane5" style="display:none">
+      <div class="reg-pane" id="regPane5" data-reg-pane="5" style="display:none" inert>
         <div class="alert alert-green"><span class="alert-icon">✅</span><div><b>Ready to Register!</b> Please verify patient details before printing the registration slip.</div></div>
-        <div style="background:var(--surface-2);border:1px solid var(--border-light);border-radius:12px;padding:16px" id="regSummary">
+        <div style="background:var(--surface-2);border:1px solid var(--border-light);border-radius:12px;padding:16px" id="regSummary" tabindex="0" role="region" aria-label="Registration summary" data-reg-keeps-tabindex="1">
           <div class="fw-700 fs-14 mb-12">📋 Registration Summary</div>
           <div class="form-row cols-2">
             <div id="summLeft"></div>
@@ -763,20 +885,23 @@
       <div style="flex:1"></div>
       <button class="btn btn-secondary" type="button" onclick="closeModal('newPatientModal')">Cancel</button>
         <button class="btn btn-primary" id="regNextBtn" type="button">Next ›</button>
-        <button class="btn btn-success" id="regSubmitBtn" type="submit" style="display:none">✅ Register & Print Slip</button>
+        <button class="btn btn-success" id="regSubmitBtn" type="button" style="display:none">✅ Register & Print Slip</button>
     </div>
     </form>
   </div>
 </div>
 
-<div class="modal-overlay hidden" id="opdTokenModal" onclick="if(event.target===this)closeModal('opdTokenModal')">
+<div class="modal-overlay hidden" id="opdTokenModal" role="dialog" aria-modal="true" aria-labelledby="opdTokenModalTitle" onclick="if(event.target===this)closeModal('opdTokenModal')">
   <div class="modal modal-md">
     <div class="modal-header">
-      <div class="modal-title">🎫 Issue OPD Token</div>
-      <button class="modal-close" onclick="closeModal('opdTokenModal')">✕</button>
+      <div class="modal-title" id="opdTokenModalTitle">🎫 Issue OPD Token</div>
+      <button type="button" class="modal-close" onclick="closeModal('opdTokenModal')">✕</button>
     </div>
     <form id="opdTokenForm" novalidate>
     <div class="modal-body">
+      <div id="tokKeyboardHints" style="margin:0 0 12px;padding:10px 12px;border:1px dashed var(--border-light);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
+        Keyboard: <b>Tab</b> in dialog · Patient search: <b>↓</b>/<b>↑</b> · <b>Enter</b> pick → Department · Chief Complaint <b>Enter</b> = issue token · <b>Shift+Enter</b> new line · Last field / charge <b>Enter</b> = issue token · <b>Enter</b> on Issue Token = submit · <b>Alt+N</b> / <b>Alt+B</b> · Date DD-MM-YYYY
+      </div>
       <div class="form-group">
         <label class="form-label">Search Existing Patient</label>
         <div class="input-group"><span class="input-addon">🔍</span><input type="text" class="form-control" id="tok_patient_search" placeholder="MRN / Name / Phone"/></div>
@@ -836,20 +961,23 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" type="button" onclick="closeModal('opdTokenModal')">Cancel</button>
-      <button class="btn btn-success" type="submit" id="tokSubmitBtn">🎫 Issue Token & Print</button>
+      <button class="btn btn-success" type="button" id="tokSubmitBtn">🎫 Issue Token & Print</button>
     </div>
     </form>
   </div>
 </div>
 
-<div class="modal-overlay hidden" id="ipdAdmitModal" onclick="if(event.target===this)closeModal('ipdAdmitModal')">
+<div class="modal-overlay hidden" id="ipdAdmitModal" role="dialog" aria-modal="true" aria-labelledby="ipdAdmitModalTitle" onclick="if(event.target===this)closeModal('ipdAdmitModal')">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <div class="modal-title">🛏️ IPD Admission</div>
-      <button class="modal-close" onclick="closeModal('ipdAdmitModal')">✕</button>
+      <div class="modal-title" id="ipdAdmitModalTitle">🛏️ IPD Admission</div>
+      <button type="button" class="modal-close" onclick="closeModal('ipdAdmitModal')">✕</button>
     </div>
     <form id="ipdAdmitForm" novalidate>
     <div class="modal-body">
+      <div id="ipdKeyboardHints" style="margin:0 0 12px;padding:10px 12px;border:1px dashed var(--border-light);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
+        Keyboard: <b>Tab</b> in dialog · Patient search: <b>↓</b>/<b>↑</b> · <b>Enter</b> pick → Department · Last field <b>Enter</b> → focus <b>Admit</b> · <b>Enter</b> on Admit = submit · Forward <b>Tab</b> on Admit stays on Admit · <b>Alt+N</b> / <b>Alt+B</b> · <b>Space</b> on selects · Bed preview: <b>mouse only</b>; use <b>Bed</b> dropdown + keyboard
+      </div>
       <div class="form-row cols-2">
         <div>
           <div class="form-group"><label class="form-label">Patient (Search MRN)</label><div class="input-group"><span class="input-addon">🔍</span><input class="form-control" id="admit_patient_search" placeholder="MRN-XXXXX or Name"/></div><input type="hidden" id="admit_patient_id"/><div id="admit_search_results" class="mt-8"></div></div>
@@ -870,7 +998,7 @@
             <select class="form-control" id="admit_doctor"><option value="">Select Doctor</option></select>
           </div>
           <div class="form-group"><label class="form-label">Expected Duration</label>
-            <select class="form-control"><option>1-3 days</option><option>3-7 days</option><option>7-14 days</option><option>14+ days</option></select>
+            <select class="form-control" id="admit_duration"><option>1-3 days</option><option>3-7 days</option><option>7-14 days</option><option>14+ days</option></select>
           </div>
         </div>
         <div>
@@ -881,7 +1009,7 @@
             <div class="input-group"><span class="input-addon">₹</span><input type="number" class="form-control" id="admit_advance" placeholder="5000"/></div>
           </div>
           <div class="form-group"><label class="form-label">Special Instructions</label>
-            <textarea class="form-control" rows="3" placeholder="Any special nursing or dietary instructions..."></textarea>
+            <textarea class="form-control" id="admit_special_instructions" rows="3" placeholder="Any special nursing or dietary instructions..."></textarea>
           </div>
           <div style="background:var(--surface-2);border:1px solid var(--border-light);border-radius:10px;padding:12px">
             <div class="fw-600 fs-12 mb-8">🛏️ Bed Availability Preview</div>
@@ -894,7 +1022,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" type="button" onclick="closeModal('ipdAdmitModal')">Cancel</button>
-      <button class="btn btn-purple" type="submit" id="admitSubmitBtn">🛏️ Admit Patient & Allocate Bed</button>
+      <button class="btn btn-purple" type="button" id="admitSubmitBtn">🛏️ Admit Patient & Allocate Bed</button>
     </div>
     </form>
   </div>

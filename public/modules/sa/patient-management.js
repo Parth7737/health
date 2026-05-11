@@ -318,6 +318,83 @@ function currentValue(id) {
   return document.getElementById(id)?.value || '';
 }
 
+let pmPageHotkeysBound = false;
+
+/** Bootstrap 5 tooltips on header actions: styled, and show on Tab focus (not only mouse hover). */
+function initPatientManagementHeaderTooltips() {
+  if (!window.bootstrap?.Tooltip) {
+    return;
+  }
+  document.querySelectorAll('.page-actions [data-bs-toggle="tooltip"]').forEach((el) => {
+    try {
+      window.bootstrap.Tooltip.getOrCreateInstance(el, {
+        trigger: 'hover focus',
+        delay: { show: 120, hide: 0 },
+        container: 'body',
+        boundary: 'viewport',
+        html: false,
+      });
+    } catch (e) {
+      /* ignore duplicate init or unsupported nodes */
+    }
+  });
+}
+
+/**
+ * Alt+Shift+N / T / I open modals when no blocking overlay is open
+ * (Alt+N / Alt+B stay for in-modal actions on registration / token / admit).
+ */
+function bindPatientManagementPageHotkeys() {
+  if (pmPageHotkeysBound) {
+    return;
+  }
+  pmPageHotkeysBound = true;
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.repeat || !event.altKey || !event.shiftKey) {
+        return;
+      }
+      const key = String(event.key || '').toLowerCase();
+      const reg = document.getElementById('newPatientModal');
+      const tok = document.getElementById('opdTokenModal');
+      const adm = document.getElementById('ipdAdmitModal');
+      const anyBlockingOpen =
+        (reg && !reg.classList.contains('hidden')) ||
+        (tok && !tok.classList.contains('hidden')) ||
+        (adm && !adm.classList.contains('hidden'));
+      if (anyBlockingOpen) {
+        return;
+      }
+
+      if (key === 'n') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.openModal === 'function') {
+          window.openModal('newPatientModal');
+        }
+        return;
+      }
+      if (key === 't') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.openModal === 'function') {
+          window.openModal('opdTokenModal');
+        }
+        return;
+      }
+      if (key === 'i') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.openModal === 'function') {
+          window.openModal('ipdAdmitModal');
+        }
+      }
+    },
+    true,
+  );
+}
+
 async function initPatientManagementDynamic() {
   renderOptions(document.getElementById('tok_dept'), PM_BOOT.departments, { placeholder: 'Select Department' });
   renderOptions(document.getElementById('deptFilter'), PM_BOOT.departments, { placeholder: 'All Departments' });
@@ -332,6 +409,8 @@ async function initPatientManagementDynamic() {
   window.PatientVisitModals?.init({ routes: PM_ROUTES, boot: PM_BOOT });
 
   bindPmEvents();
+  bindPatientManagementPageHotkeys();
+  initPatientManagementHeaderTooltips();
   await initPatientManagementFirstPaint();
 }
 

@@ -41,6 +41,16 @@
       this.admitModalObserver = null;
       this.tokenAppliedCharge = 0;
       this.flatpickrRetryCount = 0;
+      this._visitOverlayKeydown = (e) => this.handleVisitOverlayKeydown(e);
+      this._visitFormEnterKeydown = (e) => this.handleVisitFormEnterKeydown(e);
+      this._visitDocumentFocusContain = (e) => this.handleVisitDocumentFocusContain(e);
+      this._visitKeyboardA11yBound = false;
+      /** Last Select2 `<select>` the user interacted with — used to refocus after destroy/re-init. */
+      this._visitLastSelect2InteractionId = null;
+      /** Highlighted row index in #tok_search_results (-1 = none). */
+      this._tokSearchActiveIndex = -1;
+      /** Highlighted row index in #admit_search_results (-1 = none). */
+      this._admitSearchActiveIndex = -1;
     }
 
     init({ routes, boot }) {
@@ -171,15 +181,22 @@
         });
       }
       this.token.patientSearch?.addEventListener('input', debounce(() => this.handleTokenPatientSearch(), 300));
+      this.token.patientSearch?.addEventListener('keydown', (event) => this.handleTokenPatientSearchKeydown(event));
       this.token.searchResults?.addEventListener('click', (event) => this.handleTokenResultClick(event));
       document.addEventListener('click', (event) => {
-        if (!this.token.searchResults || !this.token.patientSearch) {
-          return;
+        const t = event.target;
+        if (this.token.searchResults && this.token.patientSearch) {
+          if (t !== this.token.patientSearch && !this.token.searchResults.contains(t)) {
+            this.token.searchResults.innerHTML = '';
+            this._tokSearchActiveIndex = -1;
+          }
         }
-        if (event.target === this.token.patientSearch || this.token.searchResults.contains(event.target)) {
-          return;
+        if (this.admit.searchResults && this.admit.patientSearch) {
+          if (t !== this.admit.patientSearch && !this.admit.searchResults.contains(t)) {
+            this.admit.searchResults.innerHTML = '';
+            this._admitSearchActiveIndex = -1;
+          }
         }
-        this.token.searchResults.innerHTML = '';
       });
       this.token.form?.querySelectorAll('input, select, textarea').forEach((field) => {
         field.addEventListener('input', () => this.clearFieldError(field.id));
@@ -197,12 +214,15 @@
       this.admit.ward?.addEventListener('change', () => this.renderAvailableBeds());
       this.admit.bed?.addEventListener('change', () => this.syncPreviewSelection());
       this.admit.patientSearch?.addEventListener('input', debounce(() => this.handleAdmitPatientSearch(), 300));
+      this.admit.patientSearch?.addEventListener('keydown', (event) => this.handleAdmitPatientSearchKeydown(event));
       this.admit.searchResults?.addEventListener('click', (event) => this.handleAdmitResultClick(event));
       this.admit.preview?.addEventListener('click', (event) => this.handleBedPreviewClick(event));
       this.admit.form?.querySelectorAll('input, select, textarea').forEach((field) => {
         field.addEventListener('input', () => this.clearFieldError(field.id));
         field.addEventListener('change', () => this.clearFieldError(field.id));
       });
+
+      this.bindVisitModalKeyboardA11y();
 
       this.bound = true;
     }
@@ -230,7 +250,207 @@
         $el.select2({ width: '100%', dropdownParent: $modal });
       });
 
-      this.applyModalTabIndexOrder(form);
+      if (form.id === 'opdTokenForm' || form.id === 'ipdAdmitForm') {
+        this.clearVisitModalTabindex(form);
+      } else {
+        this.applyModalTabIndexOrder(form);
+      }
+      this.restoreVisitSelect2FocusAfterReinit(form, modal);
+    }
+
+    clearVisitModalTabindex(form) {
+      if (!form) {
+        return;
+      }
+      const modalEl = form.closest('.modal');
+      const scope = modalEl || form;
+      scope.querySelectorAll('[tabindex]').forEach((node) => {
+        node.removeAttribute('tabindex');
+      });
+      scope.querySelectorAll('[data-modal-tabindex]').forEach((node) => {
+        node.removeAttribute('data-modal-tabindex');
+      });
+      form.querySelectorAll('select.select2-hidden-accessible').forEach((sel) => {
+        sel.setAttribute('tabindex', '-1');
+        const box = sel.nextElementSibling?.querySelector('.select2-selection');
+        if (box) {
+          box.removeAttribute('tabindex');
+        }
+      });
+    }
+
+    getSelect2FocusTarget(selectEl) {
+      if (!(selectEl instanceof HTMLElement) || selectEl.disabled) {
+        return null;
+      }
+      if (!selectEl.classList.contains('select2-hidden-accessible')) {
+        return selectEl;
+      }
+      const selection = selectEl.nextElementSibling?.querySelector('.select2-selection');
+      if (selection && this.isFocusableVisitField(selection)) {
+        return selection;
+      }
+      return null;
+    }
+
+    getAppointmentDateFocusTarget() {
+      const inp = document.getElementById('tok_appointment_date');
+      if (!inp) {
+        return null;
+      }
+      if (inp._flatpickr?.altInput) {
+        return inp._flatpickr.altInput;
+      }
+      return inp;
+    }
+
+    pushIfVisitModalFocusable(list, el) {
+      if (!(el instanceof HTMLElement)) {
+        return;
+      }
+      if (el.disabled) {
+        return;
+      }
+      if (el.classList.contains('select2-selection')) {
+        const native = el.closest('.select2-container')?.previousElementSibling;
+        if (native && native.matches('select') && native.disabled) {
+          return;
+        }
+      }
+      if (!this.isFocusableVisitField(el)) {
+        return;
+      }
+      list.push(el);
+    }
+
+    getOrderedOpdTokenFocusables(overlay) {
+      if (!(overlay instanceof HTMLElement) || overlay.id !== 'opdTokenModal') {
+        return [];
+      }
+      const list = [];
+      const selectChain = (id) => {
+        const node = document.getElementById(id);
+        if (!node || node.tagName !== 'SELECT') {
+          return;
+        }
+        const t = this.getSelect2FocusTarget(node);
+        if (t) {
+          this.pushIfVisitModalFocusable(list, t);
+        }
+      };
+      [
+        'tok_patient_search',
+        'tok_name',
+        'tok_age',
+        'tok_gender',
+      ].forEach((id) => {
+        const node = document.getElementById(id);
+        if (node) {
+          this.pushIfVisitModalFocusable(list, node);
+        }
+      });
+      selectChain('tok_dept');
+      selectChain('tok_doctor');
+      this.pushIfVisitModalFocusable(list, this.getAppointmentDateFocusTarget());
+      selectChain('tok_slot');
+      ['tok_complaint', 'tok_visit_type', 'tok_payment'].forEach((id) => {
+        const node = document.getElementById(id);
+        if (!node) {
+          return;
+        }
+        if (node.tagName === 'SELECT') {
+          selectChain(id);
+        } else {
+          this.pushIfVisitModalFocusable(list, node);
+        }
+      });
+      const charge = document.getElementById('tok_charge');
+      if (charge) {
+        this.pushIfVisitModalFocusable(list, charge);
+      }
+      /* After Applied Charge: Tab goes straight to Issue Token (skip Cancel in forward order). */
+      const footer = overlay.querySelector('.modal-footer');
+      if (footer) {
+        const submitBtn = document.getElementById('tokSubmitBtn');
+        const cancelBtn = footer.querySelector('.btn-secondary');
+        if (submitBtn) {
+          this.pushIfVisitModalFocusable(list, submitBtn);
+        }
+        if (cancelBtn && cancelBtn !== submitBtn) {
+          this.pushIfVisitModalFocusable(list, cancelBtn);
+        }
+      }
+      const closeBtn = overlay.querySelector('.modal-header .modal-close');
+      this.pushIfVisitModalFocusable(list, closeBtn);
+      return list;
+    }
+
+    getOrderedIpdAdmitFocusables(overlay) {
+      if (!(overlay instanceof HTMLElement) || overlay.id !== 'ipdAdmitModal') {
+        return [];
+      }
+      const list = [];
+      const selectChain = (id) => {
+        const node = document.getElementById(id);
+        if (!node || node.tagName !== 'SELECT') {
+          return;
+        }
+        const t = this.getSelect2FocusTarget(node);
+        if (t) {
+          this.pushIfVisitModalFocusable(list, t);
+        }
+      };
+      this.pushIfVisitModalFocusable(list, document.getElementById('admit_patient_search'));
+      selectChain('admit_dept');
+      this.pushIfVisitModalFocusable(list, document.getElementById('admit_reason'));
+      selectChain('admit_ward');
+      selectChain('admit_bed');
+      selectChain('admit_doctor');
+      selectChain('admit_duration');
+      selectChain('admit_payment');
+      this.pushIfVisitModalFocusable(list, document.getElementById('admit_advance'));
+      this.pushIfVisitModalFocusable(list, document.getElementById('admit_special_instructions'));
+      /* Bed preview chips: mouse-only — Tab skips to footer actions (see .bed-preview-chip tabindex). */
+      /* After last body field: Tab goes straight to Admit (skip Cancel in forward order). */
+      const footer = overlay.querySelector('.modal-footer');
+      if (footer) {
+        const submitBtn = document.getElementById('admitSubmitBtn');
+        const cancelBtn = footer.querySelector('.btn-secondary');
+        if (submitBtn) {
+          this.pushIfVisitModalFocusable(list, submitBtn);
+        }
+        if (cancelBtn && cancelBtn !== submitBtn) {
+          this.pushIfVisitModalFocusable(list, cancelBtn);
+        }
+      }
+      const closeBtn = overlay.querySelector('.modal-header .modal-close');
+      this.pushIfVisitModalFocusable(list, closeBtn);
+      return list;
+    }
+
+    indexInVisitOrderedFocusables(ordered, active) {
+      if (!active || !ordered.length) {
+        return -1;
+      }
+      let idx = ordered.indexOf(active);
+      if (idx >= 0) {
+        return idx;
+      }
+      const sc = active.closest('.select2-selection');
+      if (sc) {
+        idx = ordered.indexOf(sc);
+        if (idx >= 0) {
+          return idx;
+        }
+      }
+      const apptAlt = document.getElementById('tok_appointment_date')?._flatpickr?.altInput;
+      if (apptAlt && active === apptAlt) {
+        idx = ordered.indexOf(apptAlt);
+        if (idx >= 0) {
+          return idx;
+        }
+      }
+      return -1;
     }
 
     applyModalTabIndexOrder(form) {
@@ -281,6 +501,15 @@
     isTabbableControl(node) {
       if (!node || node.disabled) return false;
       if (node.type === 'hidden') return false;
+      /* Select2 hides the real <select> (often no offsetParent); tab order uses .select2-selection instead. */
+      if (node.tagName === 'SELECT' && node.classList.contains('select2-hidden-accessible')) {
+        return true;
+      }
+      /* Flatpickr: only the alt input is tabbed; primary stays for programmatic value. */
+      if (node.tagName === 'INPUT' && node.classList.contains('flatpickr-input')
+        && !node.classList.contains('flatpickr-alt-input') && node._flatpickr?.altInput) {
+        return false;
+      }
       if (!this.isVisibleElement(node)) return false;
       return true;
     }
@@ -298,6 +527,7 @@
           } else {
             this.resetTokenForm(false);
             this.initFlatpickr();
+            window.setTimeout(() => this.focusVisitModalStart(this.token), 50);
           }
         });
         this.tokenModalObserver.observe(this.token.modal, { attributes: true, attributeFilter: ['class'] });
@@ -310,6 +540,7 @@
           } else {
             this.resetAdmitForm(false);
             this.loadAvailableBeds();
+            window.setTimeout(() => this.focusVisitModalStart(this.admit), 50);
           }
         });
         this.admitModalObserver.observe(this.admit.modal, { attributes: true, attributeFilter: ['class'] });
@@ -329,7 +560,9 @@
       if (this.token.patientName) this.token.patientName.value = '';
       if (this.token.patientAge) this.token.patientAge.value = '';
       if (this.token.patientGender) this.token.patientGender.value = '';
+      this.setTokenGenderLocked(false);
       if (this.token.searchResults) this.token.searchResults.innerHTML = '';
+      this._tokSearchActiveIndex = -1;
       if (this.token.doctor) this.token.doctor.innerHTML = '<option value="">Select Doctor</option>';
       if (this.token.slot) this.token.slot.innerHTML = '<option value="">Select Slot</option>';
       if (this.token.visitType) this.token.visitType.value = 'OPD';
@@ -361,7 +594,7 @@
         altFormat: 'd-m-Y',
         dateFormat: 'Y-m-d',
         minDate: 'today',
-        allowInput: false,
+        allowInput: true,
         onChange: async () => {
           await this.loadTokenSlots();
           await this.loadSlotWiseTokenPreview();
@@ -369,7 +602,7 @@
       });
     }
 
-    setupFlatpickrField(field, config) {
+    setupFlatpickrField(field, config = {}) {
       if (!field) {
         return;
       }
@@ -378,7 +611,45 @@
         field._flatpickr.destroy();
       }
 
-      window.flatpickr(field, config);
+      const userOnReady = config.onReady;
+      const userOnOpen = config.onOpen;
+      const merged = {
+        ...config,
+        clickOpens: true,
+        onReady(selectedDates, dateStr, instance) {
+          const alt = instance?.altInput;
+          if (alt) {
+            alt.removeAttribute('readonly');
+            alt.setAttribute('placeholder', 'DD-MM-YYYY');
+            alt.setAttribute('inputmode', 'numeric');
+            alt.setAttribute('autocomplete', 'off');
+          }
+          if (typeof userOnReady === 'function') {
+            userOnReady(selectedDates, dateStr, instance);
+          }
+        },
+        onOpen(selectedDates, dateStr, instance) {
+          const alt = instance?.altInput;
+          if (alt) {
+            alt.removeAttribute('readonly');
+          }
+          if (typeof userOnOpen === 'function') {
+            userOnOpen(selectedDates, dateStr, instance);
+          }
+        },
+      };
+
+      window.flatpickr(field, merged);
+
+      window.queueMicrotask(() => {
+        if (field._flatpickr?.altInput) {
+          field.setAttribute('tabindex', '-1');
+        }
+        const form = field.closest('form');
+        if (form && (form.id === 'opdTokenForm' || form.id === 'ipdAdmitForm')) {
+          this.clearVisitModalTabindex(form);
+        }
+      });
     }
 
     resetAdmitForm(clearValues) {
@@ -390,6 +661,7 @@
       this.admitPatient = null;
       if (this.admit.patientId) this.admit.patientId.value = '';
       if (this.admit.searchResults) this.admit.searchResults.innerHTML = '';
+      this._admitSearchActiveIndex = -1;
       if (this.admit.patientChip) {
         this.admit.patientChip.style.display = 'none';
         this.admit.patientChip.innerHTML = '';
@@ -495,13 +767,239 @@
       }
     }
 
+    getTokSearchItemButtons() {
+      if (!this.token.searchResults) {
+        return [];
+      }
+      return Array.from(this.token.searchResults.querySelectorAll('.tok-search-item[data-token-patient]'));
+    }
+
+    refreshTokSearchActiveClass() {
+      const items = this.getTokSearchItemButtons();
+      items.forEach((btn, i) => {
+        btn.classList.toggle('tok-search-item--active', i === this._tokSearchActiveIndex);
+      });
+      const active = items[this._tokSearchActiveIndex];
+      if (active && typeof active.scrollIntoView === 'function') {
+        active.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    handleTokenPatientSearchKeydown(event) {
+      const items = this.getTokSearchItemButtons();
+      const key = event.key;
+      if (key === 'ArrowDown' && items.length) {
+        event.preventDefault();
+        if (this._tokSearchActiveIndex < items.length - 1) {
+          this._tokSearchActiveIndex += 1;
+        } else {
+          this._tokSearchActiveIndex = 0;
+        }
+        if (this._tokSearchActiveIndex < 0) {
+          this._tokSearchActiveIndex = 0;
+        }
+        this.refreshTokSearchActiveClass();
+        return;
+      }
+      if (key === 'ArrowUp' && items.length) {
+        event.preventDefault();
+        if (this._tokSearchActiveIndex > 0) {
+          this._tokSearchActiveIndex -= 1;
+        } else {
+          this._tokSearchActiveIndex = -1;
+        }
+        this.refreshTokSearchActiveClass();
+        return;
+      }
+      if (key === 'Enter' && this._tokSearchActiveIndex >= 0 && items[this._tokSearchActiveIndex]) {
+        event.preventDefault();
+        this.selectTokenPatientFromItem(items[this._tokSearchActiveIndex]);
+        return;
+      }
+      if (key === 'Escape' && items.length) {
+        event.preventDefault();
+        this._tokSearchActiveIndex = -1;
+        this.refreshTokSearchActiveClass();
+      }
+    }
+
+    getAdmitSearchItemButtons() {
+      if (!this.admit.searchResults) {
+        return [];
+      }
+      return Array.from(this.admit.searchResults.querySelectorAll('.tok-search-item[data-admit-patient]'));
+    }
+
+    refreshAdmitSearchActiveClass() {
+      const items = this.getAdmitSearchItemButtons();
+      items.forEach((btn, i) => {
+        btn.classList.toggle('tok-search-item--active', i === this._admitSearchActiveIndex);
+      });
+      const active = items[this._admitSearchActiveIndex];
+      if (active && typeof active.scrollIntoView === 'function') {
+        active.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    handleAdmitPatientSearchKeydown(event) {
+      const items = this.getAdmitSearchItemButtons();
+      const key = event.key;
+      if (key === 'ArrowDown' && items.length) {
+        event.preventDefault();
+        if (this._admitSearchActiveIndex < items.length - 1) {
+          this._admitSearchActiveIndex += 1;
+        } else {
+          this._admitSearchActiveIndex = 0;
+        }
+        if (this._admitSearchActiveIndex < 0) {
+          this._admitSearchActiveIndex = 0;
+        }
+        this.refreshAdmitSearchActiveClass();
+        return;
+      }
+      if (key === 'ArrowUp' && items.length) {
+        event.preventDefault();
+        if (this._admitSearchActiveIndex > 0) {
+          this._admitSearchActiveIndex -= 1;
+        } else {
+          this._admitSearchActiveIndex = -1;
+        }
+        this.refreshAdmitSearchActiveClass();
+        return;
+      }
+      if (key === 'Enter' && this._admitSearchActiveIndex >= 0 && items[this._admitSearchActiveIndex]) {
+        event.preventDefault();
+        this.selectAdmitPatientFromItem(items[this._admitSearchActiveIndex]);
+        return;
+      }
+      if (key === 'Escape' && items.length) {
+        event.preventDefault();
+        this._admitSearchActiveIndex = -1;
+        this.refreshAdmitSearchActiveClass();
+      }
+    }
+
+    setTokenGenderLocked(locked) {
+      if (!this.token.patientGender) {
+        return;
+      }
+      this.token.patientGender.disabled = !!locked;
+      this.token.patientGender.setAttribute('aria-readonly', locked ? 'true' : 'false');
+    }
+
+    /** Map API / age_sex suffix to select values Male | Female | Other. */
+    normalizeTokenGenderValue(raw) {
+      const s = String(raw || '').trim();
+      if (!s || s === '-') {
+        return '';
+      }
+      const lower = s.toLowerCase();
+      if (lower === 'male' || lower === 'm') {
+        return 'Male';
+      }
+      if (lower === 'female' || lower === 'f') {
+        return 'Female';
+      }
+      if (lower === 'other' || lower === 'o') {
+        return 'Other';
+      }
+      if (['Male', 'Female', 'Other'].includes(s)) {
+        return s;
+      }
+      return '';
+    }
+
+    parseGenderFromAgeSex(ageSexText) {
+      const parts = String(ageSexText || '').split('/');
+      if (parts.length < 2) {
+        return '';
+      }
+      return this.normalizeTokenGenderValue(parts[1]);
+    }
+
+    focusTokenDepartmentSelect() {
+      window.setTimeout(() => {
+        const el = this.token.dept;
+        if (!el) {
+          return;
+        }
+        const $ = window.jQuery;
+        if ($ && $.fn && $.fn.select2 && $(el).hasClass('select2-hidden-accessible')) {
+          const selection = el.nextElementSibling?.querySelector?.('.select2-selection');
+          if (selection instanceof HTMLElement) {
+            selection.focus();
+            return;
+          }
+        }
+        el.focus();
+      }, 50);
+    }
+
+    focusAdmitDepartmentSelect() {
+      window.setTimeout(() => {
+        const el = this.admit.dept;
+        if (!el) {
+          return;
+        }
+        const $ = window.jQuery;
+        if ($ && $.fn && $.fn.select2 && $(el).hasClass('select2-hidden-accessible')) {
+          const selection = el.nextElementSibling?.querySelector?.('.select2-selection');
+          if (selection instanceof HTMLElement) {
+            selection.focus();
+            return;
+          }
+        }
+        el.focus();
+      }, 50);
+    }
+
+    selectTokenPatientFromItem(item) {
+      if (!item) {
+        return;
+      }
+      const genderRaw = item.dataset.gender ? decodeURIComponent(item.dataset.gender) : '';
+      const ageSex = item.dataset.ageSex ? decodeURIComponent(item.dataset.ageSex || '') : '';
+      this.tokenPatient = {
+        id: item.dataset.id,
+        mrn: decodeURIComponent(item.dataset.mrn || ''),
+        name: decodeURIComponent(item.dataset.name || ''),
+        phone: decodeURIComponent(item.dataset.phone || ''),
+        ageSex,
+        gender: genderRaw,
+      };
+      if (this.token.patientId) {
+        this.token.patientId.value = this.tokenPatient.id;
+      }
+      if (this.token.patientName) {
+        this.token.patientName.value = this.tokenPatient.name;
+      }
+      if (this.token.patientSearch) {
+        this.token.patientSearch.value = `${this.tokenPatient.mrn} - ${this.tokenPatient.name}`;
+      }
+      this.fillTokenAgeSex(this.tokenPatient.ageSex);
+      if (this.token.patientGender) {
+        const g = this.normalizeTokenGenderValue(this.tokenPatient.gender)
+          || this.parseGenderFromAgeSex(this.tokenPatient.ageSex);
+        this.token.patientGender.value = g;
+      }
+      this.setTokenGenderLocked(true);
+      this._tokSearchActiveIndex = -1;
+      if (this.token.searchResults) {
+        this.token.searchResults.innerHTML = '';
+      }
+      this.clearFieldError('tok_patient_search');
+      this.focusTokenDepartmentSelect();
+    }
+
     async handleTokenPatientSearch() {
       const q = this.token.patientSearch?.value.trim() || '';
+      this._tokSearchActiveIndex = -1;
       if (this.token.patientId?.value) {
         this.token.patientId.value = '';
         if (this.token.patientName) this.token.patientName.value = '';
         if (this.token.patientAge) this.token.patientAge.value = '';
         if (this.token.patientGender) this.token.patientGender.value = '';
+        this.setTokenGenderLocked(false);
       }
       if (q.length < 2) {
         this.token.searchResults.innerHTML = '';
@@ -518,7 +1016,7 @@
         const phone = this.escapeHtml(patient.phone || '-');
         const ageSex = this.escapeHtml(patient.age_sex || '-');
         return `
-          <button type="button" class="tok-search-item" data-token-patient="1" data-id="${patient.id}" data-mrn="${encodeURIComponent(patient.mrn || '')}" data-name="${encodeURIComponent(patient.name || '')}" data-phone="${encodeURIComponent(patient.phone || '')}" data-age-sex="${encodeURIComponent(patient.age_sex || '')}">
+          <button type="button" class="tok-search-item" data-token-patient="1" data-id="${patient.id}" data-mrn="${encodeURIComponent(patient.mrn || '')}" data-name="${encodeURIComponent(patient.name || '')}" data-phone="${encodeURIComponent(patient.phone || '')}" data-age-sex="${encodeURIComponent(patient.age_sex || '')}" data-gender="${encodeURIComponent(patient.gender || '')}">
             <div class="tok-search-name">${name}</div>
             <div class="tok-search-meta">${mrn} | ${phone} | ${ageSex}</div>
           </button>`;
@@ -530,29 +1028,13 @@
       if (!item) {
         return;
       }
-      this.tokenPatient = {
-        id: item.dataset.id,
-        mrn: decodeURIComponent(item.dataset.mrn || ''),
-        name: decodeURIComponent(item.dataset.name || ''),
-        phone: decodeURIComponent(item.dataset.phone || ''),
-        ageSex: decodeURIComponent(item.dataset.ageSex || ''),
-      };
-      this.token.patientId.value = this.tokenPatient.id;
-      this.token.patientName.value = this.tokenPatient.name;
-      this.token.patientSearch.value = `${this.tokenPatient.mrn} - ${this.tokenPatient.name}`;
-      this.fillTokenAgeSex(this.tokenPatient.ageSex);
-      this.token.searchResults.innerHTML = '';
-      this.clearFieldError('tok_patient_search');
+      this.selectTokenPatientFromItem(item);
     }
 
     fillTokenAgeSex(ageSexText) {
-      const [age, sex] = String(ageSexText || '').split('/');
+      const [age] = String(ageSexText || '').split('/');
       if (this.token.patientAge) {
-        this.token.patientAge.value = age && age !== '-' ? age : '';
-      }
-      if (this.token.patientGender) {
-        const normalizedSex = String(sex || '').trim();
-        this.token.patientGender.value = ['Male', 'Female', 'Other'].includes(normalizedSex) ? normalizedSex : '';
+        this.token.patientAge.value = age && age !== '-' ? String(age).trim() : '';
       }
     }
 
@@ -602,6 +1084,480 @@
       return match ? Number(match[0]) : 0;
     }
 
+    bindVisitModalKeyboardA11y() {
+      if (this._visitKeyboardA11yBound) {
+        return;
+      }
+      this._visitKeyboardA11yBound = true;
+
+      this.token.modal?.addEventListener('keydown', this._visitOverlayKeydown, true);
+      this.admit.modal?.addEventListener('keydown', this._visitOverlayKeydown, true);
+      this.token.form?.addEventListener('keydown', this._visitFormEnterKeydown, true);
+      this.admit.form?.addEventListener('keydown', this._visitFormEnterKeydown, true);
+      document.addEventListener('focusin', this._visitDocumentFocusContain, true);
+
+      this.token.submitBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        void this.submitTokenForm();
+      });
+      this.token.form?.addEventListener('submit', (event) => {
+        event.preventDefault();
+      });
+      this.admit.submitBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        void this.submitAdmitForm();
+      });
+      this.admit.form?.addEventListener('submit', (event) => {
+        event.preventDefault();
+      });
+
+      if (window.jQuery) {
+        jQuery(document).on(
+          'select2:select select2:clear',
+          '#opdTokenModal select.select2-hidden-accessible, #ipdAdmitModal select.select2-hidden-accessible',
+          (event) => {
+            const selectEl = event.currentTarget || event.target;
+            if (!selectEl || selectEl.dataset?.noSelect2 === '1') {
+              return;
+            }
+            this._visitLastSelect2InteractionId = selectEl.id || null;
+          },
+        );
+        jQuery(document).on(
+          'select2:close',
+          '#opdTokenModal select.select2-hidden-accessible, #ipdAdmitModal select.select2-hidden-accessible',
+          (event) => {
+            const selectEl = event.currentTarget || event.target;
+            if (!selectEl || selectEl.dataset?.noSelect2 === '1') {
+              return;
+            }
+            const overlay = selectEl.closest('#opdTokenModal, #ipdAdmitModal');
+            if (!overlay || overlay.classList.contains('hidden')) {
+              return;
+            }
+            window.setTimeout(() => {
+              if (this.visitModalSelect2DropdownOpen()) {
+                return;
+              }
+              const selection = selectEl.nextElementSibling?.querySelector?.('.select2-selection');
+              if (selection && document.activeElement !== selection) {
+                this.focusVisitModalField(selection);
+              }
+            }, 0);
+          },
+        );
+      }
+    }
+
+    visitModalSelect2DropdownOpen() {
+      return !!document.querySelector(
+        '#opdTokenModal .select2-container--open, #ipdAdmitModal .select2-container--open',
+      );
+    }
+
+    /**
+     * After Select2 destroy+init (e.g. dept → reload doctors), focus often lands on &lt;body&gt;.
+     * Re-focus the last select the user used when focus is no longer inside the modal.
+     */
+    restoreVisitSelect2FocusAfterReinit(form, modal) {
+      if (!(form instanceof HTMLElement) || !(modal instanceof HTMLElement) || modal.classList.contains('hidden')) {
+        return;
+      }
+      const lastId = this._visitLastSelect2InteractionId;
+      if (!lastId) {
+        return;
+      }
+      const node = document.getElementById(lastId);
+      if (!node || !form.contains(node) || !node.classList.contains('select2-hidden-accessible')) {
+        return;
+      }
+
+      const attempt = () => {
+        if (modal.classList.contains('hidden') || this.visitModalSelect2DropdownOpen()) {
+          return;
+        }
+        const ae = document.activeElement;
+        if (ae instanceof HTMLElement && ae.closest('.flatpickr-calendar')) {
+          return;
+        }
+        if (ae instanceof HTMLElement && modal.contains(ae) && ae !== document.body && ae !== document.documentElement) {
+          return;
+        }
+        const selection = node.nextElementSibling?.querySelector?.('.select2-selection');
+        if (!selection || document.activeElement === selection) {
+          return;
+        }
+        this.focusVisitModalField(selection);
+      };
+
+      window.requestAnimationFrame(() => window.requestAnimationFrame(attempt));
+      window.setTimeout(attempt, 40);
+      window.setTimeout(attempt, 120);
+    }
+
+    /**
+     * Focus inside Issue Token / IPD Admit modals and keep the target in view (modal-body scroll).
+     */
+    focusVisitModalField(el) {
+      if (!(el instanceof HTMLElement)) {
+        return;
+      }
+      el.focus({ preventScroll: false });
+      window.requestAnimationFrame(() => {
+        try {
+          el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        } catch (e) {
+          /* ignore */
+        }
+      });
+    }
+
+    focusVisitModalStart(ctx) {
+      const search = ctx === this.token ? this.token.patientSearch : this.admit?.patientSearch;
+      if (search && !search.disabled) {
+        this.focusVisitModalField(search);
+      }
+    }
+
+    getActiveVisitModalOverlay() {
+      if (this.token.modal && !this.token.modal.classList.contains('hidden')) {
+        return this.token.modal;
+      }
+      if (this.admit.modal && !this.admit.modal.classList.contains('hidden')) {
+        return this.admit.modal;
+      }
+      return null;
+    }
+
+    isVisitDetachedOverlayFocus() {
+      const active = document.activeElement;
+      if (!active || !(active instanceof HTMLElement)) {
+        return false;
+      }
+      return !!(active.closest('.select2-dropdown') || active.closest('.flatpickr-calendar'));
+    }
+
+    isFocusableVisitField(el) {
+      if (!el || !(el instanceof HTMLElement) || el.disabled) {
+        return false;
+      }
+      if (el.getAttribute('aria-hidden') === 'true') {
+        return false;
+      }
+      if (el.type === 'hidden') {
+        return false;
+      }
+      if (el.tagName === 'INPUT' && el.classList.contains('flatpickr-input')
+        && !el.classList.contains('flatpickr-alt-input') && el._flatpickr?.altInput) {
+        return false;
+      }
+      if (typeof el.checkVisibility === 'function') {
+        return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+      }
+      return !!(el.offsetParent || el.getClientRects().length);
+    }
+
+    collectVisitFocusables(root, { bodyOnly }) {
+      if (!root) {
+        return [];
+      }
+      const modalEl = root.querySelector('.modal') || root;
+      const body = modalEl.querySelector('.modal-body');
+      const list = [];
+      const seen = new Set();
+
+      const pushCandidates = (nodes) => {
+        for (const el of nodes) {
+          if (!(el instanceof HTMLElement)) {
+            continue;
+          }
+          if (el.tagName === 'SELECT' && el.classList.contains('select2-hidden-accessible')) {
+            const selection = el.nextElementSibling?.querySelector?.('.select2-selection');
+            if (selection && this.isFocusableVisitField(selection) && !seen.has(selection)) {
+              seen.add(selection);
+              seen.add(el);
+              list.push(selection);
+            }
+            continue;
+          }
+          if (el.classList.contains('select2-selection')) {
+            const prev = el.closest('.select2-container')?.previousElementSibling;
+            if (prev?.matches?.('select.select2-hidden-accessible')) {
+              continue;
+            }
+          }
+          if (!this.isFocusableVisitField(el)) {
+            continue;
+          }
+          if (seen.has(el)) {
+            continue;
+          }
+          seen.add(el);
+          list.push(el);
+        }
+      };
+
+      if (!bodyOnly) {
+        const closeBtn = modalEl.querySelector('.modal-header .modal-close');
+        if (closeBtn) {
+          pushCandidates([closeBtn]);
+        }
+      }
+
+      if (body) {
+        pushCandidates(
+          body.querySelectorAll(
+            'input:not([type="hidden"]), select, textarea, button, a[href], .select2-selection, [data-token-patient], [data-admit-patient], .bed-preview-chip',
+          ),
+        );
+      }
+
+      if (!bodyOnly) {
+        const footer = modalEl.querySelector('.modal-footer');
+        if (footer) {
+          pushCandidates(footer.querySelectorAll('button'));
+        }
+      }
+
+      return list;
+    }
+
+    getVisitModalFocusables(overlay) {
+      if (overlay?.id === 'opdTokenModal') {
+        return this.getOrderedOpdTokenFocusables(overlay);
+      }
+      if (overlay?.id === 'ipdAdmitModal') {
+        return this.getOrderedIpdAdmitFocusables(overlay);
+      }
+      return this.collectVisitFocusables(overlay, { bodyOnly: false });
+    }
+
+    getVisitModalBodyFocusables(overlay) {
+      if (overlay?.id === 'opdTokenModal' || overlay?.id === 'ipdAdmitModal') {
+        return this.getVisitModalFocusables(overlay).filter((el) => el.closest && el.closest('.modal-body'));
+      }
+      return this.collectVisitFocusables(overlay, { bodyOnly: true });
+    }
+
+    handleVisitOverlayKeydown(event) {
+      const overlay = event.currentTarget;
+      if (!(overlay instanceof HTMLElement) || overlay.classList.contains('hidden')) {
+        return;
+      }
+
+      if (event.altKey && !event.repeat) {
+        const key = String(event.key || '').toLowerCase();
+        if (key === 'n') {
+          event.preventDefault();
+          event.stopPropagation();
+          const primary = overlay.querySelector('#tokSubmitBtn, #admitSubmitBtn');
+          if (primary) {
+            this.focusVisitModalField(primary);
+          }
+          return;
+        }
+        if (key === 'b') {
+          event.preventDefault();
+          event.stopPropagation();
+          const cancel = overlay.querySelector('.modal-footer .btn-secondary');
+          if (cancel) {
+            this.focusVisitModalField(cancel);
+          }
+          return;
+        }
+      }
+
+      if (event.key === 'Tab') {
+        this.handleVisitTabCycle(event, overlay);
+      }
+    }
+
+    handleVisitTabCycle(event, overlay) {
+      if (event.key !== 'Tab' || overlay.classList.contains('hidden')) {
+        return;
+      }
+      if (this.isVisitDetachedOverlayFocus()) {
+        return;
+      }
+      const ordered = overlay.id === 'opdTokenModal'
+        ? this.getOrderedOpdTokenFocusables(overlay)
+        : this.getOrderedIpdAdmitFocusables(overlay);
+      if (!ordered.length) {
+        return;
+      }
+      const active = document.activeElement;
+      const idx = this.indexInVisitOrderedFocusables(ordered, active);
+      if (idx === -1) {
+        return;
+      }
+      /* Issue Token: forward Tab stays on the button; Shift+Tab jumps back to Applied Charge (skip Cancel). */
+      if (overlay.id === 'opdTokenModal' && active.id === 'tokSubmitBtn') {
+        if (!event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        const ch = document.getElementById('tok_charge');
+        if (ch) {
+          event.preventDefault();
+          event.stopPropagation();
+          this.focusVisitModalField(ch);
+          return;
+        }
+      }
+      /* IPD Admit: same — forward Tab stays on Admit; Shift+Tab to last body field (skip Cancel). */
+      if (overlay.id === 'ipdAdmitModal' && active.id === 'admitSubmitBtn') {
+        if (!event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        const lastBody = document.getElementById('admit_special_instructions');
+        if (lastBody) {
+          event.preventDefault();
+          event.stopPropagation();
+          this.focusVisitModalField(lastBody);
+          return;
+        }
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const len = ordered.length;
+      const nextIdx = event.shiftKey ? (idx - 1 + len) % len : (idx + 1) % len;
+      this.focusVisitModalField(ordered[nextIdx]);
+    }
+
+    handleVisitFormEnterKeydown(event) {
+      if (event.key !== 'Enter' || event.isComposing) {
+        return;
+      }
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+      const overlay = form.closest('.modal-overlay');
+      if (!overlay || overlay.classList.contains('hidden')) {
+        return;
+      }
+      if (document.querySelector('#opdTokenModal .select2-container--open, #ipdAdmitModal .select2-container--open')) {
+        return;
+      }
+      if (document.querySelector('.flatpickr-calendar.open')) {
+        return;
+      }
+      const active = document.activeElement;
+      if (!active || !(active instanceof HTMLElement)) {
+        return;
+      }
+
+      const submitBtn = form.querySelector('#tokSubmitBtn, #admitSubmitBtn');
+      if (!submitBtn) {
+        return;
+      }
+
+      if (active.id === 'tokSubmitBtn' || active.id === 'admitSubmitBtn') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (active.id === 'tokSubmitBtn') {
+          void this.submitTokenForm();
+        } else {
+          void this.submitAdmitForm();
+        }
+        return;
+      }
+
+      if (active.closest('.modal-footer')) {
+        return;
+      }
+
+      /* Chief complaint: Enter issues token (Shift+Enter = newline). */
+      if (active.id === 'tok_complaint' && !event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.submitTokenForm();
+        return;
+      }
+
+      if (active.tagName === 'TEXTAREA' && event.shiftKey) {
+        return;
+      }
+
+      const bodyFocusables = this.getVisitModalBodyFocusables(overlay);
+      if (!bodyFocusables.length) {
+        return;
+      }
+      const last = bodyFocusables[bodyFocusables.length - 1];
+
+      if (form.id === 'ipdAdmitForm') {
+        if (active !== last) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        if (submitBtn instanceof HTMLElement) {
+          this.focusVisitModalField(submitBtn);
+        }
+        return;
+      }
+
+      if (form.id === 'opdTokenForm') {
+        /* Last body control or charge: Enter submits (implicit form submit was closing / doing nothing useful). */
+        if (active !== last && active.id !== 'tok_charge') {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        void this.submitTokenForm();
+      }
+    }
+
+    handleVisitDocumentFocusContain(event) {
+      const overlay = this.getActiveVisitModalOverlay();
+      if (!overlay) {
+        return;
+      }
+      if (this.visitModalSelect2DropdownOpen()) {
+        return;
+      }
+      const t = event.target;
+      if (!(t instanceof HTMLElement)) {
+        return;
+      }
+      if (overlay.contains(t)) {
+        return;
+      }
+      if (t.closest('.select2-dropdown')) {
+        return;
+      }
+      if (t.closest('.flatpickr-calendar')) {
+        return;
+      }
+      const otherOverlay = t.closest('.modal-overlay');
+      if (otherOverlay && otherOverlay !== overlay) {
+        return;
+      }
+
+      const list = this.getVisitModalFocusables(overlay);
+      if (!list.length) {
+        return;
+      }
+      /* Let Select2 / post-reinit focus settle — immediate pull-back was racing focus restore. */
+      window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
+          if (overlay.classList.contains('hidden') || this.visitModalSelect2DropdownOpen()) {
+            return;
+          }
+          if (overlay.contains(document.activeElement)) {
+            return;
+          }
+          const preferred = overlay.querySelector('#tok_patient_search, #admit_patient_search') || list[0];
+          if (preferred) {
+            this.focusVisitModalField(preferred);
+          }
+        }, 60);
+      });
+    }
+
     escapeHtml(value) {
       return String(value || '')
         .replace(/&/g, '&amp;')
@@ -611,24 +1567,7 @@
         .replace(/'/g, '&#39;');
     }
 
-    async handleAdmitPatientSearch() {
-      const q = this.admit.patientSearch?.value.trim() || '';
-      if (q.length < 2) {
-        this.admit.searchResults.innerHTML = '';
-        return;
-      }
-      const data = await window.pmFetch(`${this.routes.searchPatients}?q=${encodeURIComponent(q)}`);
-      this.admit.searchResults.innerHTML = (data || []).map((patient) => `
-        <div class="patient-chip mt-8" style="cursor:pointer" data-admit-patient="1" data-id="${patient.id}" data-mrn="${encodeURIComponent(patient.mrn || '')}" data-name="${encodeURIComponent(patient.name || '')}" data-phone="${encodeURIComponent(patient.phone || '')}" data-age-sex="${encodeURIComponent(patient.age_sex || '')}">
-          <div class="patient-chip-info">
-            <div class="patient-chip-name">${patient.name}</div>
-            <div class="patient-chip-meta">${patient.mrn} | ${patient.phone || '-'} | ${patient.age_sex}</div>
-          </div>
-        </div>`).join('');
-    }
-
-    handleAdmitResultClick(event) {
-      const item = event.target.closest('[data-admit-patient]');
+    selectAdmitPatientFromItem(item) {
       if (!item) {
         return;
       }
@@ -639,12 +1578,69 @@
         phone: decodeURIComponent(item.dataset.phone || ''),
         ageSex: decodeURIComponent(item.dataset.ageSex || ''),
       };
-      this.admit.patientId.value = this.admitPatient.id;
-      this.admit.patientSearch.value = `${this.admitPatient.mrn} - ${this.admitPatient.name}`;
-      this.admit.searchResults.innerHTML = '';
-      this.admit.patientChip.style.display = '';
-      this.admit.patientChip.innerHTML = `<div class="patient-chip-info"><div class="patient-chip-name">${this.admitPatient.name}</div><div class="patient-chip-meta">${this.admitPatient.mrn} | ${this.admitPatient.phone || '-'} | ${this.admitPatient.ageSex}</div></div>`;
+      if (this.admit.patientId) {
+        this.admit.patientId.value = this.admitPatient.id;
+      }
+      if (this.admit.patientSearch) {
+        this.admit.patientSearch.value = `${this.admitPatient.mrn} - ${this.admitPatient.name}`;
+      }
+      this._admitSearchActiveIndex = -1;
+      if (this.admit.searchResults) {
+        this.admit.searchResults.innerHTML = '';
+      }
+      if (this.admit.patientChip) {
+        this.admit.patientChip.style.display = '';
+        this.admit.patientChip.innerHTML = `<div class="patient-chip-info"><div class="patient-chip-name">${this.escapeHtml(this.admitPatient.name)}</div><div class="patient-chip-meta">${this.escapeHtml(this.admitPatient.mrn)} | ${this.escapeHtml(this.admitPatient.phone || '-')} | ${this.escapeHtml(this.admitPatient.ageSex)}</div></div>`;
+      }
       this.clearFieldError('admit_patient_search');
+      this.focusAdmitDepartmentSelect();
+    }
+
+    async handleAdmitPatientSearch() {
+      const q = this.admit.patientSearch?.value.trim() || '';
+      this._admitSearchActiveIndex = -1;
+      if (this.admit.patientId?.value) {
+        this.admit.patientId.value = '';
+        if (this.admit.patientChip) {
+          this.admit.patientChip.style.display = 'none';
+          this.admit.patientChip.innerHTML = '';
+        }
+      }
+      if (q.length < 2) {
+        if (this.admit.searchResults) {
+          this.admit.searchResults.innerHTML = '';
+        }
+        return;
+      }
+      const data = await window.pmFetch(`${this.routes.searchPatients}?q=${encodeURIComponent(q)}`);
+      if (!Array.isArray(data) || data.length === 0) {
+        if (this.admit.searchResults) {
+          this.admit.searchResults.innerHTML = '<div class="tok-search-empty">No patient found</div>';
+        }
+        return;
+      }
+      if (!this.admit.searchResults) {
+        return;
+      }
+      this.admit.searchResults.innerHTML = data.slice(0, 10).map((patient) => {
+        const mrn = this.escapeHtml(patient.mrn || '-');
+        const name = this.escapeHtml(patient.name || '-');
+        const phone = this.escapeHtml(patient.phone || '-');
+        const ageSex = this.escapeHtml(patient.age_sex || '-');
+        return `
+          <button type="button" class="tok-search-item" data-admit-patient="1" data-id="${patient.id}" data-mrn="${encodeURIComponent(patient.mrn || '')}" data-name="${encodeURIComponent(patient.name || '')}" data-phone="${encodeURIComponent(patient.phone || '')}" data-age-sex="${encodeURIComponent(patient.age_sex || '')}" data-gender="${encodeURIComponent(patient.gender || '')}">
+            <div class="tok-search-name">${name}</div>
+            <div class="tok-search-meta">${mrn} | ${phone} | ${ageSex}</div>
+          </button>`;
+      }).join('');
+    }
+
+    handleAdmitResultClick(event) {
+      const item = event.target.closest('[data-admit-patient]');
+      if (!item) {
+        return;
+      }
+      this.selectAdmitPatientFromItem(item);
     }
 
     async loadAvailableBeds() {
@@ -701,7 +1697,8 @@
           >
             ${bed.bed_no} | ${bed.ward || '-'} / ${bed.room_no || '-'} | ${bed.bed_type || '-'}
           </option>`).join('');
-        window.PatientRegistrationForm?.initSelect2?.(['#reg_bed']);
+        /* Do not focus bed after reload — user may be Tabbing through visit-type radios (IPD → Emergency → Daycare). */
+        window.PatientRegistrationForm?.initSelect2?.(['#reg_bed'], { force: true });
         window.PatientRegistrationForm?.displayBedDetails?.();
       }
     }
@@ -734,6 +1731,7 @@
                 <button
                   class="bed-preview-chip"
                   type="button"
+                  tabindex="-1"
                   data-bed-id="${this.escapeHtml(bed.id)}"
                   title="${this.escapeHtml(`${bed.bed_no} | ${bed.room_no} | ${bed.bed_type}`)}"
                 >

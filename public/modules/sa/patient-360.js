@@ -31,6 +31,135 @@
     var bsModal       = null;
     var prescComposer = null;
     var els           = {};
+    var keyboardA11yBound = false;
+    var lastSelect2InteractionAt = 0;
+    var suspendFocusContainUntil = 0;
+    var p360PageHotkeysBound = false;
+
+    /** Same chord family as patient-management (Alt+Shift+…); only on this page script. */
+    function isPatient360PageHotkeyTypingTarget(el) {
+        if (!el || !(el instanceof HTMLElement)) {
+            return false;
+        }
+        if (el.isContentEditable) {
+            return true;
+        }
+        var tag = el.tagName;
+        if (tag === 'TEXTAREA' || tag === 'SELECT') {
+            return true;
+        }
+        if (tag === 'INPUT') {
+            var type = String(el.type || '').toLowerCase();
+            if (type === 'button' || type === 'submit' || type === 'reset' || type === 'checkbox'
+                || type === 'radio' || type === 'file' || type === 'hidden' || type === 'range') {
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function hasOtherBootstrapModalOpen() {
+        var list = doc.querySelectorAll('.modal.show');
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id !== 'p360Modal') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function triggerPatient360OpenButton(buttonId) {
+        var btn = doc.getElementById(buttonId);
+        if (!btn || btn.disabled || btn.getAttribute('data-can-new-order') === '0') {
+            return false;
+        }
+        btn.click();
+        return true;
+    }
+
+    function bindPatient360PageHotkeys() {
+        if (p360PageHotkeysBound) {
+            return;
+        }
+        p360PageHotkeysBound = true;
+        doc.addEventListener('keydown', function (event) {
+            if (event.repeat || !event.altKey || !event.shiftKey) {
+                return;
+            }
+            if (isPatient360PageHotkeyTypingTarget(event.target)) {
+                return;
+            }
+            if (isModalOpen() || hasOtherBootstrapModalOpen()) {
+                return;
+            }
+            var key = String(event.key || '').toLowerCase();
+            var id = null;
+            if (key === 'o') {
+                id = 'patient360NewOrderBtn';
+            } else if (key === 'p') {
+                id = 'patient360PrescribeBtn';
+            } else if (key === 'n') {
+                id = 'patient360AddNoteBtn';
+            }
+            if (!id) {
+                return;
+            }
+            if (!triggerPatient360OpenButton(id)) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+        }, true);
+    }
+
+    /** Dispose or (re)create Bootstrap tooltip on modal Save — hidden while loading. */
+    function refreshP360SaveTooltip(enable) {
+        if (!els.saveBtn || !win.bootstrap || !win.bootstrap.Tooltip) {
+            return;
+        }
+        var inst = win.bootstrap.Tooltip.getInstance(els.saveBtn);
+        if (inst) {
+            try {
+                inst.dispose();
+            } catch (e) { /* ignore */ }
+        }
+        if (!enable || els.saveBtn.style.display === 'none' || els.saveBtn.disabled) {
+            return;
+        }
+        try {
+            win.bootstrap.Tooltip.getOrCreateInstance(els.saveBtn, {
+                trigger: 'hover focus',
+                delay: { show: 120, hide: 0 },
+                container: 'body',
+                boundary: 'viewport',
+                html: false,
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    /** Banner + entry-point tooltips (same pattern as patient-management header). */
+    function initPatient360Tooltips() {
+        if (!win.bootstrap || !win.bootstrap.Tooltip) {
+            return;
+        }
+        doc.querySelectorAll(
+            '#patient360NewOrderBtn[data-bs-toggle="tooltip"],'
+            + '#patient360PrescribeBtn[data-bs-toggle="tooltip"],'
+            + '#patient360AddNoteBtn[data-bs-toggle="tooltip"]'
+        ).forEach(function (el) {
+            try {
+                win.bootstrap.Tooltip.getOrCreateInstance(el, {
+                    trigger: 'hover focus',
+                    delay: { show: 120, hide: 0 },
+                    container: 'body',
+                    boundary: 'viewport',
+                    html: false,
+                });
+            } catch (e) { /* ignore */ }
+        });
+        refreshP360SaveTooltip(false);
+    }
 
     // --- Init ---
     function init() {
@@ -74,6 +203,15 @@
             els.saveBtn.addEventListener('click', saveAll);
         }
 
+        bindModalKeyboardA11y();
+        bindPatient360PageHotkeys();
+        initPatient360Tooltips();
+
+        modalEl.addEventListener('shown.bs.modal', function () {
+            win.setTimeout(function () {
+                focusFirstModalField();
+            }, 30);
+        });
         modalEl.addEventListener('hidden.bs.modal', onModalClose);
     }
 
@@ -94,6 +232,7 @@
                 + '<div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading workspace...</div>';
         }
         if (els.saveBtn) {
+            refreshP360SaveTooltip(false);
             els.saveBtn.style.display = 'none';
             els.saveBtn.disabled      = true;
         }
@@ -413,9 +552,11 @@
         initSelect2();
         initPrescComposer();
         bindPrescriptionEvents();
+        initPrescriptionValidityDatepicker();
         wireVitalsBmiAutoCalc();
         ensureDiagnosticPriorityControl();
         bindDiagnosticPicker();
+        ensureKeyboardHelp();
 
         if (win.OPDCareShared && typeof win.OPDCareShared.refreshDiagnosticPreview === 'function') {
             if (els.body) {
@@ -424,6 +565,335 @@
                 });
             }
         }
+    }
+
+    function initPrescriptionValidityDatepicker() {
+        if (!els.body || typeof win.flatpickr !== 'function') { return; }
+        var candidate = els.body.querySelector(
+            '#prescription_valid_till, #prescription_valid_till_date, input[name="valid_till"], input[name="prescription_valid_till"]',
+        );
+        if (!candidate) { return; }
+        if (!candidate.value) {
+            var plus5 = new Date();
+            plus5.setDate(plus5.getDate() + 5);
+            var yyyy = plus5.getFullYear();
+            var mm = String(plus5.getMonth() + 1).padStart(2, '0');
+            var dd = String(plus5.getDate()).padStart(2, '0');
+            candidate.value = dd + '-' + mm + '-' + yyyy;
+        }
+        if (candidate._flatpickr) {
+            candidate._flatpickr.destroy();
+        }
+        win.flatpickr(candidate, {
+            altInput: true,
+            altFormat: 'd-m-Y',
+            dateFormat: 'd-m-Y',
+            minDate: 'today',
+            allowInput: true,
+        });
+    }
+
+    function ensureKeyboardHelp() {
+        if (!els.body) { return; }
+        var old = els.body.querySelector('#p360KeyboardHints');
+        if (old) { old.remove(); }
+        var hint = doc.createElement('div');
+        hint.id = 'p360KeyboardHints';
+        hint.style.cssText = 'margin:0 0 12px;padding:10px 12px;border:1px dashed #d6e4f1;border-radius:10px;background:#f8fbff;font-size:12px;color:#5a7894;';
+        hint.innerHTML = 'From this page (when no dialog is open): <b>Alt+Shift+O</b> New Order · <b>Alt+Shift+P</b> Prescribe · <b>Alt+Shift+N</b> Add Note. In dialog: <b>Tab</b> stays in dialog · <b>Alt+S</b> Save now · <b>Alt+N</b> focus Save · <b>Alt+B</b> Close · <b>Alt+D</b> Add Drug · <b>Ctrl+Enter</b> commit drug row · <b>Alt+T</b> Add Test · <b>Alt+1..9</b> jump sections · <b>Enter</b> on last field moves to Save';
+        els.body.prepend(hint);
+    }
+
+    function bindModalKeyboardA11y() {
+        if (keyboardA11yBound || !els.modal) { return; }
+        keyboardA11yBound = true;
+
+        els.modal.addEventListener('keydown', handleModalKeydown, true);
+        if (els.body) {
+            els.body.addEventListener('keydown', handleBodyEnterAdvance, true);
+        }
+        doc.addEventListener('keydown', handleGlobalSaveShortcut, true);
+        doc.addEventListener('focusin', handleDocumentFocusContain, true);
+    }
+
+    function isModalOpen() {
+        if (!els.modal) { return false; }
+        var ariaHidden = els.modal.getAttribute('aria-hidden');
+        return ariaHidden !== 'true' && els.modal.classList.contains('show');
+    }
+
+    function canTriggerSaveShortcut() {
+        return !!(els.saveBtn && els.saveBtn.style.display !== 'none' && !els.saveBtn.disabled);
+    }
+
+    function tryTriggerSaveFromShortcut(event) {
+        if (!isModalOpen() || !canTriggerSaveShortcut()) { return false; }
+        event.preventDefault();
+        event.stopPropagation();
+        saveAll();
+        return true;
+    }
+
+    function handleGlobalSaveShortcut(event) {
+        if (!isModalOpen() || event.repeat) { return; }
+        var key = String(event.key || '').toLowerCase();
+        var code = String(event.code || '');
+        var isSaveKey = key === 's' || code === 'KeyS';
+        if (!isSaveKey) { return; }
+        if (event.altKey || event.ctrlKey || event.metaKey) {
+            tryTriggerSaveFromShortcut(event);
+        }
+    }
+
+    function isFocusable(node) {
+        if (!node || !(node instanceof HTMLElement) || node.disabled) { return false; }
+        if (node.getAttribute('aria-hidden') === 'true') { return false; }
+        if (node.matches('input[type="hidden"]')) { return false; }
+        if (typeof node.checkVisibility === 'function') {
+            return node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+        }
+        return !!(node.offsetParent || node.getClientRects().length);
+    }
+
+    function modalHasDetachedOverlayFocus() {
+        var ae = doc.activeElement;
+        if (!ae || !(ae instanceof HTMLElement)) { return false; }
+        return !!(ae.closest('.select2-dropdown') || ae.closest('.flatpickr-calendar'));
+    }
+
+    function recentlyInteractedWithSelect2() {
+        return (Date.now() - lastSelect2InteractionAt) < 250;
+    }
+
+    function focusContainSuspended() {
+        return Date.now() < suspendFocusContainUntil;
+    }
+
+    function getModalFocusables(options) {
+        if (!els.modal || !els.body) { return []; }
+        var bodyOnly = !!(options && options.bodyOnly);
+        var root = bodyOnly ? els.body : (els.modal.querySelector('.modal-content') || els.modal);
+        var candidates = root.querySelectorAll('input:not([type="hidden"]), select, textarea, button, a[href], .select2-selection');
+        var list = [];
+        var seen = new Set();
+        candidates.forEach(function (el) {
+            if (!(el instanceof HTMLElement)) { return; }
+            if (el.tagName === 'SELECT' && el.classList.contains('select2-hidden-accessible')) {
+                var selection = el.nextElementSibling && el.nextElementSibling.querySelector
+                    ? el.nextElementSibling.querySelector('.select2-selection')
+                    : null;
+                if (selection && isFocusable(selection) && !seen.has(selection)) {
+                    seen.add(selection);
+                    seen.add(el);
+                    list.push(selection);
+                }
+                return;
+            }
+            if (el.classList.contains('select2-selection')) {
+                var prev = el.closest('.select2-container') && el.closest('.select2-container').previousElementSibling;
+                if (prev && prev.matches && prev.matches('select.select2-hidden-accessible')) { return; }
+            }
+            if (!isFocusable(el) || seen.has(el)) { return; }
+            seen.add(el);
+            list.push(el);
+        });
+        return list;
+    }
+
+    function focusFirstModalField() {
+        if (!els.modal || els.modal.getAttribute('aria-hidden') === 'true') { return; }
+        var focusables = getModalFocusables({ bodyOnly: true });
+        if (!focusables.length) { return; }
+        focusables[0].focus({ preventScroll: true });
+    }
+
+    function focusSectionByIndex(index) {
+        if (!els.body) { return; }
+        var cards = Array.from(els.body.querySelectorAll('.doctor-care-card'));
+        if (!cards.length) { return; }
+        var targetCard = cards[index - 1];
+        if (!targetCard) { return; }
+        targetCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        var field = targetCard.querySelector('input:not([type="hidden"]), select, textarea, button, .select2-selection');
+        if (field instanceof HTMLElement) {
+            if (field.tagName === 'SELECT' && field.classList.contains('select2-hidden-accessible')) {
+                var selection = field.nextElementSibling && field.nextElementSibling.querySelector
+                    ? field.nextElementSibling.querySelector('.select2-selection')
+                    : null;
+                if (selection) {
+                    selection.focus({ preventScroll: true });
+                    return;
+                }
+            }
+            field.focus({ preventScroll: true });
+            return;
+        }
+        var head = targetCard.querySelector('.doctor-care-card-head');
+        if (head instanceof HTMLElement) {
+            head.setAttribute('tabindex', '-1');
+            head.focus({ preventScroll: true });
+        }
+    }
+
+    function handleModalKeydown(event) {
+        if (!els.modal || els.modal.getAttribute('aria-hidden') === 'true') { return; }
+        if (event.key === 'Enter' && !event.isComposing) {
+            var active = doc.activeElement;
+            if (active === els.saveBtn && els.saveBtn && !els.saveBtn.disabled && els.saveBtn.style.display !== 'none') {
+                event.preventDefault();
+                event.stopPropagation();
+                saveAll();
+                return;
+            }
+        }
+
+        if (event.altKey && !event.repeat) {
+            var key = String(event.key || '').toLowerCase();
+            if (key === 's') {
+                tryTriggerSaveFromShortcut(event);
+                return;
+            }
+            if (key === 'n') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (els.saveBtn && els.saveBtn.style.display !== 'none' && !els.saveBtn.disabled) {
+                    els.saveBtn.focus({ preventScroll: true });
+                }
+                return;
+            }
+            if (key === 'd') {
+                event.preventDefault();
+                event.stopPropagation();
+                openPrescriptionComposerForQuickAdd();
+                return;
+            }
+            if (key === 't') {
+                event.preventDefault();
+                event.stopPropagation();
+                openDiagnosticBlockForQuickAdd();
+                return;
+            }
+            if (key === 'b') {
+                event.preventDefault();
+                event.stopPropagation();
+                var closeBtn = els.modal.querySelector('.btn-close');
+                if (closeBtn instanceof HTMLElement) { closeBtn.click(); }
+                return;
+            }
+            if (/^[1-9]$/.test(key)) {
+                event.preventDefault();
+                event.stopPropagation();
+                focusSectionByIndex(Number(key));
+                return;
+            }
+        }
+
+        if (event.key !== 'Tab' || modalHasDetachedOverlayFocus()) { return; }
+        var focusables = getModalFocusables();
+        if (!focusables.length) { return; }
+        var active = doc.activeElement;
+        var idx = (active instanceof HTMLElement) ? focusables.indexOf(active) : -1;
+        var nextIdx;
+        if (event.shiftKey) {
+            nextIdx = (idx <= 0) ? (focusables.length - 1) : (idx - 1);
+        } else {
+            nextIdx = (idx === -1 || idx >= focusables.length - 1) ? 0 : (idx + 1);
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        var nextEl = focusables[nextIdx];
+        nextEl.focus({ preventScroll: false });
+        if (typeof nextEl.scrollIntoView === 'function') {
+            nextEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+    }
+
+    function openPrescriptionComposerForQuickAdd() {
+        var addDrugBtn = doc.getElementById('doctorUnifiedAddDrugBtn');
+        if (addDrugBtn instanceof HTMLElement) {
+            addDrugBtn.click();
+            return;
+        }
+        focusPrescriptionMedicineField();
+    }
+
+    function focusPrescriptionMedicineField() {
+        var medField = doc.getElementById('prescription_entry_medicine');
+        if (!medField) { return; }
+        medField.focus();
+        if (win.jQuery) {
+            var $el = win.jQuery(medField);
+            if ($el.hasClass('select2-hidden-accessible')) {
+                $el.select2('open');
+            }
+        }
+    }
+
+    function focusPrescriptionDosageField() {
+        var dosage = doc.getElementById('prescription_entry_dosage');
+        if (!dosage) { return; }
+        if (dosage.tagName === 'SELECT' && dosage.classList.contains('select2-hidden-accessible')) {
+            var selection = dosage.nextElementSibling && dosage.nextElementSibling.querySelector
+                ? dosage.nextElementSibling.querySelector('.select2-selection')
+                : null;
+            if (selection) {
+                selection.focus({ preventScroll: true });
+                return;
+            }
+        }
+        dosage.focus({ preventScroll: true });
+    }
+
+    function openDiagnosticBlockForQuickAdd() {
+        var addTestBtn = doc.getElementById('doctorUnifiedAddTestBtn');
+        if (!(addTestBtn instanceof HTMLElement)) { return; }
+        var block = doc.getElementById('doctorUnifiedTestBlock');
+        var wasOpen = !!(block && block.classList.contains('is-open'));
+        if (!wasOpen) {
+            addTestBtn.click();
+        }
+        var testType = doc.getElementById('doctorUnifiedTestType');
+        var testSelect = doc.getElementById('doctorUnifiedTestSelect');
+        var target = (testType && !testType.value) ? testType : (testSelect || testType);
+        if (target instanceof HTMLElement) {
+            target.focus({ preventScroll: true });
+        }
+    }
+
+    function handleBodyEnterAdvance(event) {
+        if (event.key !== 'Enter' || event.isComposing) { return; }
+        if (!els.modal || els.modal.getAttribute('aria-hidden') === 'true') { return; }
+        if (doc.querySelector('#p360Modal .select2-container--open')) { return; }
+        if (doc.querySelector('.flatpickr-calendar.open')) { return; }
+        var active = doc.activeElement;
+        if (!(active instanceof HTMLElement)) { return; }
+        if (active.closest('.modal-footer')) { return; }
+        if (active.tagName === 'TEXTAREA') { return; }
+        var bodyFocusables = getModalFocusables({ bodyOnly: true });
+        if (!bodyFocusables.length) { return; }
+        var last = bodyFocusables[bodyFocusables.length - 1];
+        if (active !== last) { return; }
+        if (els.saveBtn && els.saveBtn.style.display !== 'none' && !els.saveBtn.disabled) {
+            event.preventDefault();
+            event.stopPropagation();
+            els.saveBtn.focus({ preventScroll: true });
+        }
+    }
+
+    function handleDocumentFocusContain(event) {
+        if (!els.modal || els.modal.getAttribute('aria-hidden') === 'true') { return; }
+        if (modalHasDetachedOverlayFocus() || recentlyInteractedWithSelect2() || focusContainSuspended()) { return; }
+        var t = event.target;
+        if (!(t instanceof HTMLElement)) { return; }
+        if (els.modal.contains(t)) { return; }
+        if (t.closest('.select2-dropdown') || t.closest('.flatpickr-calendar')) { return; }
+        var focusables = getModalFocusables();
+        if (!focusables.length) { return; }
+        win.requestAnimationFrame(function () {
+            if (!els.modal || els.modal.getAttribute('aria-hidden') === 'true') { return; }
+            if (els.modal.contains(doc.activeElement)) { return; }
+            focusables[0].focus({ preventScroll: true });
+        });
     }
 
     // --- Prescription events (required for dosage loading and row actions) ---
@@ -444,7 +914,7 @@
             .off('click.p360Rx', '#addPrescriptionItemRow')
             .on('click.p360Rx', '#addPrescriptionItemRow', function (event) {
                 event.preventDefault();
-                prescComposer.addOrUpdateFromComposer(function (message, focusSelector) {
+                var committed = prescComposer.addOrUpdateFromComposer(function (message, focusSelector) {
                     notify('error', message);
                     var focusEl = doc.querySelector(focusSelector);
                     if (focusEl) { focusEl.focus(); }
@@ -468,15 +938,41 @@
             })
             .off('change.p360Rx', '#prescription_entry_medicine')
             .on('change.p360Rx', '#prescription_entry_medicine', function () {
+                if (state.mode === 'opd') {
+                    suspendFocusContainUntil = Date.now() + 1200;
+                }
                 prescComposer.onMedicineChanged(true);
+                win.setTimeout(function () {
+                    if (doc.querySelector('#p360Modal .select2-container--open')) { return; }
+                    focusPrescriptionDosageField();
+                }, 120);
             })
             .off('select2:select.p360Rx', '#prescription_entry_medicine')
             .on('select2:select.p360Rx', '#prescription_entry_medicine', function () {
+                if (state.mode === 'opd') {
+                    suspendFocusContainUntil = Date.now() + 1200;
+                }
                 prescComposer.onMedicineChanged(true);
+                win.setTimeout(function () {
+                    if (doc.querySelector('#p360Modal .select2-container--open')) { return; }
+                    focusPrescriptionDosageField();
+                }, 120);
             })
             .off('change.p360Rx', '#prescription_entry_dosage, #prescription_entry_instruction, #prescription_entry_route, #prescription_entry_frequency')
             .on('change.p360Rx', '#prescription_entry_dosage, #prescription_entry_instruction, #prescription_entry_route, #prescription_entry_frequency', function () {
                 prescComposer.focusNextField(this.id);
+            })
+            .off('keydown.p360RxCommit', '#doctorUnifiedPrescriptionSlot input, #doctorUnifiedPrescriptionSlot select, #doctorUnifiedPrescriptionSlot textarea')
+            .on('keydown.p360RxCommit', '#doctorUnifiedPrescriptionSlot input, #doctorUnifiedPrescriptionSlot select, #doctorUnifiedPrescriptionSlot textarea', function (event) {
+                if (!(event.ctrlKey && String(event.key || '').toLowerCase() === 'enter')) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                var addBtn = doc.getElementById('addPrescriptionItemRow');
+                if (addBtn instanceof HTMLElement) {
+                    addBtn.click();
+                }
             });
     }
 
@@ -485,6 +981,7 @@
             els.saveBtn.style.display = '';
             els.saveBtn.disabled      = false;
             els.saveBtn.textContent   = 'Save';
+            refreshP360SaveTooltip(true);
         }
     }
 
@@ -659,6 +1156,7 @@
             setOptionSelected(typeEl.value, testEl.value, true, prioEl.value);
             renderBadges();
             testEl.value = '';
+            testEl.focus();
         };
 
         listEl.onclick = function (e) {
@@ -900,7 +1398,37 @@
             var $el = win.jQuery(this);
             if ($el.hasClass('select2-hidden-accessible')) { $el.select2('destroy'); }
             $el.select2({ dropdownParent: win.jQuery('#p360Modal'), width: '100%' });
+            var nativeTabindex = this.getAttribute('tabindex');
+            var selection = this.nextElementSibling && this.nextElementSibling.querySelector
+                ? this.nextElementSibling.querySelector('.select2-selection')
+                : null;
+            if (selection) {
+                selection.setAttribute('tabindex', nativeTabindex && nativeTabindex !== '-1' ? nativeTabindex : '0');
+            }
         });
+        win.jQuery(doc)
+            .off('select2:select.p360Focus select2:clear.p360Focus', '#p360ModalBody .select2-modal')
+            .on('select2:select.p360Focus select2:clear.p360Focus', '#p360ModalBody .select2-modal', function () {
+                lastSelect2InteractionAt = Date.now();
+                var selectEl = this;
+                if (selectEl && selectEl.id === 'prescription_entry_medicine') {
+                    return;
+                }
+                win.requestAnimationFrame(function () {
+                    win.requestAnimationFrame(function () {
+                        var selection = selectEl.nextElementSibling && selectEl.nextElementSibling.querySelector
+                            ? selectEl.nextElementSibling.querySelector('.select2-selection')
+                            : null;
+                        if (selection && doc.activeElement !== selection) {
+                            selection.focus({ preventScroll: true });
+                        }
+                    });
+                });
+            })
+            .off('select2:open.p360Focus select2:close.p360Focus', '#p360ModalBody .select2-modal')
+            .on('select2:open.p360Focus select2:close.p360Focus', '#p360ModalBody .select2-modal', function () {
+                lastSelect2InteractionAt = Date.now();
+            });
     }
 
     // --- Modal cleanup ---
@@ -912,9 +1440,13 @@
                 var $el = win.jQuery(this);
                 if ($el.hasClass('select2-hidden-accessible')) { $el.select2('destroy'); }
             });
+            win.jQuery(doc).off('.p360Focus');
         }
         if (els.body) { els.body.innerHTML = '<div class="p-4 text-center text-muted">Loading...</div>'; }
-        if (els.saveBtn) { els.saveBtn.style.display = 'none'; }
+        if (els.saveBtn) {
+            refreshP360SaveTooltip(false);
+            els.saveBtn.style.display = 'none';
+        }
     }
 
     // --- Utilities ---

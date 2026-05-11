@@ -84,6 +84,10 @@
                                 <label>BMI</label>
                                 <input type="number" name="bmi" min="0" max="200" step="0.1" class="form-control" value="{{ $visit->bmi }}" placeholder="22.5">
                             </div>
+                            <div class="doctor-care-form-group">
+                                <label>RBS (mg/dL)</label>
+                                <input type="number" name="diabetes" min="0" max="999" step="1" class="form-control" value="{{ $visit->diabetes }}" placeholder="e.g. 120" title="Random blood sugar — stored with visit vitals">
+                            </div>
                         </div>
                     </div>
                 </div>
