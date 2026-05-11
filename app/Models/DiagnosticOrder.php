@@ -41,4 +41,9 @@ class DiagnosticOrder extends Model
     {
         return $this->belongsTo(User::class, 'ordered_by');
     }
+
+    public function doctorStaff(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class, 'doctor_staff_id');
+    }
 }

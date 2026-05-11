@@ -12,6 +12,7 @@ use App\Models\PathologyTest;
 use App\Models\RadiologyTest;
 use App\Services\ChargeLedgerService;
 use App\Services\PatientTimelineService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -85,11 +86,12 @@ class OpdDiagnosticOrderController extends BaseHospitalController
             'order_type' => 'required|in:pathology,radiology',
             'test_ids' => 'required|array|min:1',
             'test_ids.*' => 'required|integer',
-            'priority' => 'required|in:Routine,Urgent,STAT',
+            'priority' => 'nullable|in:Routine,Urgent,STAT',
             'notes' => 'nullable|string',
+            'scheduled_for' => 'nullable|date',
         ]);
 
-        $validator->after(function ($validator) use ($request, $orderType) {
+        $validator->after(function ($validator) use ($request, $orderType, $opdPatient) {
             $testIds = collect($request->test_ids ?? [])->filter()->map(fn ($id) => (int) $id)->unique()->values();
             if ($testIds->isEmpty()) {
                 $validator->errors()->add('test_ids', 'Please select at least one test.');
@@ -109,10 +111,47 @@ class OpdDiagnosticOrderController extends BaseHospitalController
             if (!empty($missingChargeMasterTests)) {
                 $validator->errors()->add('test_ids', 'Charge master not mapped for: ' . implode(', ', $missingChargeMasterTests));
             }
+
+            if ($orderType === 'pathology' && !in_array((string) $request->input('priority', ''), ['Routine', 'Urgent', 'STAT'], true)) {
+                $validator->errors()->add('priority', 'Please select a valid priority.');
+            }
+
+            $testableType = $orderType === 'pathology' ? PathologyTest::class : RadiologyTest::class;
+            $duplicateTestNames = DiagnosticOrderItem::query()
+                ->where('department', $orderType)
+                ->where('testable_type', $testableType)
+                ->whereIn('testable_id', $testIds)
+                ->whereHas('order', function ($q) use ($opdPatient) {
+                    $q->where('hospital_id', $this->hospital_id)
+                        ->where('patient_id', (int) $opdPatient->patient_id);
+                })
+                ->where(function ($q) {
+                    $q->whereNotIn('status', ['completed', 'cancelled'])
+                        ->orWhere(function ($future) {
+                            $future->whereNotNull('scheduled_for')
+                                ->where('scheduled_for', '>', now());
+                        });
+                })
+                ->pluck('test_name')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            if (!empty($duplicateTestNames)) {
+                $validator->errors()->add('test_ids', 'Already pending/future booked for this patient: ' . implode(', ', $duplicateTestNames));
+            }
         });
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        $scheduledFor = null;
+        if ($orderType === 'radiology') {
+            $scheduledFor = $request->filled('scheduled_for')
+                ? Carbon::parse((string) $request->input('scheduled_for'))
+                : now();
         }
 
         $testIds = collect($request->test_ids)->map(fn ($id) => (int) $id)->unique()->values();
@@ -120,7 +159,7 @@ class OpdDiagnosticOrderController extends BaseHospitalController
             ? PathologyTest::with(['category:id,name', 'parameters.unit:id,name', 'chargeMaster.tpaRates'])->whereIn('id', $testIds)->get()
             : RadiologyTest::with(['category:id,name', 'parameters.unit:id,name', 'chargeMaster.tpaRates'])->whereIn('id', $testIds)->get();
 
-        $order = DB::transaction(function () use ($opdPatient, $request, $orderType, $tests, $chargeLedger, $priorityValue) {
+        $order = DB::transaction(function () use ($opdPatient, $request, $orderType, $tests, $chargeLedger, $priorityValue, $scheduledFor) {
             $order = DiagnosticOrder::create([
                 'hospital_id' => $this->hospital_id,
                 'patient_id' => $opdPatient->patient_id,
@@ -147,6 +186,7 @@ class OpdDiagnosticOrderController extends BaseHospitalController
                     'sample_type' => $test->sample_type ?? null,
                     'method' => $test->method,
                     'expected_report_days' => $test->report_days,
+                    'scheduled_for' => $scheduledFor,
                     'standard_charge' => $resolvedCharge,
                     'status' => 'ordered',
                 ]);
@@ -196,6 +236,7 @@ class OpdDiagnosticOrderController extends BaseHospitalController
                 'order_no' => $order->order_no,
                 'priority' => $priorityValue,
                 'test_count' => $tests->count(),
+                'scheduled_for' => optional($scheduledFor)->toDateTimeString(),
             ],
         ]);
 

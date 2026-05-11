@@ -22,6 +22,7 @@ class DiagnosticOrderItem extends Model
         'billed_at' => 'datetime',
         'paid_at' => 'datetime',
         'reported_at' => 'datetime',
+        'scheduled_for' => 'datetime',
         'critical_doctor_called_at' => 'datetime',
         'critical_acknowledged_at' => 'datetime',
         'report_is_draft' => 'boolean',

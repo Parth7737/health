@@ -15,6 +15,8 @@
     let risFilterToolbarLayoutTimer = null;
     let risFilterToolbarResizeTimer = null;
     let radRisReportingCtx = { itemId: null, orderNo: '', patientId: '', patient: '', study: '' };
+    let radRisManualTests = [];
+    let radRisPatientSearchTimer = null;
 
     function getPacsViewerTemplate() {
         const scope = document.querySelector('.rad-ris-scope');
@@ -251,12 +253,34 @@
             .replace(/</g, '&lt;');
     }
 
-    function radRisGenerateParamFlag(value, minVal, maxVal, critLow, critHigh) {
+    function normalizeRadRisTextValue(v) {
+        return String(v === null || v === undefined ? '' : v).trim().toLowerCase();
+    }
+
+    function normalizeRadRisFlagRules(rules) {
+        const parsed = typeof rules === 'string' ? (function () {
+            try {
+                return JSON.parse(rules);
+            } catch (e) {
+                return {};
+            }
+        })() : (rules && typeof rules === 'object' ? rules : {});
+
+        const out = { normal: [], abnormal: [], low: [], high: [], critical_low: [], critical_high: [] };
+        Object.keys(out).forEach(function (key) {
+            const list = Array.isArray(parsed[key]) ? parsed[key] : [];
+            out[key] = list
+                .map(normalizeRadRisTextValue)
+                .filter(function (x, idx, arr) {
+                    return x !== '' && arr.indexOf(x) === idx;
+                });
+        });
+
+        return out;
+    }
+
+    function radRisGenerateParamFlag(value, minVal, maxVal, critLow, critHigh, valueType, flagRules) {
         if (value === '' || value === null || value === undefined) {
-            return null;
-        }
-        const val = parseFloat(String(value).replace(/,/g, ''));
-        if (Number.isNaN(val)) {
             return null;
         }
         const n = function (s) {
@@ -275,8 +299,46 @@
             low: { label: '↓ Low', color: '#e65100', bg: '#fff3e0' },
             high: { label: '↑ High', color: '#e65100', bg: '#fff3e0' },
             critical_low: { label: '↓↓ Critical', color: '#c62828', bg: '#ffebee' },
-            critical_high: { label: '↑↑ Critical', color: '#c62828', bg: '#ffebee' }
+            critical_high: { label: '↑↑ Critical', color: '#c62828', bg: '#ffebee' },
+            abnormal: { label: 'Abnormal', color: '#e65100', bg: '#fff3e0' }
         };
+
+        const type = normalizeRadRisTextValue(valueType || 'numeric');
+        const useTextRules = type === 'ordinal' || type === 'boolean';
+
+        if (useTextRules) {
+            const needle = normalizeRadRisTextValue(value);
+            if (!needle) {
+                return null;
+            }
+
+            const rules = normalizeRadRisFlagRules(flagRules);
+            if (type === 'boolean') {
+                if (rules.normal.indexOf(needle) !== -1) {
+                    return Object.assign({ flag: 'normal' }, styles.normal);
+                }
+                if (rules.abnormal.indexOf(needle) !== -1) {
+                    return Object.assign({ flag: 'high' }, styles.abnormal);
+                }
+                return null;
+            }
+
+            const priority = ['critical_low', 'critical_high', 'low', 'high', 'normal'];
+            for (let i = 0; i < priority.length; i++) {
+                const k = priority[i];
+                if ((rules[k] || []).indexOf(needle) !== -1) {
+                    return Object.assign({ flag: k }, styles[k] || styles.normal);
+                }
+            }
+
+            return null;
+        }
+
+        const val = parseFloat(String(value).replace(/,/g, ''));
+        if (Number.isNaN(val)) {
+            return null;
+        }
+
         let flag = 'normal';
         if (cLo !== null && val < cLo) {
             flag = 'critical_low';
@@ -314,7 +376,9 @@
         const maxV = row.querySelector('.rad-ris-param-max')?.value;
         const cLo = row.querySelector('.rad-ris-param-crit-low')?.value;
         const cHi = row.querySelector('.rad-ris-param-crit-high')?.value;
-        const info = radRisGenerateParamFlag(input.value, minV, maxV, cLo, cHi);
+        const valueType = row.querySelector('.rad-ris-param-value-type')?.value || 'numeric';
+        const flagRules = row.querySelector('.rad-ris-param-flag-rules')?.value || '{}';
+        const info = radRisGenerateParamFlag(input.value, minV, maxV, cLo, cHi, valueType, flagRules);
         if (info) {
             flagBox.innerHTML =
                 '<span style="display:inline-block;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700;border:1px solid ' +
@@ -387,6 +451,12 @@
                 '">' +
                 '<input type="hidden" class="rad-ris-param-crit-high" value="' +
                 escapeRadRisAttr(p.critical_high) +
+                '">' +
+                '<input type="hidden" class="rad-ris-param-value-type" value="' +
+                escapeRadRisAttr(p.value_type || 'numeric') +
+                '">' +
+                '<input type="hidden" class="rad-ris-param-flag-rules" value="' +
+                escapeRadRisAttr(JSON.stringify(p.flag_rules || {})) +
                 '">' +
                 '</td>' +
                 '<td class="text-center align-middle rad-ris-text-sm">' +
@@ -601,6 +671,296 @@
         }
     }
 
+    function openRadRisOrderModalAjax() {
+        if (!radRisRouteExists('manualOrderCreate')) {
+            sendmsg('error', 'Manual order modal route not configured.');
+            return;
+        }
+        loader('show');
+        csrftoken().then(function (token) {
+            $.ajax({
+                url: route('manualOrderCreate'),
+                method: 'POST',
+                data: { _token: token },
+                success: function (response) {
+                    loader('hide');
+                    $('#ajaxdata').html(response);
+                    $('.add-datamodal .modal-dialog').addClass('modal-xl');
+                    $('.add-datamodal').modal('show');
+                },
+                error: function () {
+                    loader('hide');
+                    sendmsg('error', 'Failed to load radiology order form.');
+                }
+            });
+        });
+    }
+
+    function getTodayIsoDate() {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    function escapeRadRisString(str) {
+        if (str === null || str === undefined) {
+            return '';
+        }
+        return String(str).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c;
+        });
+    }
+
+    function radRisRouteExists(name) {
+        return Boolean(window.Routes && Object.prototype.hasOwnProperty.call(window.Routes, name) && window.Routes[name]);
+    }
+
+    function resetManualOrderForm() {
+        const form = document.getElementById('rad-ris-manual-order-form');
+        if (form) {
+            form.reset();
+        }
+        const scheduledDate = document.getElementById('rad-ris-order-scheduled-date');
+        if (scheduledDate) {
+            scheduledDate.value = getTodayIsoDate();
+        }
+        const scheduledTime = document.getElementById('rad-ris-order-scheduled-time');
+        if (scheduledTime && !scheduledTime.value) {
+            scheduledTime.value = '10:00';
+        }
+        const ageSex = document.getElementById('rad-ris-order-age-sex');
+        if (ageSex) {
+            ageSex.value = '';
+        }
+        const chip = document.getElementById('rad-ris-patient-chip-container');
+        if (chip) {
+            chip.innerHTML = '';
+        }
+        const results = document.getElementById('rad-ris-patient-search-results');
+        if (results) {
+            results.style.display = 'none';
+            results.innerHTML = '';
+        }
+        renderManualOrderExamOptions();
+    }
+
+    function renderManualOrderModalityOptions() {
+        const modalitySelect = document.getElementById('rad-ris-order-modality');
+        if (!modalitySelect) {
+            return;
+        }
+        const uniqueModalities = [];
+        const seen = {};
+        radRisManualTests.forEach(function (t) {
+            const mod = String(t.category_name || '').trim() || 'Uncategorized';
+            const key = mod.toLowerCase();
+            if (!seen[key]) {
+                seen[key] = true;
+                uniqueModalities.push(mod);
+            }
+        });
+        uniqueModalities.sort();
+
+        const previous = modalitySelect.value;
+        let html = '<option value="">Select Modality</option>';
+        uniqueModalities.forEach(function (m) {
+            html += '<option value="' + escapeRadRisString(m) + '">' + escapeRadRisString(m) + '</option>';
+        });
+        modalitySelect.innerHTML = html;
+        if (previous && uniqueModalities.indexOf(previous) !== -1) {
+            modalitySelect.value = previous;
+        }
+    }
+
+    function renderManualOrderExamOptions() {
+        const modalitySelect = document.getElementById('rad-ris-order-modality');
+        const testSelect = document.getElementById('rad-ris-order-test');
+        if (!modalitySelect || !testSelect) {
+            return;
+        }
+        const selectedModality = String(modalitySelect.value || '').trim();
+        if (!selectedModality) {
+            testSelect.innerHTML = '<option value="">Select Modality First</option>';
+            return;
+        }
+
+        const rows = radRisManualTests.filter(function (t) {
+            const mod = String(t.category_name || '').trim() || 'Uncategorized';
+            return mod === selectedModality;
+        });
+
+        if (!rows.length) {
+            testSelect.innerHTML = '<option value="">No examinations available</option>';
+            return;
+        }
+
+        let html = '<option value="">Select Examination</option>';
+        rows.forEach(function (t) {
+            const charge = Number.parseFloat(t.standard_charge || 0);
+            const chargeText = Number.isFinite(charge) && charge > 0 ? ' - INR ' + charge.toFixed(2) : '';
+            const codeText = t.test_code ? ' (' + t.test_code + ')' : '';
+            html += '<option value="' + String(t.id) + '">' + escapeRadRisString(t.test_name + codeText + chargeText) + '</option>';
+        });
+        testSelect.innerHTML = html;
+    }
+
+    function loadManualOrderTests() {
+        if (!radRisRouteExists('manualOrderTests')) {
+            return;
+        }
+        fetch(route('manualOrderTests'), { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) {
+                return r.json();
+            })
+            .then(function (res) {
+                radRisManualTests = Array.isArray(res && res.data) ? res.data : [];
+                renderManualOrderModalityOptions();
+                renderManualOrderExamOptions();
+            })
+            .catch(function () {
+                radRisToast('Unable to load radiology examinations.', 'warning');
+            });
+    }
+
+    function bindManualOrderPatientSearch() {
+        const input = document.getElementById('rad-ris-order-patient-search');
+        const box = document.getElementById('rad-ris-patient-search-results');
+        const chipContainer = document.getElementById('rad-ris-patient-chip-container');
+        const ageSexInput = document.getElementById('rad-ris-order-age-sex');
+
+        if (!input || !box || !chipContainer || !ageSexInput) {
+            return;
+        }
+
+        input.addEventListener('input', function () {
+            clearTimeout(radRisPatientSearchTimer);
+            const q = String(input.value || '').trim();
+            if (q.length < 2 || !radRisRouteExists('patientSearch')) {
+                box.style.display = 'none';
+                box.innerHTML = '';
+                return;
+            }
+
+            radRisPatientSearchTimer = setTimeout(function () {
+                fetch(route('patientSearch') + '?q=' + encodeURIComponent(q), {
+                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function (r) {
+                        return r.json();
+                    })
+                    .then(function (rows) {
+                        if (!Array.isArray(rows) || !rows.length) {
+                            box.innerHTML = '<div class="rad-ris-patient-search-item rad-ris-text-muted">No patient found</div>';
+                            box.style.display = 'block';
+                            return;
+                        }
+                        let html = '';
+                        rows.forEach(function (p) {
+                            html += '<a href="#" class="rad-ris-patient-search-item" data-id="' + String(p.id || '') + '" data-name="' + escapeRadRisString(p.name || '') + '" data-mrn="' + escapeRadRisString(p.mrn || p.patient_id || '') + '" data-age-sex="' + escapeRadRisString(p.age_sex || '') + '" data-meta="' + escapeRadRisString([p.blood_group || '', p.phone || ''].filter(Boolean).join(' | ')) + '">';
+                            html += '<div><strong>' + escapeRadRisString(p.name || '') + '</strong> <span class="rad-ris-text-muted">(' + escapeRadRisString(p.mrn || p.patient_id || '') + ')</span></div>';
+                            html += '<div class="rad-ris-text-sm rad-ris-text-muted">' + escapeRadRisString((p.age_sex || '') + ' | ' + (p.blood_group || '') + ' | ' + (p.phone || '')) + '</div>';
+                            html += '</a>';
+                        });
+                        box.innerHTML = html;
+                        box.style.display = 'block';
+                    })
+                    .catch(function () {
+                        box.innerHTML = '<div class="rad-ris-patient-search-item rad-ris-text-muted">Search failed</div>';
+                        box.style.display = 'block';
+                    });
+            }, 250);
+        });
+
+        box.addEventListener('click', function (e) {
+            const item = e.target.closest('.rad-ris-patient-search-item');
+            if (!item) {
+                return;
+            }
+            e.preventDefault();
+            const pid = item.getAttribute('data-id') || '';
+            const pname = item.getAttribute('data-name') || '';
+            const pmrn = item.getAttribute('data-mrn') || '';
+            const ageSex = item.getAttribute('data-age-sex') || '';
+            const meta = item.getAttribute('data-meta') || '';
+
+            chipContainer.innerHTML = '<div class="rad-ris-patient-chip"><input type="hidden" id="rad-ris-order-patient-id" value="' + escapeRadRisString(pid) + '"><div class="name">' + escapeRadRisString(pname) + '</div><div class="meta">' + escapeRadRisString(pmrn + (meta ? ' | ' + meta : '')) + '</div></div>';
+            input.value = pmrn;
+            ageSexInput.value = ageSex;
+            box.style.display = 'none';
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('#rad-ris-order-patient-search') && !e.target.closest('#rad-ris-patient-search-results')) {
+                box.style.display = 'none';
+            }
+        });
+    }
+
+    function bindManualOrderForm() {
+        const form = document.getElementById('rad-ris-manual-order-form');
+        const modalitySelect = document.getElementById('rad-ris-order-modality');
+        if (!form || !modalitySelect) {
+            return;
+        }
+
+        modalitySelect.addEventListener('change', renderManualOrderExamOptions);
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            if (!radRisRouteExists('manualOrderSave')) {
+                sendmsg('error', 'Manual order route is not configured.');
+                return;
+            }
+
+            const patientId = document.getElementById('rad-ris-order-patient-id')?.value || '';
+            if (!patientId) {
+                sendmsg('error', 'Please select a patient.');
+                return;
+            }
+
+            const payload = {
+                patient_id: patientId,
+                ward_or_opd: document.getElementById('rad-ris-order-ward-opd')?.value || '',
+                doctor_staff_id: document.getElementById('rad-ris-order-doctor-staff-id')?.value || '',
+                modality: document.getElementById('rad-ris-order-modality')?.value || '',
+                radiology_test_id: document.getElementById('rad-ris-order-test')?.value || '',
+                priority: document.getElementById('rad-ris-order-priority')?.value || 'Routine',
+                contrast_required: document.getElementById('rad-ris-order-contrast')?.value || 'No',
+                clinical_indication: document.getElementById('rad-ris-order-clinical')?.value || '',
+                previous_relevant_imaging: document.getElementById('rad-ris-order-prev-imaging')?.value || '',
+                scheduled_date: document.getElementById('rad-ris-order-scheduled-date')?.value || '',
+                scheduled_time: document.getElementById('rad-ris-order-scheduled-time')?.value || '',
+                radiation_consent: document.getElementById('rad-ris-order-consent')?.value || 'Obtained',
+                pregnancy_status: document.getElementById('rad-ris-order-pregnancy')?.value || 'N/A'
+            };
+
+            loader('show');
+            const token = await csrftoken();
+            $.ajax({
+                url: route('manualOrderSave'),
+                type: 'POST',
+                data: Object.assign({ _token: token }, payload),
+                success: function (response) {
+                    loader('hide');
+                    closeModal('rad-ris-order-modal');
+                    reloadWorklist();
+                    loadSummary();
+                    sendmsg('success', response.message || 'Radiology order created successfully.');
+                    resetManualOrderForm();
+                },
+                error: function (xhr) {
+                    loader('hide');
+                    if (xhr.status === 422 && xhr.responseJSON && Array.isArray(xhr.responseJSON.errors)) {
+                        const errs = xhr.responseJSON.errors.map(function (x) {
+                            return x.message;
+                        });
+                        sendmsg('error', errs.join('<br>'));
+                        return;
+                    }
+                    sendmsg('error', xhr?.responseJSON?.message || 'Unable to create radiology order.');
+                }
+            });
+        });
+    }
+
     function switchTab(tab) {
         document.querySelectorAll('.rad-ris-panel').forEach(function (p) {
             p.classList.remove('active');
@@ -680,8 +1040,12 @@
     }
 
     function loadModalitiesBoard() {
-        const today = new Date().toISOString().slice(0, 10);
-        fetch(route('risModalitiesBoard') + '?date=' + encodeURIComponent(today), {
+        const dateInput = document.getElementById('rad-ris-modality-date');
+        const selectedDate = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().slice(0, 10);
+        if (dateInput && !dateInput.value) {
+            dateInput.value = selectedDate;
+        }
+        fetch(route('risModalitiesBoard') + '?date=' + encodeURIComponent(selectedDate), {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         })
             .then(function (r) {
@@ -713,7 +1077,7 @@
                             m.color +
                             '">' +
                             m.today +
-                            '</div><div class="lbl">Today</div></div>' +
+                            '</div><div class="lbl">Orders</div></div>' +
                             '<div class="rad-ris-mod-stat"><div class="val" style="color:#e65100">' +
                             m.pending +
                             '</div><div class="lbl">Pending</div></div>' +
@@ -1045,9 +1409,6 @@
                             '<div class="rad-ris-text-sm mt-1 d-flex flex-wrap gap-1 align-items-center"><span class="rad-ris-badge rad-ris-badge-purple">' +
                             escapeHtml(p.modality) +
                             '</span>' +
-                            (p.code
-                                ? '<span class="rad-ris-badge rad-ris-badge-gray">' + escapeHtml(p.code) + '</span>'
-                                : '') +
                             '</div>' +
                             '</div>'
                         );
@@ -1221,6 +1582,12 @@
             return;
         }
 
+        $input.prop('disabled', false).prop('readonly', false);
+        $input.css('pointer-events', 'auto');
+        $input.closest('.search-wrap').off('click.radRisSearchFocus').on('click.radRisSearchFocus', function () {
+            $input.trigger('focus');
+        });
+
         $input.off('input.radRisSearch').on('input.radRisSearch', function () {
             clearTimeout(worklistSearchTimer);
             const val = $(this).val();
@@ -1228,14 +1595,6 @@
                 worklistTable.search(val).draw();
             }, 350);
         });
-
-        $('#rad-ris-clear-search')
-            .off('click.radRisSearch')
-            .on('click.radRisSearch', function () {
-                clearTimeout(worklistSearchTimer);
-                $input.val('');
-                worklistTable.search('').draw();
-            });
     }
 
     function reloadWorklist() {
@@ -1326,6 +1685,11 @@
         });
         const $cin = $('#rad-ris-completed-search');
         let cTimer = null;
+        $cin.prop('disabled', false).prop('readonly', false);
+        $cin.css('pointer-events', 'auto');
+        $cin.closest('.search-wrap').off('click.radRisCompletedFocus').on('click.radRisCompletedFocus', function () {
+            $cin.trigger('focus');
+        });
         $cin.off('input.radRisCompleted').on('input.radRisCompleted', function () {
             clearTimeout(cTimer);
             const val = $(this).val();
@@ -1333,13 +1697,6 @@
                 completedTable.search(val).draw();
             }, 350);
         });
-        $('#rad-ris-c-clear-search')
-            .off('click.radRisCompleted')
-            .on('click.radRisCompleted', function () {
-                clearTimeout(cTimer);
-                $cin.val('');
-                completedTable.search('').draw();
-            });
         $('#rad-ris-c-filter-status, #rad-ris-c-filter-modality, #rad-ris-c-filter-priority').on('change', function () {
             completedTable.ajax.reload();
         });
@@ -1386,11 +1743,19 @@
                 closeModal(btn.getAttribute('data-target'));
             });
         });
-        [['rad-ris-btn-new-order', 'rad-ris-order-modal'], ['rad-ris-toolbar-new-order', 'rad-ris-order-modal'], ['rad-ris-btn-book-slot', 'rad-ris-schedule-modal']].forEach(function (pair) {
+        [['rad-ris-btn-book-slot', 'rad-ris-schedule-modal']].forEach(function (pair) {
             const b = document.getElementById(pair[0]);
             if (b) {
                 b.addEventListener('click', function () {
                     openModal(pair[1]);
+                });
+            }
+        });
+        ['rad-ris-btn-new-order', 'rad-ris-toolbar-new-order'].forEach(function (id) {
+            const b = document.getElementById(id);
+            if (b) {
+                b.addEventListener('click', function () {
+                    openRadRisOrderModalAjax();
                 });
             }
         });
@@ -1402,6 +1767,15 @@
             loadModalitiesBoard();
             radRisToast('Modality board refreshed', 'info');
         });
+        const modalityDate = document.getElementById('rad-ris-modality-date');
+        if (modalityDate) {
+            if (!modalityDate.value) {
+                modalityDate.value = new Date().toISOString().slice(0, 10);
+            }
+            modalityDate.addEventListener('change', function () {
+                loadModalitiesBoard();
+            });
+        }
         document.getElementById('rad-ris-sch-prev')?.addEventListener('click', function () {
             weekOffset -= 1;
             loadScheduleGrid();

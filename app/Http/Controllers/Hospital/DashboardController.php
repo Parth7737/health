@@ -119,7 +119,9 @@ class DashboardController extends BaseHospitalController
                     'status' => $status,
                     'status_color' => $statusColor,
                     'status_badge_class' => $statusBadgeClass,
-                    'profile_url' => route('hospital.ipd-patient.profile', ['allocation' => $allocation->id]),
+                    'profile_url' => $patient?->id
+                        ? route('hospital.patient-management.patient-details', ['patient' => $patient->id])
+                        : '#',
                 ];
             })
             ->values()
@@ -206,6 +208,7 @@ class DashboardController extends BaseHospitalController
                 $query->where('ordered_by', auth()->id())
                     ->where('order_type', 'pathology');
             })
+            ->whereDate('created_at', $today)
             ->orderByDesc('created_at')
             ->limit(8)
             ->get();
@@ -216,27 +219,61 @@ class DashboardController extends BaseHospitalController
                 $query->where('ordered_by', auth()->id())
                     ->where('order_type', 'radiology');
             })
-            ->orderByDesc('created_at')
-            ->limit(8)
+            ->whereDate('created_at', $today)
+            ->orderByRaw('COALESCE(scheduled_for, created_at) DESC')
+            ->limit(12)
+            ->get();
+
+        $upcomingRadiology = DiagnosticOrderItem::query()
+            ->with(['order.patient:id,name'])
+            ->where('department', 'radiology')
+            ->whereHas('order', function ($query) {
+                $query->where('ordered_by', auth()->id())
+                    ->where('order_type', 'radiology');
+            })
+            ->whereIn('status', ['ordered', 'sample_collected', 'in_progress', 'examination'])
+            ->where(function ($query) use ($today) {
+                $query->whereDate('scheduled_for', '>=', $today)
+                    ->orWhere(function ($inner) use ($today) {
+                        $inner->whereNull('scheduled_for')
+                            ->whereDate('created_at', '>=', $today);
+                    });
+            })
+            ->orderByRaw('COALESCE(scheduled_for, created_at) ASC')
+            ->limit(4)
             ->get();
 
         $pendingDiagnosticsCount = $pathologyItems->whereNotIn('status', ['reported', 'completed'])->count()
             + $radiologyItems->whereNotIn('status', ['reported', 'completed'])->count();
 
-        $clinicalNotes = PatientTimeline::query()
+        $opdSoapNotes = OpdPatient::query()
             ->with('patient:id,name')
-            ->where('created_by', auth()->id())
-            ->orderByDesc('logged_at')
-            ->orderByDesc('id')
+            ->where('hospital_id', $this->hospital_id)
+            ->when($doctorStaffId, fn($q) => $q->where('doctor_id', $doctorStaffId))
+            ->where(function ($q) {
+                $q->whereNotNull('subjective_notes')
+                  ->orWhereNotNull('objective_notes')
+                  ->orWhereNotNull('assessment_notes')
+                  ->orWhereNotNull('plan_notes');
+            })
+            ->orderByDesc('updated_at')
             ->limit(6)
             ->get()
-            ->map(function (PatientTimeline $entry) {
+            ->map(function (OpdPatient $opd) {
+                $parts = array_filter([
+                    $opd->subjective_notes ? 'S: ' . Str::limit($opd->subjective_notes, 80) : null,
+                    $opd->objective_notes  ? 'O: ' . Str::limit($opd->objective_notes, 80)  : null,
+                    $opd->assessment_notes ? 'A: ' . Str::limit($opd->assessment_notes, 80) : null,
+                    $opd->plan_notes       ? 'P: ' . Str::limit($opd->plan_notes, 80)       : null,
+                ]);
                 return [
-                    'patient' => $entry->patient?->name ?: 'Patient timeline',
-                    'title' => $entry->title ?: Str::headline(str_replace('.', ' ', (string) $entry->event_key)),
-                    'note' => $entry->description ?: 'Clinical update recorded.',
-                    'time' => optional($entry->logged_at)->diffForHumans(),
-                    'author' => $entry->creator?->name ?: 'System',
+                    'patient'   => $opd->patient?->name ?: 'Patient',
+                    'title'     => 'OPD SOAP Note',
+                    'note_type' => 'OPD',
+                    'note'      => implode(' | ', $parts) ?: 'SOAP note recorded.',
+                    'time'      => optional($opd->updated_at)->diffForHumans(),
+                    'datetime'  => optional($opd->updated_at)->format('d M Y h:i A'),
+                    'author'    => auth()->user()->name,
                 ];
             })
             ->values()
@@ -255,17 +292,20 @@ class DashboardController extends BaseHospitalController
             ->get()
             ->map(function (IpdProgressNote $note) {
                 return [
-                    'patient' => $note->patient?->name ?: 'IPD Patient',
-                    'title' => strtoupper((string) $note->note_type) . ' note',
-                    'note' => $note->note ?: 'Progress note updated.',
-                    'time' => optional($note->noted_at)->diffForHumans(),
-                    'author' => $note->creator?->name ?: 'Care team',
+                    'patient'   => $note->patient?->name ?: 'IPD Patient',
+                    'title'     => Str::upper((string) $note->note_type) . ' Note',
+                    'note_type' => 'IPD',
+                    'note'      => $note->note ?: 'Progress note updated.',
+                    'time'      => optional($note->noted_at)->diffForHumans(),
+                    'datetime'  => optional($note->noted_at)->format('d M Y h:i A'),
+                    'author'    => $note->creator?->name ?: 'Care team',
                 ];
             });
 
-        $clinicalFeed = collect($clinicalNotes)
+        $clinicalFeed = collect($opdSoapNotes)
             ->concat($progressHighlights)
-            ->take(6)
+            ->sortByDesc('time')
+            ->take(8)
             ->values()
             ->all();
 
@@ -298,25 +338,55 @@ class DashboardController extends BaseHospitalController
             'ipdPatients' => $ipdPatients,
             'prescriptions' => $prescriptions,
             'labOrders' => $pathologyItems->map(function (DiagnosticOrderItem $item) {
+                $statusKey = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
+                $isReportReady = $item->reported_at !== null || in_array($statusKey, ['reported', 'completed'], true);
                 return [
+                    'item_id' => (int) $item->id,
                     'patient' => $item->order?->patient?->name ?: '-',
                     'test' => $item->test_name ?: '-',
                     'status' => $this->formatStatusLabel($item->status),
                     'result' => $item->pathologyStatus?->name ?: ($item->reported_at ? 'Reported' : 'Pending'),
                     'time' => optional($item->created_at)->format('H:i'),
+                    'can_print' => $isReportReady,
+                    'print_url' => $isReportReady
+                        ? route('hospital.pathology.worklist.print', ['item' => $item->id])
+                        : null,
                 ];
             })->values()->all(),
             'radiologyOrders' => $radiologyItems->map(function (DiagnosticOrderItem $item) {
+                $scheduledAt = $item->scheduled_for ?: $item->created_at;
+                $statusKey = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
+                $isReported = $item->reported_at !== null || $statusKey === 'completed';
                 return [
+                    'item_id' => (int) $item->id,
                     'patient' => $item->order?->patient?->name ?: '-',
                     'test' => $item->test_name ?: '-',
                     'modality' => strtoupper($item->department ?: 'RAD'),
                     'status' => $this->formatStatusLabel($item->status),
                     'time' => optional($item->created_at)->format('H:i'),
+                    'scheduled_for' => optional($scheduledAt)->format('d-m-Y h:i A') ?: '-',
+                    'report_status' => $isReported
+                        ? 'Report ready' . (optional($item->reported_at)->format(' d-m-Y h:i A') ? ' (' . optional($item->reported_at)->format('d-m-Y h:i A') . ')' : '')
+                        : 'Pending',
+                    'report_excerpt' => $isReported
+                        ? Str::limit(trim(strip_tags((string) ($item->report_summary ?: $item->report_text ?: ''))), 120)
+                        : '',
+                    'can_print' => $statusKey === 'completed',
+                    'print_url' => $statusKey === 'completed'
+                        ? route('hospital.radiology.ris.completed-pdf', ['item' => $item->id])
+                        : null,
                 ];
             })->values()->all(),
             'clinicalFeed' => $clinicalFeed,
-            'workboard' => [
+            'workboard' => $upcomingRadiology->map(function (DiagnosticOrderItem $item) {
+                $slotTime = $item->scheduled_for ?: $item->created_at;
+                return [
+                    'slot' => optional($slotTime)->format('d M, h:i A') ?: 'TBD',
+                    'type' => 'Radiology',
+                    'label' => ($item->test_name ?: 'Radiology test') . ' - ' . ($item->order?->patient?->name ?: 'Patient'),
+                    'color' => '#5c6bc0',
+                ];
+            })->take(4)->values()->all() ?: [
                 [
                     'slot' => 'LIVE',
                     'type' => 'OPD',

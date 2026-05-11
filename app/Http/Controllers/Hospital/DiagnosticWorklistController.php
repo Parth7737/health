@@ -15,6 +15,7 @@ use App\Models\Staff;
 use App\Services\ChargeLedgerService;
 use App\Services\PathologyFlagService;
 use App\Services\PatientTimelineService;
+use App\Services\RadiologyFlagService;
 use App\Support\SafeReportHtml;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -158,6 +159,34 @@ class DiagnosticWorklistController extends BaseHospitalController
                 ->all();
             if (!empty($missingCharge)) {
                 $validator->errors()->add('pathology_test_ids', 'Charge master not mapped for: ' . implode(', ', $missingCharge));
+            }
+
+            $patientId = (int) $request->input('patient_id');
+            if ($patientId > 0) {
+                $duplicateTests = DiagnosticOrderItem::query()
+                    ->where('department', 'pathology')
+                    ->where('testable_type', PathologyTest::class)
+                    ->whereIn('testable_id', $testIds)
+                    ->whereHas('order', function ($q) use ($patientId) {
+                        $q->where('hospital_id', $this->hospital_id)
+                            ->where('patient_id', $patientId);
+                    })
+                    ->where(function ($q) {
+                        $q->whereNotIn('status', ['completed', 'cancelled'])
+                            ->orWhere(function ($future) {
+                                $future->whereNotNull('scheduled_for')
+                                    ->where('scheduled_for', '>', now());
+                            });
+                    })
+                    ->pluck('test_name')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                if (!empty($duplicateTests)) {
+                    $validator->errors()->add('pathology_test_ids', 'Already pending/future booked for this patient: ' . implode(', ', $duplicateTests));
+                }
             }
         });
 
@@ -949,7 +978,9 @@ class DiagnosticWorklistController extends BaseHospitalController
         if ($item->department !== 'radiology') {
             return;
         }
-        $item->loadMissing('parameters.parameterable');
+        $item->loadMissing('order.patient', 'parameters.parameterable');
+        $patientGender = $item->order?->patient?->gender;
+
         foreach ($item->parameters as $parameter) {
             $rawVal = $resultValues[$parameter->id] ?? null;
             $resultValue = is_string($rawVal) ? trim($rawVal) : $rawVal;
@@ -958,14 +989,8 @@ class DiagnosticWorklistController extends BaseHospitalController
             }
             $resultFlag = null;
             $def = $parameter->parameterable;
-            if ($resultValue !== null && $def && is_numeric($resultValue)) {
-                $resultFlag = PathologyFlagService::generateFlag(
-                    $resultValue,
-                    $def->min_value ?? null,
-                    $def->max_value ?? null,
-                    $def->critical_low ?? null,
-                    $def->critical_high ?? null
-                );
+            if ($resultValue !== null && $def) {
+                $resultFlag = RadiologyFlagService::generateFlagByParameter($resultValue, $def, $patientGender);
             }
             $rawRemark = $remarks[$parameter->id] ?? null;
             $remarkVal = is_string($rawRemark) ? trim($rawRemark) : $rawRemark;

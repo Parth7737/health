@@ -144,6 +144,12 @@ function encodeInline(value) {
   return encodeURIComponent(String(value ?? ''));
 }
 
+function formatDayCount(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return '-';
+  return String(Math.trunc(parsed));
+}
+
 function switchPtTab(targetPaneId, triggerButton) {
   const panes = ['ptListPane', 'opdPane', 'bookingPane', 'ipdPane', 'emergencyPane', 'dischargePane'];
   panes.forEach((paneId) => {
@@ -418,7 +424,7 @@ function renderPatientTableDynamic(patients) {
     return `
       <tr>
         <td><span class="text-primary fw-700" style="cursor:pointer" onclick="viewPatient360(decodeURIComponent('${mrn}'))">${escapeHtml(patient.mrn || '-')}</span></td>
-        <td><div class="fw-700 fs-12">${escapeHtml(patient.name || '-')}</div></td>
+        <td><div class="fw-700 fs-12">${escapeHtml(patient.full_name || patient.name || '-')}</div></td>
         <td>${escapeHtml(patient.age_sex || '-')}</td>
         <td>${escapeHtml(patient.phone || '-')}</td>
         <td><span class="badge badge-gray" style="font-size:10px">${escapeHtml(patient.blood_group || '-')}</span></td>
@@ -683,7 +689,7 @@ async function loadIPDList(page = pmState.ipd.page) {
   document.getElementById('ipdAdmissionsList').innerHTML = `
     <div class="table-wrap">
       <table class="hims-table">
-        <thead><tr><th>MRN</th><th>Patient</th><th>Age/Sex</th><th>Visit Type</th><th>Department</th><th>Bed</th><th>Ward</th><th>Day</th><th>Actions</th></tr></thead>
+        <thead><tr><th>MRN</th><th>Patient</th><th>Age/Sex</th><th>Visit Type</th><th>Department</th><th>Bed</th><th>Ward</th><th>LOS</th><th>Actions</th></tr></thead>
         <tbody>${rows.map((patient) => {
           const mrn = encodeInline(patient.mrn || '');
           const patientId = Number(patient.patient_id || 0);
@@ -696,7 +702,7 @@ async function loadIPDList(page = pmState.ipd.page) {
               <td class="fs-11">${escapeHtml(patient.dept || '-')}</td>
               <td><span class="badge badge-teal fs-10">${escapeHtml(patient.bed || '-')}</span></td>
               <td><span class="badge badge-gray fs-10">${escapeHtml(patient.ward || '-')}</span></td>
-              <td class="text-muted">Day ${escapeHtml(patient.days || '-')}</td>
+              <td class="text-muted">${escapeHtml(formatDayCount(patient.days))} Day's</td>
               <td>
                 <div style="display:flex;gap:3px">
                   <button class="btn btn-primary btn-xs" onclick="openPatientDetails(${patientId}, decodeURIComponent('${mrn}'))" title="View Details">👁️</button>
@@ -779,7 +785,7 @@ async function loadDischargedList(page = pmState.discharged.page) {
           return `
             <tr>
               <td><span class="text-primary fw-700" style="cursor:pointer" onclick="viewPatient360(decodeURIComponent('${mrn}'))">${escapeHtml(patient.mrn || '-')}</span></td>
-              <td>${escapeHtml(patient.name || '-')}</td>
+              <td>${escapeHtml(patient.full_name || patient.name || '-')}</td>
               <td>${escapeHtml(patient.dept || '-')}</td>
               <td class="text-muted">${escapeHtml(patient.status || '-')}</td>
               <td>
@@ -853,20 +859,47 @@ function openPatientDetails(patientId, mrn) {
     return;
   }
 
-  const url = new URL(PM_ROUTES.patientDetails, window.location.origin);
-  if (Number(patientId) > 0) {
-    url.searchParams.set('id', String(patientId));
-  } else if (mrn) {
-    url.searchParams.set('mrn', mrn);
+  const id = Number(patientId);
+  if (!Number.isFinite(id) || id <= 0) {
+    notify('Missing Patient', 'Patient ID not found for details view.', 'error');
+    return;
   }
 
-  window.location.href = url.toString();
+  const base = String(PM_ROUTES.patientDetails);
+  const href = base.includes('__ID__')
+    ? base.replace('__ID__', encodeURIComponent(String(id)))
+    : `${base.replace(/\/+$/, '')}/${encodeURIComponent(String(id))}`;
+
+  window.location.href = href;
+}
+
+function openPatientDetailsWithTab(patientId, tabId) {
+  if (!PM_ROUTES.patientDetails) {
+    notify('Config Missing', 'Patient details route is not configured.', 'error');
+    return;
+  }
+
+  const id = Number(patientId);
+  if (!Number.isFinite(id) || id <= 0) {
+    notify('Missing Patient', 'Patient ID not found for details view.', 'error');
+    return;
+  }
+
+  const base = String(PM_ROUTES.patientDetails);
+  const href = base.includes('__ID__')
+    ? base.replace('__ID__', encodeURIComponent(String(id)))
+    : `${base.replace(/\/+$/, '')}/${encodeURIComponent(String(id))}`;
+
+  const target = new URL(href, window.location.origin);
+  target.searchParams.set('tab', tabId);
+  window.location.href = target.toString();
 }
 
 async function viewPatient360(mrn) {
   try {
     const data = await pmFetch(`${PM_ROUTES.patient360}?mrn=${encodeURIComponent(mrn)}`);
     const patient = data.patient || {};
+    const patientId = Number(patient.id || patient.patient_id || 0);
     const today = new Date();
     const todayOnly = parseLocalDateOnly(today);
     const isIpd = Boolean(data.active_ipd);
@@ -916,6 +949,9 @@ async function viewPatient360(mrn) {
     const dueAmount = Number(billingSummary.total_due || 0);
     const discountAmount = Number(billingSummary.total_discount || 0);
     const advanceBalance = Number(billingSummary.advance_balance || 0);
+    const activeMeds = Array.isArray(data.active_medications) ? data.active_medications : [];
+    const latestLabRows = Array.isArray(data.latest_lab_non_normal) ? data.latest_lab_non_normal : [];
+    const latestLabMeta = data.latest_lab_meta || null;
 
     const formatInr = (value) => `Rs ${Number(value || 0).toLocaleString('en-IN')}`;
 
@@ -983,11 +1019,46 @@ async function viewPatient360(mrn) {
 
     const timelineHtml = timelineRows.join('') || '<div class="fs-12 text-muted">No visit timeline found.</div>';
 
+    const labFlagMeta = {
+      low: { text: 'Low', cls: 'badge-warning' },
+      high: { text: 'High', cls: 'badge-warning' },
+      critical_low: { text: 'Critical Low', cls: 'badge-danger' },
+      critical_high: { text: 'Critical High', cls: 'badge-danger' },
+    };
+
+    const latestLabMetaHtml = latestLabMeta
+      ? `<div class="fs-11 text-muted" style="margin-bottom:8px">${escapeHtml(latestLabMeta.test_name || '-')} | ${escapeHtml(latestLabMeta.visit || '-')} | ${escapeHtml(latestLabMeta.reported_at || '-')}</div>`
+      : '';
+
+    const latestLabRowsHtml = latestLabRows.length
+      ? latestLabRows.map((row) => {
+        const flagKey = String(row.result_flag || '').toLowerCase();
+        const flag = labFlagMeta[flagKey] || null;
+        const statusHtml = flag
+          ? `<span class="badge ${flag.cls}" style="font-size:10px">${flag.text}</span>`
+          : '<span class="badge badge-secondary" style="font-size:10px">Summary</span>';
+
+        return `<div style="padding:8px 0;border-bottom:1px solid var(--border-light)">
+          <div class="fw-700 fs-12">${escapeHtml(row.parameter || '-')}</div>
+          <div class="fs-12" style="margin-top:2px">${escapeHtml(row.result || '-')}</div>
+          <div class="fs-11 text-muted" style="margin-top:2px">Ref: ${escapeHtml(row.ref_range || '-')} | ${statusHtml}</div>
+        </div>`;
+      }).join('')
+      : '<div class="fs-12 text-muted">No any lab results found.</div>';
+
+    const activeMedsHtml = activeMeds.length
+      ? activeMeds.map((med) => `<div style="padding:8px 0;border-bottom:1px solid var(--border-light)">
+          <div class="fw-700 fs-12">${escapeHtml(med.drug || '-')}</div>
+          <div class="fs-11 text-muted" style="margin-top:2px">${escapeHtml(med.dose || '-')} | ${escapeHtml(med.frequency || '-')} | ${escapeHtml(med.duration || '-')}</div>
+          <div class="fs-11 text-muted" style="margin-top:2px">${escapeHtml(med.reference || '-')} | Start: ${escapeHtml(med.started_at || '-')}</div>
+        </div>`).join('')
+      : '<div class="fs-12 text-muted">No active medicines found.</div>';
+
     document.getElementById('p360Content').innerHTML = `
       <div class="patient-chip mb-16">
-        <div class="patient-chip-avatar" style="background:linear-gradient(135deg,#1565c0,#42a5f5)">${escapeHtml((patient.name || 'P').charAt(0))}</div>
+        <div class="patient-chip-avatar" style="background:linear-gradient(135deg,#1565c0,#42a5f5)">${escapeHtml((patient.full_name || patient.name || 'P').charAt(0))}</div>
         <div class="patient-chip-info">
-          <div class="patient-chip-name">${escapeHtml(patient.name || '-')}</div>
+          <div class="patient-chip-name">${escapeHtml(patient.full_name || patient.name || '-')}</div>
           <div class="patient-chip-meta">${escapeHtml(patient.mrn || patient.patient_id || '-')} | ${escapeHtml(patient.age_years || '-')} Yrs / ${escapeHtml(patient.gender || '-')} | Blood Group: ${escapeHtml(patient.blood_group || '-')} | ${escapeHtml(patient.phone || '-')}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -1005,14 +1076,14 @@ async function viewPatient360(mrn) {
         <div class="card">
           <div class="card-header"><div class="card-title">🧪 Recent Lab Results</div></div>
           <div class="card-body">
-            <div class="fs-12 text-muted">CBC: WBC 11.2 ↑ | HB 10.8 ↓ | Platelets 1.8L</div>
-            <div class="fs-12 text-muted mt-4">LFT: Bilirubin 1.2 | ALT 42 | AST 38</div>
+            ${latestLabMetaHtml}
+            <div>${latestLabRowsHtml}</div>
           </div>
         </div>
         <div class="card">
           <div class="card-header"><div class="card-title">💊 Current Medications</div></div>
           <div class="card-body">
-            <div class="fs-12 text-muted">Tab. Metformin 500mg BD | Tab. Amlodipine 5mg OD | Inj. Ceftriaxone 1g IV BD</div>
+            <div>${activeMedsHtml}</div>
           </div>
         </div>
         <div class="card">
@@ -1037,25 +1108,14 @@ async function viewPatient360(mrn) {
     actionRow.innerHTML = `
       <button class="btn btn-primary btn-sm" type="button" id="p360BtnBill">💳 View Bill</button>
       <button class="btn btn-secondary btn-sm" type="button" id="p360BtnLab">🧪 Lab Reports</button>
-      <button class="btn btn-secondary btn-sm" type="button" id="p360BtnCert">📜 Certificates</button>
-      <button class="btn btn-warning btn-sm" type="button" id="p360BtnDischarge">🏠 Discharge</button>`;
+      <button class="btn btn-secondary btn-sm" type="button" id="p360BtnCert">📜 Certificates</button>`;
     document.getElementById('p360Content').appendChild(actionRow);
 
     document.getElementById('p360BtnBill')?.addEventListener('click', () => {
-      window.location.href = 'billing.html';
+      openPatientDetailsWithTab(patientId, 'tabBilling');
     });
     document.getElementById('p360BtnLab')?.addEventListener('click', () => {
-      window.location.href = 'lab.html';
-    });
-    document.getElementById('p360BtnCert')?.addEventListener('click', () => {
-      window.location.href = 'certificate.html';
-    });
-    document.getElementById('p360BtnDischarge')?.addEventListener('click', () => {
-      if (typeof window.dischargeWorkflow === 'function') {
-        window.dischargeWorkflow(patient.mrn || mrn);
-      } else {
-        notify('Discharge', 'Discharge workflow is not configured yet.', 'info');
-      }
+      openPatientDetailsWithTab(patientId, 'tabLab');
     });
 
     openModal('patient360Modal');

@@ -187,7 +187,7 @@
           <div class="card-title"><span class="ct-icon">🛏️</span> My IPD Patients</div>
           <div class="card-subtitle">Current ward admissions under my care</div>
         </div>
-        <a href="{{ route('hospital.ipd-patient.index') }}" class="btn btn-secondary btn-xs">View All</a>
+        <a href="{{ route('hospital.patient-management.index') }}" class="btn btn-secondary btn-xs">View All</a>
       </div>
       <div id="ipdPatientsList" class="list-wrap">
         @forelse ($ipdPatients as $patient)
@@ -221,7 +221,7 @@
       <div class="tabs-bar" id="orderTabsBar" style="padding:0 18px;margin-bottom:0">
         <button class="tab-btn active" type="button" data-target="rxPane">💊 e-Prescriptions <span class="tab-count">{{ count($prescriptions) }}</span></button>
         <button class="tab-btn" type="button" data-target="labPane">🧪 Lab Orders <span class="tab-count">{{ count($labOrders) }}</span></button>
-        <button class="tab-btn" type="button" data-target="radPane">🩻 Radiology Orders <span class="tab-count">{{ count($radiologyOrders) }}</span></button>
+        <button class="tab-btn" type="button" data-target="radPane"><i class="fa-solid fa-x-ray" style="color:#1565c0"></i> Radiology Orders <span class="tab-count">{{ count($radiologyOrders) }}</span></button>
         <button class="tab-btn" type="button" data-target="notesPane">📝 Clinical Notes</button>
       </div>
 
@@ -277,6 +277,7 @@
               <th>Status</th>
               <th>Result</th>
               <th>Time</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -287,9 +288,16 @@
                 <td><span class="badge badge-orange">{{ strtoupper($order['status']) }}</span></td>
                 <td>{{ $order['result'] }}</td>
                 <td>{{ $order['time'] ?: '-' }}</td>
+                <td>
+                  @if (!empty($order['can_print']) && !empty($order['print_url']))
+                    <a href="{{ $order['print_url'] }}" target="_blank" rel="noopener" class="btn btn-primary btn-xs">Print Report</a>
+                  @else
+                    <span class="text-muted small">Not ready</span>
+                  @endif
+                </td>
               </tr>
             @empty
-              <tr><td colspan="5" class="text-center text-muted">No pathology orders available.</td></tr>
+              <tr><td colspan="6" class="text-center text-muted">No pathology orders available.</td></tr>
             @endforelse
           </tbody>
         </table>
@@ -304,8 +312,11 @@
               <th>Patient</th>
               <th>Test</th>
               <th>Modality</th>
+              <th>Scheduled</th>
               <th>Status</th>
+              <th>Report</th>
               <th>Time</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -314,11 +325,25 @@
                 <td class="fw-semibold">{{ $order['patient'] }}</td>
                 <td>{{ $order['test'] }}</td>
                 <td><span class="badge badge-indigo">{{ $order['modality'] }}</span></td>
+                <td>{{ $order['scheduled_for'] ?? '-' }}</td>
                 <td><span class="badge badge-blue">{{ strtoupper($order['status']) }}</span></td>
+                <td>
+                  <div>{{ $order['report_status'] ?? 'Pending' }}</div>
+                  @if (!empty($order['report_excerpt']))
+                    <div class="text-muted small">{{ $order['report_excerpt'] }}</div>
+                  @endif
+                </td>
                 <td>{{ $order['time'] ?: '-' }}</td>
+                <td>
+                  @if (!empty($order['can_print']) && !empty($order['print_url']))
+                    <a href="{{ $order['print_url'] }}" target="_blank" rel="noopener" class="btn btn-primary btn-xs">Download PDF</a>
+                  @else
+                    <span class="text-muted small">Not ready</span>
+                  @endif
+                </td>
               </tr>
             @empty
-              <tr><td colspan="5" class="text-center text-muted">No radiology orders available.</td></tr>
+              <tr><td colspan="8" class="text-center text-muted">No radiology orders available.</td></tr>
             @endforelse
           </tbody>
         </table>
@@ -331,10 +356,17 @@
           <div class="tl-item">
             <div class="tl-dot"></div>
             <div class="tl-content">
-              <div class="tl-time">{{ $entry['time'] ?? 'Just now' }} - {{ $entry['author'] ?? 'Care team' }}</div>
+              <div class="tl-time" style="display:flex;align-items:center;gap:6px">
+                <span class="badge {{ ($entry['note_type'] ?? '') === 'IPD' ? 'badge-teal' : 'badge-blue' }}" style="font-size:9px;padding:2px 6px">{{ $entry['note_type'] ?? 'NOTE' }}</span>
+                <span>{{ $entry['datetime'] ?? ($entry['time'] ?? 'Just now') }}</span>
+                @if (!empty($entry['time']) && !empty($entry['datetime']))
+                  <span class="text-muted" style="font-size:10px">({{ $entry['time'] }})</span>
+                @endif
+                <span class="text-muted">— {{ $entry['author'] ?? 'Care team' }}</span>
+              </div>
               <div class="tl-title">{{ $entry['patient'] }}</div>
               <div class="tl-sub">{{ $entry['title'] }}</div>
-              <div class="tl-note">{{ \Illuminate\Support\Str::limit($entry['note'] ?? '', 160) }}</div>
+              <div class="tl-note">{{ \Illuminate\Support\Str::limit($entry['note'] ?? '', 200) }}</div>
             </div>
           </div>
         @empty
@@ -428,7 +460,7 @@
       diagnosticDestroy: "{{ route('hospital.opd-patient.diagnostics.destroy', ['opdPatient' => '__ID__', 'item' => '__ITEM__']) }}",
       updateVitalsSocial: "{{ route('hospital.opd-patient.vitals-social.update', ['opdPatient' => '__ID__']) }}",
       updateStatus: "{{ route('hospital.opd-patient.update-status', ['opdPatient' => '__ID__']) }}",
-      patientDetails: "{{ route('hospital.patient-management.patient-details') }}",
+      patientDetails: "{{ route('hospital.patient-management.patient-details', ['patient' => '__ID__']) }}",
       visits: "{{ route('hospital.opd-patient.visits', ['patient' => '__ID__']) }}",
       visitSummaryPrint: "{{ route('hospital.opd-patient.visit-summary.print', ['opdPatient' => '__ID__']) }}",
       prescriptionPrint: "{{ route('hospital.opd-patient.prescription.print', ['opdPatient' => '__ID__']) }}"

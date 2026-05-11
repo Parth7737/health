@@ -80,7 +80,7 @@ $(document).ready(function() {
                 if (response) {
                     $("#ajaxdata").html(response);
                     $(".add-datamodal").modal('show');
-                    $(".add-datamodal .modal-dialog").removeClass('modal-xl');
+                    $(".add-datamodal .modal-dialog").addClass('modal-xl');
                 }
             },
             error: function (xhr) {

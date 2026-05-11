@@ -1,7 +1,10 @@
 <div id="rad-ris-panel-modalities" class="rad-ris-panel">
     <div class="rad-ris-card-header" style="background:#fff;border-radius:12px 12px 0 0;border:1px solid var(--rad-border, #ccd8e8);border-bottom:none;padding:14px 18px;margin-bottom:0">
         <h2 class="rad-ris-card-title"><i class="fa-solid fa-x-ray" style="color:#1565c0"></i> Modality status board</h2>
-        <button type="button" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm" id="rad-ris-refresh-modalities"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        <div class="d-flex gap-2 align-center">
+            <input type="date" id="rad-ris-modality-date" class="form-control" style="min-width:170px">
+            <button type="button" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm" id="rad-ris-refresh-modalities"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
     </div>
     <div class="rad-ris-modality-grid" style="padding:16px;background:#fff;border:1px solid var(--rad-border, #ccd8e8);border-top:none;border-radius:0 0 12px 12px" id="rad-ris-modality-grid"></div>
     <div class="rad-ris-card rad-ris-mt-4">

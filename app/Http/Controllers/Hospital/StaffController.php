@@ -123,6 +123,16 @@ class StaffController extends BaseHospitalController
         return view('hospital.hr.staff.form', compact('data', 'id', 'departments', 'designations', 'specialists', 'roles', 'superiors'));
     }
 
+    public function view(Staff $staff)
+    {
+        $staff->loadMissing(['department:id,name', 'designation:id,name', 'specialist:id,name', 'role:id,name']);
+
+        return response()->json([
+            'status' => true,
+            'html' => view('hospital.hr.staff.view', compact('staff'))->render(),
+        ]);
+    }
+
     /**
      * Store a newly created or update an existing resource in storage.
      */
@@ -156,8 +166,12 @@ class StaffController extends BaseHospitalController
             'permanent_address' => 'nullable|string',
             'qualifications' => 'nullable|string',
             'work_experience' => 'nullable|string',
+            'employment_category' => 'nullable|in:Permanent,Contract,Daily Wage,Outsource',
+            'basic_pay' => 'nullable|numeric|min:0',
+            'shift_timing' => 'nullable|string|max:100',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'status' => 'required|in:Active,Inactive',
+            'slot_duration' => 'nullable|integer|min:1',
             'work_timings' => 'nullable|array',
             'work_timings.*.start_time' => 'required_with:work_timings|string',
             'work_timings.*.end_time' => 'required_with:work_timings|string',
@@ -169,16 +183,20 @@ class StaffController extends BaseHospitalController
 
         try {
             $staff = null;
+            $selectedRole = Role::hospitalRole()->find($request->role_id);
+            $isDoctorRole = $selectedRole && strtolower($selectedRole->name) === 'doctor';
 
             if ($request->id) {
                 // Update existing staff
                 $staff = Staff::findOrFail($request->id);
                 
                 // Update user if email changed
-                if ($staff->user && $staff->user->email !== $request->email) {
-                    $staff->user->update(['email' => $request->email]);
+                if ($staff->user) {
+                    if ($staff->user->email !== $request->email) {
+                        $staff->user->update(['email' => $request->email]);
+                    }
+                    $staff->user->update(['name' => $request->first_name . ' ' . $request->last_name]);
                 }
-                $staff->user->update(['name' => $request->first_name . ' ' . $request->last_name]);
             } else {
                 // Create new user account
                 $password = Str::random(6);
@@ -189,8 +207,7 @@ class StaffController extends BaseHospitalController
                     'hospital_id' => $this->hospital_id,
                     'userid' => $this->generateUserId(),
                 ]);
-                $role = Role::hospitalRole()->findOrFail($request->role_id);
-                $user->assignRole($role);
+                $user->assignRole($selectedRole);
                 // Store password in session for display
                 session(['staff_password' => $password]);
             }
@@ -236,6 +253,9 @@ class StaffController extends BaseHospitalController
                 'permanent_address' => $request->permanent_address,
                 'qualifications' => $request->qualifications,
                 'work_experience' => $request->work_experience,
+                'employment_category' => $request->employment_category,
+                'basic_pay' => $request->basic_pay,
+                'shift_timing' => $request->shift_timing,
                 'specialization' => $request->specialization,
                 'note' => $request->note,
                 'pto' => $request->pto ?? 0,
@@ -249,15 +269,14 @@ class StaffController extends BaseHospitalController
                 'bank_ifsc_code' => $request->bank_ifsc_code,
                 'bank_account_holder_name' => $request->bank_account_holder_name,
                 'status' => $request->status,
-                'slot_duration' => $request->slot_duration
+                // Slot duration is only applicable for doctor role.
+                'slot_duration' => $isDoctorRole ? $request->slot_duration : 0,
+                // Persist clear-all action too (null when no timing rows exist).
+                'work_timings' => $workTimings,
             ];
 
             if ($imagePath) {
                 $staffData['image'] = $imagePath;
-            }
-
-            if ($workTimings !== null) {
-                $staffData['work_timings'] = $workTimings;
             }
 
             if ($request->id) {

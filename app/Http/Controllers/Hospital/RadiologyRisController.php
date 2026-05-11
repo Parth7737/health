@@ -4,19 +4,25 @@ namespace App\Http\Controllers\Hospital;
 
 use App\Http\Controllers\BaseHospitalController;
 use App\Models\BedAllocation;
+use App\Models\DiagnosticOrder;
 use App\Models\DiagnosticOrderItem;
 use App\Models\OpdPatient;
+use App\Models\Patient;
 use App\Models\HeaderFooter;
 use App\Models\RadiologyCategory;
 use App\Models\RadiologyPacsStudy;
 use App\Models\RadiologyTest;
 use App\Models\Staff;
 use App\Models\User;
+use App\Services\ChargeLedgerService;
+use App\Services\PatientTimelineService;
 use App\Support\SafeReportHtml;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Yajra\DataTables\Facades\DataTables;
 
 class RadiologyRisController extends BaseHospitalController
@@ -35,6 +41,22 @@ class RadiologyRisController extends BaseHospitalController
 
         return view('hospital.radiology.ris.index', [
             'modalities' => $modalities,
+            'doctors' => Staff::query()
+                ->where('hospital_id', $this->hospital_id)
+                ->doctor()
+                ->active()
+                ->select('id', 'first_name', 'last_name')
+                ->orderBy('first_name')
+                ->get()
+                ->map(function (Staff $s) {
+                    $name = trim((string) ($s->first_name ?? '') . ' ' . (string) ($s->last_name ?? ''));
+                    return [
+                        'id' => (int) $s->id,
+                        'name' => $name !== '' ? $name : ('Staff #' . $s->id),
+                    ];
+                })
+                ->values()
+                ->all(),
             'pacs_viewer_url_template' => (string) config('radiology.pacs_web_viewer_url_template', ''),
             'routes' => [
                 'loadtable' => route('hospital.radiology.ris.worklist-load'),
@@ -48,12 +70,89 @@ class RadiologyRisController extends BaseHospitalController
                 'risPendingQueue' => route('hospital.radiology.ris.pending-queue'),
                 'risProtocols' => route('hospital.radiology.ris.protocols'),
                 'risSchedule' => route('hospital.radiology.ris.schedule'),
+                'manualOrderCreate' => route('hospital.radiology.ris.manual-order-create'),
+                'manualOrderTests' => route('hospital.radiology.ris.manual-order-tests'),
+                'manualOrderSave' => route('hospital.radiology.ris.manual-order-save'),
+                'patientSearch' => route('hospital.patient-management.search-patients'),
                 'reportItem' => route('hospital.radiology.ris.report-item', ['item' => '__ITEM__']),
                 'workflowAdvance' => route('hospital.radiology.ris.workflow-advance', ['item' => '__ITEM__']),
                 'completedPdf' => route('hospital.radiology.ris.completed-pdf', ['item' => '__ITEM__']),
                 'pacsResolve' => route('hospital.radiology.ris.pacs-resolve', ['item' => '__ITEM__']),
             ],
         ]);
+    }
+
+    public function createManualOrder(Request $request)
+    {
+        $doctors = Staff::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->doctor()
+            ->active()
+            ->select('id', 'first_name', 'last_name')
+            ->orderBy('first_name')
+            ->get()
+            ->map(function (Staff $s) {
+                $name = trim((string) ($s->first_name ?? '') . ' ' . (string) ($s->last_name ?? ''));
+                return [
+                    'id' => (int) $s->id,
+                    'name' => $name !== '' ? $name : ('Staff #' . $s->id),
+                ];
+            })
+            ->values();
+
+        return view('hospital.radiology.ris.create-order', [
+            'doctors' => $doctors,
+            'routes' => [
+                'tests' => route('hospital.radiology.ris.manual-order-tests'),
+                'save' => route('hospital.radiology.ris.manual-order-save'),
+                'patients' => route('hospital.patient-management.search-patients'),
+                'previous' => route('hospital.radiology.ris.previous-imaging-options'),
+            ],
+        ]);
+    }
+
+    public function previousImagingOptions(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'patient_id' => ['required', 'integer', Rule::exists('patients', 'id')->where('hospital_id', $this->hospital_id)],
+            'radiology_test_id' => ['nullable', 'integer'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['data' => []]);
+        }
+
+        $patientId = (int) $request->input('patient_id');
+        $testId = $request->filled('radiology_test_id') ? (int) $request->input('radiology_test_id') : null;
+
+        $query = DiagnosticOrderItem::query()
+            ->with('order')
+            ->where('department', 'radiology')
+            ->where('status', 'completed')
+            ->whereHas('order', function ($q) use ($patientId) {
+                $q->where('hospital_id', $this->hospital_id)
+                    ->where('patient_id', $patientId);
+            })
+            ->when($testId, function ($q) use ($testId) {
+                $q->where('testable_type', RadiologyTest::class)
+                    ->where('testable_id', $testId);
+            })
+            ->orderByDesc('reported_at')
+            ->orderByDesc('id')
+            ->limit(50);
+
+        $rows = $query->get()->map(function ($item) {
+            $orderNo = (string) ($item->order?->order_no ?? ('RAD-' . $item->id));
+            $reportedAt = optional($item->reported_at)->format('d-m-Y H:i') ?: optional($item->created_at)->format('d-m-Y H:i');
+            $label = $orderNo . ' | ' . (string) ($item->test_name ?? 'Study') . ' | ' . ($reportedAt ?: '-');
+
+            return [
+                'value' => $orderNo,
+                'label' => $label,
+            ];
+        })->values();
+
+        return response()->json(['data' => $rows]);
     }
 
     public function summary(Request $request)
@@ -155,7 +254,7 @@ class RadiologyRisController extends BaseHospitalController
         $completedOnly = $request->boolean('completed_only');
 
         $query = DiagnosticOrderItem::query()
-            ->with(['order.patient', 'order.visitable', 'order.orderedByUser', 'patientCharge', 'testable'])
+            ->with(['order.patient', 'order.visitable', 'order.orderedByUser', 'order.doctorStaff', 'patientCharge', 'testable'])
             ->where('department', 'radiology')
             ->whereHas('order', fn ($q) => $q->where('hospital_id', $this->hospital_id))
             ->when($completedOnly, fn ($q) => $q->where('status', 'completed'))
@@ -220,12 +319,16 @@ class RadiologyRisController extends BaseHospitalController
         return DataTables::of($query)
             ->addColumn('accession', fn ($row) => e(optional($row->order)->order_no ?? ('RAD-' . $row->id)))
             ->addColumn('patient_name', fn ($row) => e(optional($row->order?->patient)->name ?? '-'))
+            // ->addColumn('patient_age_sex', function ($row) {
+            //     // $p = $row->order?->patient;
+            //     // $age = filled($p?->age) ? (string) $p->age : '-';
+            //     // $g = filled($p?->gender) ? (string) $p->gender : '-';
+
+            //     // return e(trim($age . '/' . $g));
+            // })
             ->addColumn('patient_age_sex', function ($row) {
                 $p = $row->order?->patient;
-                $age = filled($p?->age) ? (string) $p->age : '-';
-                $g = filled($p?->gender) ? (string) $p->gender : '-';
-
-                return e(trim($age . '/' . $g));
+                return e(($p->age_years ?? '-') . ' / ' . ($p->gender ? strtoupper(substr($p->gender, 0, 1)) : '-'));
             })
             ->addColumn('modality', function ($row) {
                 $m = trim((string) ($row->category_name ?? ''));
@@ -249,7 +352,8 @@ class RadiologyRisController extends BaseHospitalController
                     return e($row->reported_at->format('d-m-Y H:i'));
                 }
 
-                return e(optional($row->created_at)?->format('H:i') ?? '-');
+                $slotAt = $row->scheduled_for ?: $row->created_at;
+                return e(optional($slotAt)?->format('d-m-Y H:i') ?? '-');
             })
             ->addColumn('workflow', function ($row) use ($request) {
                 return view('hospital.radiology.ris.partials.worklist-workflow', [
@@ -330,6 +434,11 @@ class RadiologyRisController extends BaseHospitalController
             $maxVal = $def->max_value ?? null;
             $critLow = $def->critical_low ?? null;
             $critHigh = $def->critical_high ?? null;
+            $valueType = strtolower((string) ($def->value_type ?? 'numeric'));
+            if (!in_array($valueType, ['numeric', 'ordinal', 'boolean'], true)) {
+                $valueType = 'numeric';
+            }
+            $flagRules = is_array($def?->flag_rules) ? $def->flag_rules : [];
             $unitName = $def?->unit?->name ?? ($p->unit_name ?? '');
             $rangeText = $p->normal_range ?? '';
             if ($minVal !== null && $maxVal !== null) {
@@ -348,6 +457,8 @@ class RadiologyRisController extends BaseHospitalController
                 'max_value' => $maxVal !== null ? (string) $maxVal : '',
                 'critical_low' => $critLow !== null ? (string) $critLow : '',
                 'critical_high' => $critHigh !== null ? (string) $critHigh : '',
+                'value_type' => $valueType,
+                'flag_rules' => $flagRules,
             ];
         })->all();
 
@@ -365,10 +476,14 @@ class RadiologyRisController extends BaseHospitalController
         return response()->json([
             'id' => (int) $item->id,
             'patient' => (string) ($patient->name ?? '-'),
-            'patient_age_sex' => trim((filled($patient?->age) ? (string) $patient->age : '-') . ' / ' . (filled($patient?->gender) ? (string) $patient->gender : '-')),
+            "patient_age_sex" => function ($row) use ($patient) {
+                $p = $patient;
+                return e(($p->age_years ?? '-') . ' / ' . ($p->gender ? strtoupper(substr($p->gender, 0, 1)) : '-'));
+            },
+            // 'patient_age_sex' => trim((filled($patient?->age) ? (string) $patient->age : '-') . ' / ' . (filled($patient?->gender) ? (string) $patient->gender : '-')),
             'accession' => (string) ($order->order_no ?? ('RAD-' . $item->id)),
             'study' => $testName,
-            'referred_by' => (string) (optional($order?->orderedByUser)->name ?? '-'),
+            'referred_by' => (string) (trim((string) ($order?->doctorStaff?->full_name ?? '')) ?: (optional($order?->orderedByUser)->name ?? '-')),
             'status' => (string) $item->status,
             'status_norm' => $norm,
             'status_label' => $statusLabel,
@@ -389,6 +504,13 @@ class RadiologyRisController extends BaseHospitalController
     {
         abort_if($item->department !== 'radiology', 404);
         abort_if(optional($item->order)->hospital_id != $this->hospital_id, 403);
+
+        if ($item->scheduled_for && $item->scheduled_for->isFuture()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'This study is scheduled for future date/time and cannot be moved yet.',
+            ], 422);
+        }
 
         $current = strtolower(str_replace([' ', '-'], '_', (string) $item->status));
         if ($current === 'in_progress') {
@@ -674,6 +796,10 @@ class RadiologyRisController extends BaseHospitalController
             ->where('department', 'radiology')
             ->whereIn('status', ['examination', 'in_progress'])
             ->whereHas('order', fn ($q) => $q->where('hospital_id', $this->hospital_id))
+            ->where(function ($query) {
+                $query->whereNull('scheduled_for')
+                    ->orWhere('scheduled_for', '<=', now());
+            })
             ->orderByRaw("FIELD(UPPER(TRIM(IFNULL(priority,''))), 'STAT', 'URGENT') DESC")
             ->orderBy('created_at', 'asc')
             ->limit($limit)
@@ -721,12 +847,218 @@ class RadiologyRisController extends BaseHospitalController
                     'name' => (string) $t->test_name,
                     'modality' => (string) $cat,
                     'code' => (string) ($t->test_code ?? ''),
-                    'desc' => trim((string) ($t->method ?? '') . (filled($t->expected_report_days) ? ' · Report in ' . $t->expected_report_days . 'd' : '')),
+                    'desc' => $t->description ? trim((string) $t->description) : null,
                 ];
             })
             ->values();
 
         return response()->json(['data' => $tests]);
+    }
+
+    public function manualOrderTests(Request $request): JsonResponse
+    {
+        $q = trim((string) $request->input('q', ''));
+
+        $tests = RadiologyTest::query()
+            ->with(['category:id,name', 'chargeMaster:id,standard_rate'])
+            ->when($q !== '', function ($query) use ($q) {
+                $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+                $query->where(function ($inner) use ($like) {
+                    $inner->where('test_name', 'like', $like)
+                        ->orWhere('test_code', 'like', $like);
+                });
+            })
+            ->orderBy('test_name')
+            ->limit(300)
+            ->get()
+            ->map(function (RadiologyTest $test) {
+                return [
+                    'id' => (int) $test->id,
+                    'test_name' => (string) $test->test_name,
+                    'test_code' => (string) ($test->test_code ?? ''),
+                    'category_name' => (string) (optional($test->category)->name ?? ''),
+                    'method' => (string) ($test->method ?? ''),
+                    'standard_charge' => (float) $this->resolveManualRadiologyTestCharge($test, null),
+                ];
+            })
+            ->values();
+
+        return response()->json(['data' => $tests]);
+    }
+
+    public function saveManualOrder(Request $request, ChargeLedgerService $chargeLedger, PatientTimelineService $timelineService): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'patient_id' => ['required', 'integer', Rule::exists('patients', 'id')->where('hospital_id', $this->hospital_id)],
+            'radiology_test_id' => ['required', 'integer'],
+            'ward_or_opd' => ['nullable', 'string', 'max:120'],
+            'doctor_staff_id' => ['nullable', 'integer', Rule::exists('staff', 'id')->where('hospital_id', $this->hospital_id)],
+            'modality' => ['nullable', 'string', 'max:120'],
+            'priority' => ['required', Rule::in(['Routine', 'Urgent', 'STAT'])],
+            'contrast_required' => ['nullable', Rule::in(['No', 'IV Contrast', 'Oral Contrast', 'Both'])],
+            'clinical_indication' => ['nullable', 'string', 'max:5000'],
+            'previous_relevant_imaging' => ['nullable', 'string', 'max:1500'],
+            'scheduled_date' => ['required', 'date'],
+            'scheduled_time' => ['required', 'date_format:H:i'],
+            'radiation_consent' => ['nullable', Rule::in(['Obtained', 'Not Required', 'Refused'])],
+            'pregnancy_status' => ['nullable', Rule::in(['N/A', 'Not Pregnant', 'Unknown'])],
+        ]);
+
+        $validator->after(function ($validator) use ($request) {
+            $testId = (int) $request->input('radiology_test_id');
+            if ($testId <= 0) {
+                return;
+            }
+            $testExists = RadiologyTest::query()->whereKey($testId)->exists();
+            if (! $testExists) {
+                $validator->errors()->add('radiology_test_id', 'Selected radiology test is invalid.');
+                return;
+            }
+
+            $test = RadiologyTest::query()->select('id', 'test_name', 'charge_master_id')->find($testId);
+            if ($test && ! $test->charge_master_id) {
+                $validator->errors()->add('radiology_test_id', 'Charge master is not mapped for selected test (' . $test->test_name . ').');
+            }
+
+            $patientId = (int) $request->input('patient_id');
+            if ($patientId > 0) {
+                $duplicate = DiagnosticOrderItem::query()
+                    ->where('department', 'radiology')
+                    ->where('testable_type', RadiologyTest::class)
+                    ->where('testable_id', $testId)
+                    ->whereHas('order', function ($q) use ($patientId) {
+                        $q->where('hospital_id', $this->hospital_id)
+                            ->where('patient_id', $patientId);
+                    })
+                    ->where(function ($q) {
+                        $q->whereNotIn('status', ['completed', 'cancelled'])
+                            ->orWhere(function ($future) {
+                                $future->whereNotNull('scheduled_for')
+                                    ->where('scheduled_for', '>', now());
+                            });
+                    })
+                    ->exists();
+
+                if ($duplicate) {
+                    $validator->errors()->add('radiology_test_id', 'Same radiology test is already pending or booked in future for this patient.');
+                }
+            }
+        });
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => \App\CentralLogics\Helpers::error_processor($validator)], 422);
+        }
+
+        $patient = Patient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereKey((int) $request->input('patient_id'))
+            ->firstOrFail();
+
+        $test = RadiologyTest::query()
+            ->with(['category:id,name', 'parameters.unit:id,name', 'chargeMaster.tpaRates'])
+            ->findOrFail((int) $request->input('radiology_test_id'));
+
+        $scheduledFor = Carbon::parse((string) $request->input('scheduled_date') . ' ' . (string) $request->input('scheduled_time'));
+        $priorityValue = (string) $request->input('priority', 'Routine');
+        $clinicalIndication = trim((string) $request->input('clinical_indication', ''));
+        $doctorStaffId = $request->filled('doctor_staff_id') ? (int) $request->input('doctor_staff_id') : null;
+
+        $encounterContext = $this->resolveManualOrderEncounterContext((int) $patient->id);
+
+        $order = DB::transaction(function () use ($patient, $test, $request, $scheduledFor, $priorityValue, $clinicalIndication, $doctorStaffId, $chargeLedger, $encounterContext) {
+            $order = DiagnosticOrder::create([
+                'hospital_id' => $this->hospital_id,
+                'patient_id' => $patient->id,
+                'visitable_type' => null,
+                'visitable_id' => null,
+                'order_type' => 'radiology',
+                'type' => 'manual',
+            'order_no' => $this->generateManualRadiologyOrderNo((string) $encounterContext['encounter_code']),
+                'ordered_by' => auth()->id(),
+                'doctor_staff_id' => $doctorStaffId,
+                'notes' => $clinicalIndication !== '' ? $clinicalIndication : null,
+                'ward_or_opd' => $request->filled('ward_or_opd') ? (string) $request->input('ward_or_opd') : null,
+                'contrast_required' => $request->filled('contrast_required') ? (string) $request->input('contrast_required') : null,
+                'previous_relevant_imaging' => $request->filled('previous_relevant_imaging') ? (string) $request->input('previous_relevant_imaging') : null,
+                'radiation_consent' => $request->filled('radiation_consent') ? (string) $request->input('radiation_consent') : null,
+                'pregnancy_status' => $request->filled('pregnancy_status') ? (string) $request->input('pregnancy_status') : null,
+                'status' => 'ordered',
+            ]);
+
+            $resolvedCharge = $this->resolveManualRadiologyTestCharge($test, null);
+            $categoryName = trim((string) $request->input('modality', ''));
+            if ($categoryName === '') {
+                $categoryName = (string) (optional($test->category)->name ?? '');
+            }
+
+            $item = $order->items()->create([
+                'department' => 'radiology',
+                'testable_type' => RadiologyTest::class,
+                'testable_id' => $test->id,
+                'test_name' => $test->test_name,
+                'test_code' => $test->test_code,
+                'category_name' => $categoryName,
+                'priority' => $priorityValue,
+                'method' => $test->method,
+                'expected_report_days' => $test->report_days,
+                'scheduled_for' => $scheduledFor,
+                'standard_charge' => $resolvedCharge,
+                'status' => 'ordered',
+                'clinical_indication' => $clinicalIndication !== '' ? SafeReportHtml::sanitize($clinicalIndication) : null,
+            ]);
+
+            $chargeLedger->upsertCharge([
+                'hospital_id' => $this->hospital_id,
+                'patient_id' => $patient->id,
+                'visitable_type' => Patient::class,
+                'visitable_id' => $patient->id,
+                'source_type' => DiagnosticOrderItem::class,
+                'source_id' => $item->id,
+                'module' => 'radiology',
+                'particular' => 'RADIOLOGY - ' . $test->test_name,
+                'charge_master_id' => $test->charge_master_id,
+                'charge_category' => 'radiology',
+                'calculation_type' => 'fixed',
+                'billing_frequency' => 'one_time',
+                'quantity' => 1,
+                'unit_rate' => $resolvedCharge,
+                'net_amount' => $resolvedCharge,
+                'payer_type' => 'self',
+                'tpa_id' => null,
+                'charged_at' => now(),
+            ]);
+
+            foreach ($test->parameters as $index => $parameter) {
+                $item->parameters()->create([
+                    'parameterable_type' => get_class($parameter),
+                    'parameterable_id' => $parameter->id,
+                    'parameter_name' => $parameter->name,
+                    'unit_name' => optional($parameter->unit)->name,
+                    'normal_range' => $parameter->range,
+                    'sort_order' => $index + 1,
+                ]);
+            }
+
+            return $order;
+        });
+
+        $timelineService->log($patient, [
+            'event_key' => 'patient.radiology_walk_in_registered',
+            'title' => 'Direct radiology order registered',
+            'description' => 'Radiology order ' . $order->order_no . ' (' . $test->test_name . ') created.',
+            'meta' => [
+                'order_no' => $order->order_no,
+                'type' => 'manual',
+                'priority' => $priorityValue,
+                'scheduled_for' => $scheduledFor->toDateTimeString(),
+            ],
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Radiology order created successfully: ' . $order->order_no,
+            'order_no' => $order->order_no,
+        ]);
     }
 
     public function schedule(Request $request)
@@ -751,18 +1083,25 @@ class RadiologyRisController extends BaseHospitalController
             ->with(['order.patient'])
             ->where('department', 'radiology')
             ->whereHas('order', fn ($q) => $q->where('hospital_id', $this->hospital_id))
-            ->whereBetween('created_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
-            ->orderBy('created_at')
+            ->where(function ($query) use ($start, $end) {
+                $query->whereBetween('scheduled_for', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
+                    ->orWhere(function ($inner) use ($start, $end) {
+                        $inner->whereNull('scheduled_for')
+                            ->whereBetween('created_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()]);
+                    });
+            })
+            ->orderByRaw('COALESCE(scheduled_for, created_at)')
             ->limit(200)
             ->get();
 
         $cells = [];
         foreach ($items as $item) {
-            if (!$item->created_at) {
+            $slotAt = $item->scheduled_for ?: $item->created_at;
+            if (!$slotAt) {
                 continue;
             }
-            $dayKey = $item->created_at->format('Y-m-d');
-            $hour = (int) $item->created_at->format('G');
+            $dayKey = $slotAt->format('Y-m-d');
+            $hour = (int) $slotAt->format('G');
             $slotIdx = match (true) {
                 $hour < 9 => 0,
                 $hour < 10 => 1,
@@ -925,7 +1264,7 @@ class RadiologyRisController extends BaseHospitalController
                 'modality' => (string) ($item->category_name ?? ''),
                 'study_description' => (string) ($item->test_name ?? ''),
                 'priority' => strtoupper(trim((string) ($item->priority ?? 'ROUTINE'))),
-                'scheduled_at' => optional($item->created_at)?->toIso8601String(),
+                'scheduled_at' => optional($item->scheduled_for ?: $item->created_at)?->toIso8601String(),
                 'patient' => [
                     'id' => (string) ($patient?->patient_id ?? $patient?->mrn ?? ''),
                     'name' => (string) ($patient?->name ?? ''),
@@ -955,6 +1294,11 @@ class RadiologyRisController extends BaseHospitalController
 
     protected function resolveVisitLabel(DiagnosticOrderItem $item): string
     {
+        $manualVisit = trim((string) ($item->order?->ward_or_opd ?? ''));
+        if ($manualVisit !== '') {
+            return $manualVisit;
+        }
+
         $order = $item->order;
         $v = $order?->visitable;
         $type = (string) ($order?->visitable_type ?? '');
@@ -1046,5 +1390,73 @@ class RadiologyRisController extends BaseHospitalController
             ->values();
 
         return $fromCategories->merge($fromOrders)->unique()->sort()->values()->all();
+    }
+
+    protected function generateManualRadiologyOrderNo(string $encounterCode = 'OPD'): string
+    {
+        $code = strtoupper(trim($encounterCode));
+        $prefix = $code === 'IPD' ? 'IPDRAD' : 'RAD';
+        $date = now()->format('Ymd');
+        $sequence = DiagnosticOrder::withoutGlobalScopes()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('order_type', 'radiology')
+            ->where('type', 'manual')
+            ->whereDate('created_at', now()->toDateString())
+            ->where('order_no', 'like', $prefix . '-' . $date . '-%')
+            ->count() + 1;
+
+        return sprintf('%s-%s-%04d', $prefix, $date, $sequence);
+    }
+
+    protected function resolveManualOrderEncounterContext(int $patientId): array
+    {
+        $activeIpd = BedAllocation::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('patient_id', $patientId)
+            ->whereNull('discharge_date')
+            ->latest('admission_date')
+            ->latest('id')
+            ->first();
+
+        if ($activeIpd) {
+            return [
+                'encounter_code' => 'IPD',
+                // 'visitable_type' => BedAllocation::class,
+                // 'visitable_id' => (int) $activeIpd->id,
+            ];
+        }
+
+        $opdVisit = OpdPatient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('patient_id', $patientId)
+            ->where(function ($q) {
+                $q->whereNull('ipd_bed_allocation_id')
+                    ->orWhere('ipd_bed_allocation_id', 0);
+            })
+            ->latest('id')
+            ->first();
+
+        return [
+            'encounter_code' => 'OPD',
+            // 'visitable_type' => $opdVisit ? OpdPatient::class : null,
+            // 'visitable_id' => $opdVisit ? (int) $opdVisit->id : null,
+        ];
+    }
+
+    protected function resolveManualRadiologyTestCharge(object $test, ?int $tpaId = null): float
+    {
+        $chargeMaster = $test->chargeMaster ?? null;
+        if (! $chargeMaster) {
+            return (float) ($test->standard_charge ?? 0);
+        }
+
+        if ($tpaId) {
+            $tpaRate = collect($chargeMaster->tpaRates ?? [])->firstWhere('tpa_id', $tpaId);
+            if ($tpaRate && isset($tpaRate->rate)) {
+                return (float) $tpaRate->rate;
+            }
+        }
+
+        return (float) ($chargeMaster->standard_rate ?? $test->standard_charge ?? 0);
     }
 }

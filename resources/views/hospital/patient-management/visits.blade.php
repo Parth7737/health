@@ -12,7 +12,7 @@
                 ? ($visits->firstWhere('id', $selectedVisitId) ?: $visits->first())
                 : null;
             $visitMode = $visitContext ?? (data_get($latestVisit, 'is_ipd') ? 'ipd' : 'opd');
-            $patientName = $patient->name ?? '-';
+            $patientName = $patient->full_name ?? '-';
             $initials = collect(preg_split('/\s+/', trim((string) $patientName)))
                 ->filter()
                 ->take(2)

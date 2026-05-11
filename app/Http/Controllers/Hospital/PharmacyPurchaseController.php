@@ -42,11 +42,12 @@ class PharmacyPurchaseController extends BaseHospitalController
 
     public function loaddata(Request $request)
     {
-        $data = PharmacyPurchaseBill::with('supplier')->latest('id');
+        $data = PharmacyPurchaseBill::with(['supplier', 'createdBy:id,name'])->withCount('items')->latest('id');
 
         return DataTables::of($data)
             ->editColumn('bill_date', fn ($row) => optional($row->bill_date)->format('d-m-Y'))
             ->addColumn('supplier_name', fn ($row) => $row->supplier?->name ?? $row->supplier_name ?? '—')
+            ->addColumn('created_by_name', fn ($row) => $row->createdBy?->name ?? '—')
             ->addColumn('actions', function ($row) {
                 return view('hospital.pharmacy.purchase.partials.actions', compact('row'))->render();
             })

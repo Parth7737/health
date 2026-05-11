@@ -390,6 +390,146 @@
   line-height: 1.2;
 }
 
+#rad-ris-panel-worklist .worklist-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  background: var(--rad-surface);
+  border: 1px solid var(--rad-border);
+  border-radius: 12px;
+  padding: 14px 16px 16px;
+}
+
+#rad-ris-panel-worklist .worklist-filters .filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#rad-ris-panel-worklist .worklist-filters .filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rad-muted);
+}
+
+#rad-ris-panel-worklist .worklist-filters .filter-group select,
+#rad-ris-panel-worklist .worklist-filters .filter-group input {
+  padding: 7px 10px;
+  border: 1px solid var(--rad-border);
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: #fff;
+  min-width: 120px;
+}
+
+#rad-ris-panel-worklist .worklist-filters .filter-group input:focus,
+#rad-ris-panel-worklist .worklist-filters .filter-group select:focus {
+  border-color: var(--rad-blue);
+}
+
+#rad-ris-panel-worklist .worklist-filters .search-box {
+  flex: 0 0 340px !important;
+  width: 340px !important;
+  min-width: 320px !important;
+  max-width: 340px !important;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+}
+
+#rad-ris-panel-worklist .worklist-filters .search-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 340px;
+}
+
+#rad-ris-panel-worklist .worklist-filters .search-wrap i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--rad-muted);
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+#rad-ris-panel-worklist .worklist-filters .search-wrap input {
+  display: block;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  width: 100% !important;
+  min-width: 340px !important;
+  max-width: 100% !important;
+  min-height: 36px;
+  padding: 7px 12px 7px 32px;
+  border: 1px solid var(--rad-border) !important;
+  border-radius: 7px;
+  background: #fff !important;
+  box-shadow: none !important;
+  color: var(--rad-text);
+}
+
+#rad-ris-worklist-search {
+  width: 340px !important;
+  min-width: 340px !important;
+  max-width: 340px !important;
+  display: block !important;
+  pointer-events: auto !important;
+  color: #0d1b2a !important;
+  -webkit-text-fill-color: #0d1b2a !important;
+  caret-color: #0d1b2a !important;
+  background-color: #ffffff !important;
+  border: 1px solid #ccd8e8 !important;
+  border-radius: 7px !important;
+  opacity: 1 !important;
+}
+
+#rad-ris-worklist-search::placeholder {
+  color: #8aa4bc !important;
+  -webkit-text-fill-color: #8aa4bc !important;
+  opacity: 1 !important;
+}
+
+#rad-ris-worklist-search:focus {
+  color: #0d1b2a !important;
+  -webkit-text-fill-color: #0d1b2a !important;
+  border-color: #1565c0 !important;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.08) !important;
+}
+
+#rad-ris-panel-worklist .worklist-filters .search-wrap input:focus {
+  border-color: var(--rad-blue) !important;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.08) !important;
+}
+
+#rad-ris-panel-worklist .worklist-filters .filter-actions {
+  min-width: max-content;
+  /* align-self: flex-end; */
+}
+
+#rad-ris-panel-worklist .worklist-filters .invisible-label {
+  visibility: hidden;
+}
+
+#rad-ris-panel-worklist .worklist-filters .filter-actions .rad-ris-btn {
+  white-space: nowrap;
+}
+
+#rad-ris-panel-worklist .worklist-filters .select2-container {
+  min-width: 120px !important;
+}
+
+#rad-ris-panel-worklist .worklist-filters .search-box .select2-container {
+  width: 100% !important;
+}
+
 .rad-ris-filter-group select,
 .rad-ris-filter-group input[type='text'],
 .rad-ris-filter-group input[type='search'] {
@@ -988,6 +1128,53 @@
   outline: none;
 }
 
+.rad-ris-patient-search-dropdown {
+  position: absolute;
+  width: min(520px, calc(100% - 48px));
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--rad-border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+  z-index: 2200;
+}
+
+.rad-ris-patient-search-item {
+  display: block;
+  padding: 8px 12px;
+  text-decoration: none;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.rad-ris-patient-search-item:last-child {
+  border-bottom: 0;
+}
+
+.rad-ris-patient-search-item:hover {
+  background: #f5f9ff;
+}
+
+.rad-ris-patient-chip {
+  margin-top: 8px;
+  border: 1px solid var(--rad-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fbff;
+}
+
+.rad-ris-patient-chip .name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.rad-ris-patient-chip .meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--rad-muted);
+}
+
 .rad-ris-modal-footer {
   padding: 16px 24px;
   border-top: 1px solid var(--rad-border);
@@ -1031,6 +1218,142 @@
 .rad-ris-toast.warning {
   border-color: #e65100;
   color: #e65100;
+}
+
+/* Completed tab filters aligned with worklist filter design */
+#rad-ris-panel-completed .worklist-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  background: var(--rad-surface);
+  border: 1px solid var(--rad-border);
+  border-radius: 12px;
+  padding: 14px 16px 16px;
+}
+
+#rad-ris-panel-completed .worklist-filters .filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#rad-ris-panel-completed .worklist-filters .filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rad-muted);
+}
+
+#rad-ris-panel-completed .worklist-filters .filter-group select,
+#rad-ris-panel-completed .worklist-filters .filter-group input {
+  padding: 7px 10px;
+  border: 1px solid var(--rad-border);
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: #fff;
+  min-width: 120px;
+}
+
+#rad-ris-panel-completed .worklist-filters .filter-group input:focus,
+#rad-ris-panel-completed .worklist-filters .filter-group select:focus {
+  border-color: var(--rad-blue);
+}
+
+#rad-ris-panel-completed .worklist-filters .search-box {
+  flex: 0 0 340px !important;
+  width: 340px !important;
+  min-width: 320px !important;
+  max-width: 340px !important;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+}
+
+#rad-ris-panel-completed .worklist-filters .search-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 340px;
+}
+
+#rad-ris-panel-completed .worklist-filters .search-wrap i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--rad-muted);
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+#rad-ris-panel-completed .worklist-filters .search-wrap input {
+  display: block;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  width: 100% !important;
+  min-width: 340px !important;
+  max-width: 100% !important;
+  min-height: 36px;
+  padding: 7px 12px 7px 32px;
+  border: 1px solid var(--rad-border) !important;
+  border-radius: 7px;
+  background: #fff !important;
+  box-shadow: none !important;
+  color: var(--rad-text);
+}
+
+#rad-ris-panel-completed .worklist-filters .search-wrap input:focus {
+  border-color: var(--rad-blue) !important;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.08) !important;
+}
+
+#rad-ris-completed-search {
+  width: 340px !important;
+  min-width: 340px !important;
+  max-width: 340px !important;
+  display: block !important;
+  pointer-events: auto !important;
+  color: #0d1b2a !important;
+  -webkit-text-fill-color: #0d1b2a !important;
+  caret-color: #0d1b2a !important;
+  background-color: #ffffff !important;
+  border: 1px solid #ccd8e8 !important;
+  border-radius: 7px !important;
+  opacity: 1 !important;
+}
+
+#rad-ris-completed-search::placeholder {
+  color: #8aa4bc !important;
+  -webkit-text-fill-color: #8aa4bc !important;
+  opacity: 1 !important;
+}
+
+#rad-ris-completed-search:focus {
+  color: #0d1b2a !important;
+  -webkit-text-fill-color: #0d1b2a !important;
+  border-color: #1565c0 !important;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.08) !important;
+}
+
+#rad-ris-panel-completed .worklist-filters .filter-actions {
+  min-width: max-content;
+}
+
+#rad-ris-panel-completed .worklist-filters .invisible-label {
+  visibility: hidden;
+}
+
+#rad-ris-panel-completed .worklist-filters .filter-actions .rad-ris-btn {
+  white-space: nowrap;
+}
+
+#rad-ris-panel-completed .worklist-filters .select2-container {
+  min-width: 120px !important;
 }
 
 @keyframes radRisSlideIn {

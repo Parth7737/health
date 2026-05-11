@@ -104,6 +104,11 @@ class Staff extends Model
         return $this->hasMany(Staff::class, 'linemanager_id');
     }
 
+    public function payrollRecords()
+    {
+        return $this->hasMany(HrPayrollRecord::class, 'staff_id');
+    }
+
     /**
      * Get the full name of the staff member
      */

@@ -18,13 +18,6 @@ class HospitalPermissionsSeeder extends Seeder
             //visitor
             'Visitors' => 'visitor',
 
-            // OPD
-            'OPD Patient' => 'opd-patient',
-            'Diagnosis' => 'diagnosis',
-
-            //IPD Patient
-            'IPD Patient' => 'ipd-patient',
-
             // Billing & Finance
             'Billing & Finance' => 'billing-and-finance',
 
@@ -32,11 +25,11 @@ class HospitalPermissionsSeeder extends Seeder
             'Patient Management' => 'patient-management',
 
             // Front Office
-            'Appointments' => 'appointments',
-            'Visitor Purpose' => 'visitor-purposes',
-            'Complain Type' => 'complain-types',
-            'Complain Source' => 'complain-sources',
-            'Appointment Priority' => 'appointment-priorities',
+            // 'Appointments' => 'appointments',
+            // 'Visitor Purpose' => 'visitor-purposes',
+            // 'Complain Type' => 'complain-types',
+            // 'Complain Source' => 'complain-sources',
+            // 'Appointment Priority' => 'appointment-priorities',
             
             //hospital charges
             'Charge Masters' => 'charge-masters',

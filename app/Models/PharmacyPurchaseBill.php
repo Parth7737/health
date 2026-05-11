@@ -42,4 +42,9 @@ class PharmacyPurchaseBill extends Model
     {
         return $this->belongsTo(PharmacySupplier::class, 'supplier_id');
     }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

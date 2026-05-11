@@ -23,4 +23,9 @@ class HrDepartment extends Model
     {
         return $this->belongsTo(Hospital::class);
     }
+
+    public function staff()
+    {
+        return $this->hasMany(Staff::class, 'hr_department_id');
+    }
 }

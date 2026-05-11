@@ -44,8 +44,8 @@ class IpdPatientController extends BaseHospitalController
     {
         parent::__construct();
 
-        $this->middleware('permission:create-ipd-patient', ['only' => ['store']]);
-        $this->middleware('permission:edit-ipd-patient', ['only' => ['transfer', 'discharge']]);
+        $this->middleware('permission:create-patient-management', ['only' => ['store']]);
+        $this->middleware('permission:edit-patient-management', ['only' => ['transfer', 'discharge']]);
 
         $this->routes = [
             'loadtable' => route('hospital.ipd-patient.load'),
@@ -117,7 +117,7 @@ class IpdPatientController extends BaseHospitalController
             ->where('bed_allocations.hospital_id', $this->hospital_id)
             ->select(
                 'bed_allocations.*',
-                'patients.name as patient_name',
+                DB::raw("TRIM(CONCAT(CASE WHEN COALESCE(patients.title,'') = '' THEN '' ELSE CONCAT(patients.title, ' ') END, COALESCE(patients.name,''))) as patient_name"),
                 'patients.patient_id as patient_code',
                 'patients.phone as patient_phone',
                 'patients.age_years',
@@ -850,11 +850,12 @@ class IpdPatientController extends BaseHospitalController
             'order_type' => 'required|in:pathology,radiology',
             'test_ids' => 'required|array|min:1',
             'test_ids.*' => 'required|integer',
-            'priority' => 'required|in:Routine,Urgent,STAT',
+            'priority' => 'nullable|in:Routine,Urgent,STAT',
             'notes' => 'nullable|string',
+            'scheduled_for' => 'nullable|date',
         ]);
 
-        $validator->after(function ($validator) use ($request, $orderType) {
+        $validator->after(function ($validator) use ($request, $orderType, $allocation) {
             $testIds = collect($request->test_ids ?? [])->filter()->map(fn ($id) => (int) $id)->unique()->values();
             if ($testIds->isEmpty()) {
                 $validator->errors()->add('test_ids', 'Please select at least one test.');
@@ -875,10 +876,47 @@ class IpdPatientController extends BaseHospitalController
             if (!empty($missingChargeMasterTests)) {
                 $validator->errors()->add('test_ids', 'Charge master not mapped for: ' . implode(', ', $missingChargeMasterTests));
             }
+
+            if ($orderType === 'pathology' && !in_array((string) $request->input('priority', ''), ['Routine', 'Urgent', 'STAT'], true)) {
+                $validator->errors()->add('priority', 'Please select a valid priority.');
+            }
+
+            $testableType = $orderType === 'pathology' ? PathologyTest::class : RadiologyTest::class;
+            $duplicateTestNames = DiagnosticOrderItem::query()
+                ->where('department', $orderType)
+                ->where('testable_type', $testableType)
+                ->whereIn('testable_id', $testIds)
+                ->whereHas('order', function ($q) use ($allocation) {
+                    $q->where('hospital_id', $this->hospital_id)
+                        ->where('patient_id', (int) $allocation->patient_id);
+                })
+                ->where(function ($q) {
+                    $q->whereNotIn('status', ['completed', 'cancelled'])
+                        ->orWhere(function ($future) {
+                            $future->whereNotNull('scheduled_for')
+                                ->where('scheduled_for', '>', now());
+                        });
+                })
+                ->pluck('test_name')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            if (!empty($duplicateTestNames)) {
+                $validator->errors()->add('test_ids', 'Already pending/future booked for this patient: ' . implode(', ', $duplicateTestNames));
+            }
         });
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        $scheduledFor = null;
+        if ($orderType === 'radiology') {
+            $scheduledFor = $request->filled('scheduled_for')
+                ? Carbon::parse((string) $request->input('scheduled_for'))
+                : now();
         }
 
         $testIds = collect($request->test_ids)->map(fn ($id) => (int) $id)->unique()->values();
@@ -886,7 +924,7 @@ class IpdPatientController extends BaseHospitalController
             ? PathologyTest::with(['category:id,name', 'parameters.unit:id,name', 'chargeMaster.tpaRates'])->whereIn('id', $testIds)->get()
             : RadiologyTest::with(['category:id,name', 'parameters.unit:id,name', 'chargeMaster.tpaRates'])->whereIn('id', $testIds)->get();
 
-        $order = DB::transaction(function () use ($allocation, $request, $orderType, $tests, $chargeLedger, $priorityValue) {
+        $order = DB::transaction(function () use ($allocation, $request, $orderType, $tests, $chargeLedger, $priorityValue, $scheduledFor) {
             $order = DiagnosticOrder::create([
                 'hospital_id' => $this->hospital_id,
                 'patient_id' => $allocation->patient_id,
@@ -913,6 +951,7 @@ class IpdPatientController extends BaseHospitalController
                     'sample_type' => $test->sample_type ?? null,
                     'method' => $test->method,
                     'expected_report_days' => $test->report_days,
+                    'scheduled_for' => $scheduledFor,
                     'standard_charge' => $resolvedCharge,
                     'status' => 'ordered',
                 ]);
@@ -962,6 +1001,7 @@ class IpdPatientController extends BaseHospitalController
                 'order_no' => $order->order_no,
                 'priority' => $priorityValue,
                 'test_count' => $tests->count(),
+                'scheduled_for' => optional($scheduledFor)->toDateTimeString(),
             ],
         ]);
 

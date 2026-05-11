@@ -3,10 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Patient extends Model
 {
+    protected $appends = [
+        'full_name',
+    ];
+
     protected $fillable = [
         'hospital_id',
         'patient_id',
@@ -70,8 +75,55 @@ class Patient extends Model
         return $this->hasMany(DiagnosticOrder::class);
     }
 
+    public function patientCategory(): BelongsTo
+    {
+        return $this->belongsTo(PatientCategory::class, 'patient_category_id');
+    }
+
+    public function religion(): BelongsTo
+    {
+        return $this->belongsTo(Religion::class, 'religion_id');
+    }
+
     public function timelines(): HasMany
     {
         return $this->hasMany(PatientTimeline::class);
+    }
+
+    public function getNameAttribute($value): string
+    {
+        return $this->formatNameWithTitle($value, $this->attributes['title'] ?? '', '');
+    }
+
+    public function getFullNameAttribute(): string
+    {
+        return $this->formatNameWithTitle($this->attributes['name'] ?? '', $this->attributes['title'] ?? '', '-');
+    }
+
+    private function formatNameWithTitle($nameValue, $titleValue, string $fallback = ''): string
+    {
+        $name = trim((string) ($nameValue ?? ''));
+        $title = trim((string) ($titleValue ?? ''));
+
+        if ($name === '' && $title === '') {
+            return $fallback;
+        }
+
+        if ($title === '') {
+            return $name;
+        }
+
+        if ($name === '') {
+            return $title;
+        }
+
+        $lowerName = strtolower($name);
+        $lowerTitle = strtolower($title);
+
+        if ($lowerName === $lowerTitle || str_starts_with($lowerName, $lowerTitle . ' ')) {
+            return $name;
+        }
+
+        return trim($title . ' ' . $name);
     }
 }

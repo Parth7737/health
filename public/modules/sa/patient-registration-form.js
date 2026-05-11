@@ -220,7 +220,20 @@
       this.initFlatpickr();
       this.resetWizardState();
       this.syncVisibleSelect2();
+      this.applyTabIndexOrder();
       this.updateVisitType(this.getVisitType(), { syncSlots: false });
+      this.focusRegistrationName();
+    }
+
+    focusRegistrationName() {
+      const nameField = document.getElementById('reg_name');
+      if (!nameField) {
+        return;
+      }
+
+      window.setTimeout(() => {
+        nameField.focus();
+      }, 40);
     }
 
     initFlatpickr() {
@@ -349,6 +362,7 @@
       this.elements.nextBtn.style.display = stepNumber < STEP_ORDER.length ? '' : 'none';
       this.elements.submitBtn.style.display = stepNumber === STEP_ORDER.length ? '' : 'none';
       this.syncVisibleSelect2();
+      this.applyTabIndexOrder();
       if (stepNumber === STEP_ORDER.length) {
         this.prepareStepFivePreview();
       }
@@ -499,6 +513,74 @@
       return el && el.selectedIndex >= 0 ? el.options[el.selectedIndex].text : '';
     }
 
+    selectedMeaningfulText(selectId) {
+      const text = String(this.selectedText(selectId) || '').trim();
+      if (!text) return null;
+      const normalized = text.toLowerCase();
+      if (normalized === 'select state' || normalized === 'select district' || normalized === 'select nationality') {
+        return null;
+      }
+      return text;
+    }
+
+    applyTabIndexOrder() {
+      if (!this.elements.form) {
+        return;
+      }
+
+      const activePane = this.elements.form.querySelector('[id^="regPane"]:not([style*="display:none"])');
+      const paneControls = Array.from(activePane?.querySelectorAll('input, select, textarea, button') || []);
+      const footerControls = Array.from(this.elements.form.querySelectorAll('.modal-footer button'));
+      const controls = Array.from(new Set([...paneControls, ...footerControls]))
+        .filter((node) => this.isTabbableControl(node));
+
+      let index = 1;
+      controls.forEach((node) => {
+        if (node.tagName === 'SELECT' && node.classList.contains('select2-hidden-accessible')) {
+          node.dataset.regTabindex = String(index);
+          node.setAttribute('tabindex', '-1');
+        } else {
+          node.setAttribute('tabindex', String(index));
+        }
+        if (node.tagName === 'SELECT') {
+          node.dataset.regTabindex = String(index);
+        }
+        index += 1;
+      });
+
+      this.syncSelect2TabOrder();
+    }
+
+    isTabbableControl(node) {
+      if (!node || node.disabled) return false;
+      if (node.type === 'hidden') return false;
+      if (!this.isVisibleElement(node)) return false;
+      return true;
+    }
+
+    isVisibleElement(node) {
+      if (!node || !(node instanceof HTMLElement)) return false;
+      return !!(node.offsetParent || node.getClientRects().length);
+    }
+
+    syncSelect2TabOrder() {
+      if (!(window.jQuery && jQuery.fn && jQuery.fn.select2)) {
+        return;
+      }
+
+      this.elements.form?.querySelectorAll('select[id]').forEach((selectNode) => {
+        const tabIndex = selectNode.dataset.regTabindex || selectNode.getAttribute('tabindex');
+        if (!tabIndex) {
+          return;
+        }
+
+        const select2Selection = selectNode.nextElementSibling?.querySelector('.select2-selection');
+        if (select2Selection) {
+          select2Selection.setAttribute('tabindex', String(tabIndex));
+        }
+      });
+    }
+
     select2Selectors() {
       return Array.from(this.elements.form?.querySelectorAll('select[id]') || []).map((el) => `#${el.id}`);
     }
@@ -518,6 +600,8 @@
         }
         $field.select2({ width: '100%', dropdownParent: jQuery('#newPatientModal .modal') });
       });
+
+      this.syncSelect2TabOrder();
     }
 
     syncVisibleSelect2() {
@@ -883,9 +967,9 @@
         email: document.getElementById('reg_email')?.value || null,
         address: document.getElementById('reg_address')?.value || null,
         pin_code: document.getElementById('reg_pin')?.value || null,
-        district: this.selectedText('reg_district') || null,
-        state: this.selectedText('reg_state') || null,
-        nationality: this.selectedText('reg_nationality') || null,
+        district: this.selectedMeaningfulText('reg_district'),
+        state: this.selectedMeaningfulText('reg_state'),
+        nationality: this.selectedMeaningfulText('reg_nationality'),
         emergency_contact_name: document.getElementById('reg_emergency_name')?.value || null,
         emergency_contact_relation: document.getElementById('reg_emergency_relation')?.value || null,
         emergency_contact_phone: document.getElementById('reg_emergency_phone')?.value || null,

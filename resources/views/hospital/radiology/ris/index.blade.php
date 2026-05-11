@@ -25,7 +25,7 @@
             </span>
             <button type="button" class="rad-ris-btn rad-ris-btn-primary rad-ris-btn-sm" id="rad-ris-toolbar-new-order"><i class="fa-solid fa-plus"></i> New order</button>
             <button type="button" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm" id="rad-ris-toolbar-refresh"><i class="fa-solid fa-rotate"></i> Refresh</button>
-            <a href="{{ route('hospital.radiology.worklist.index') }}" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm">Classic worklist</a>
+            <!-- <a href="{{ route('hospital.radiology.worklist.index') }}" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm">Classic worklist</a> -->
         </div>
     </div>
 
@@ -81,27 +81,6 @@
     @include('hospital.radiology.ris.tabs.protocols')
     @include('hospital.radiology.ris.tabs.completed')
     @include('hospital.radiology.ris.tabs.analytics')
-</div>
-
-<div class="rad-ris-modal-overlay" id="rad-ris-order-modal" aria-hidden="true">
-    <div class="rad-ris-modal" role="dialog" aria-labelledby="rad-ris-order-modal-title">
-        <div class="rad-ris-modal-header">
-            <h2 id="rad-ris-order-modal-title"><i class="fa-solid fa-plus-circle" style="color:#1565c0;margin-right:8px"></i> New radiology order</h2>
-            <button type="button" class="rad-ris-modal-close rad-ris-close-modal" data-target="rad-ris-order-modal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <div class="rad-ris-modal-body">
-            <p class="rad-ris-text-muted rad-ris-text-sm">Radiology orders are created from <strong>OPD / IPD</strong> patient visits (diagnostics). Use the clinical workspace to place imaging requests; they will appear on this worklist automatically.</p>
-            <div class="rad-ris-form-grid mt-3">
-                <div class="rad-ris-form-group full">
-                    <label>Quick link</label>
-                    <a href="{{ route('hospital.opd-patient.index') }}" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm w-100 justify-content-center">OPD patients</a>
-                </div>
-            </div>
-        </div>
-        <div class="rad-ris-modal-footer">
-            <button type="button" class="rad-ris-btn rad-ris-btn-outline rad-ris-close-modal" data-target="rad-ris-order-modal">Close</button>
-        </div>
-    </div>
 </div>
 
 <div class="rad-ris-modal-overlay" id="rad-ris-schedule-modal" aria-hidden="true">

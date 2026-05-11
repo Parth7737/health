@@ -66,7 +66,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('ipd-admissions', 'PatientManagementController@ipdAdmissions')->name('ipd-admissions');
         Route::get('search-patients', 'PatientManagementController@searchPatients')->name('search-patients');
         Route::get('patient-360', 'PatientManagementController@patient360')->name('patient-360');
-        Route::get('patient-details', 'PatientManagementController@patientDetails')->name('patient-details');
+        Route::get('patient-details/{patient}', 'PatientManagementController@patientDetails')->name('patient-details');
         Route::get('load-doctors', 'PatientManagementController@loadDoctors')->name('load-doctors');
         Route::get('load-doctor-slots', 'PatientManagementController@loadDoctorSlots')->name('load-doctor-slots');
         Route::get('available-beds', 'PatientManagementController@availableBeds')->name('available-beds');
@@ -94,14 +94,14 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
     });
 
     //OPD Patient
-    Route::group(['middleware' => ['permission:view-opd-patient'],'prefix' => 'opd-patient', 'as' => 'opd-patient.'], function () {
+    Route::group(['middleware' => ['permission:view-patient-management'],'prefix' => 'opd-patient', 'as' => 'opd-patient.'], function () {
         Route::resource('/', 'OpdPatientController');
         Route::post('{opd_patient}/delete', 'OpdPatientController@destroy')->name('destroy-post');
         Route::post('load-opd-patients', 'OpdPatientController@loaddata')->name('opd-patient-load');  
         Route::post('show-opd-patient-form', 'OpdPatientController@showform')->name('showform');
         Route::post('{opdPatient}/update-status', 'OpdPatientController@updateStatus')->name('update-status');
         Route::post('{opdPatient}/vitals-social', 'OpdPatientController@updateVitalsSocial')
-            ->middleware('permission:edit-opd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('vitals-social.update');
         Route::get('health-card/{patient}', 'OpdPatientController@healthCard')->name('health-card');
         Route::get('visits/{patient}', 'OpdPatientController@visits')->name('visits');
@@ -113,13 +113,13 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('token-display', 'OpdPatientController@tokenDisplay')->name('token-display');
         Route::get('queue-status', 'OpdPatientController@queueStatus')->name('queue-status');
         Route::post('queue-call-next', 'OpdPatientController@callNextToken')
-            ->middleware('permission:edit-opd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('queue-call-next');
         Route::post('{opdPatient}/queue-skip', 'OpdPatientController@skipWaitingPatient')
-            ->middleware('permission:edit-opd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('queue-skip');
         Route::post('{opdPatient}/queue-undo-skip', 'OpdPatientController@undoSkipWaitingPatient')
-            ->middleware('permission:edit-opd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('queue-undo-skip');
         Route::get('{opdPatient}/visit-summary/view', 'OpdPatientController@viewVisitSummary')->name('visit-summary.view');
         Route::get('{opdPatient}/doctor-care/unified', 'OpdPatientController@doctorCareUnified')->name('doctor-care.unified');
@@ -140,7 +140,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::post('{patient}/charges/show-refund-form', 'PatientChargeController@showRefundForm')->name('charges.show-refund-form');
         Route::post('{patient}/charges/refund-advance', 'PatientChargeController@refundAdvance')->name('charges.refund-advance');
         Route::delete('{patient}/charges/payments/{payment}', 'PatientChargeController@destroyPayment')
-            ->middleware('permission:delete-opd-payment')
+            ->middleware('permission:delete-patient-management')
             ->name('charges.payments.destroy');
         Route::get('{patient}/charges/{opdPatient}/visit-bill/print', 'PatientChargeController@printVisitBill')->name('charges.visit-bill.print');
         Route::get('{patient}/charges/final-bill/print', 'PatientChargeController@printFinalBill')->name('charges.final-bill.print');
@@ -154,50 +154,50 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
     });
     
     //IPD Patient
-    Route::group(['middleware' => ['permission:view-ipd-patient'],'prefix' => 'ipd-patient', 'as' => 'ipd-patient.'], function () {
+    Route::group(['middleware' => ['permission:view-patient-management'],'prefix' => 'ipd-patient', 'as' => 'ipd-patient.'], function () {
         Route::resource('/', 'IpdPatientController');
         Route::post('load-ipd-patients', 'IpdPatientController@loaddata')->name('load');
         Route::post('show-ipd-patient-form', 'IpdPatientController@showform')->name('showform');
         Route::get('{allocation}/profile', 'IpdPatientController@profile')->name('profile');
         Route::post('{allocation}/show-transfer-form', 'IpdPatientController@showTransferForm')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('transfer.showform');
         Route::post('{allocation}/transfer', 'IpdPatientController@transfer')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('transfer');
         Route::post('{allocation}/show-discharge-form', 'IpdPatientController@showDischargeForm')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('discharge.showform');
         Route::post('{allocation}/discharge', 'IpdPatientController@discharge')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('discharge');
         Route::post('{allocation}/notes', 'IpdPatientController@storeNote')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('notes.store');
         Route::post('{allocation}/clinical-snapshot', 'IpdPatientController@updateClinicalSnapshot')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('clinical.update');
         Route::post('{allocation}/charges/show-add-form', 'IpdPatientController@showAddChargeForm')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('charges.show-add-form');
         Route::post('{allocation}/charges/store', 'IpdPatientController@storeAdditionalCharge')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('charges.store');
         Route::get('{allocation}/doctor-care/unified', 'IpdPatientController@doctorCareUnified')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('doctor-care.unified');
         Route::get('{allocation}/prescription/form', 'IpdPrescriptionController@form')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('prescription.form');
         Route::get('{allocation}/prescription/{prescription}/edit', 'IpdPrescriptionController@editForm')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('prescription.edit-form');
         Route::post('{allocation}/prescription', 'IpdPrescriptionController@store')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('prescription.store');
         Route::get('{allocation}/prescription/{prescription}/view', 'IpdPrescriptionController@view')->name('prescription.view');
         Route::delete('{allocation}/prescription/{prescription}', 'IpdPrescriptionController@destroy')
-            ->middleware('permission:edit-ipd-patient')
+            ->middleware('permission:edit-patient-management')
             ->name('prescription.destroy');
         Route::get('{allocation}/prescription/{prescription}/print', 'IpdPrescriptionController@print')->name('prescription.print');
         Route::post('prescription/load-dosages', 'IpdPrescriptionController@loadDosages')->name('prescription.load-dosages');
@@ -245,6 +245,10 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('ris/pending-queue', 'RadiologyRisController@pendingQueue')->name('ris.pending-queue');
         Route::get('ris/protocols', 'RadiologyRisController@protocols')->name('ris.protocols');
         Route::get('ris/schedule', 'RadiologyRisController@schedule')->name('ris.schedule');
+        Route::post('ris/manual-order-create', 'RadiologyRisController@createManualOrder')->name('ris.manual-order-create');
+        Route::get('ris/manual-order-tests', 'RadiologyRisController@manualOrderTests')->name('ris.manual-order-tests');
+        Route::get('ris/previous-imaging-options', 'RadiologyRisController@previousImagingOptions')->name('ris.previous-imaging-options');
+        Route::post('ris/manual-order-save', 'RadiologyRisController@saveManualOrder')->name('ris.manual-order-save');
         Route::get('worklist', 'DiagnosticWorklistController@radiologyIndex')->name('worklist.index');
         Route::post('worklist/load', 'DiagnosticWorklistController@loadRadiology')->name('worklist.load');
         Route::post('worklist/show-form/{item}', 'DiagnosticWorklistController@showRadiologyForm')->name('worklist.showform');
@@ -259,6 +263,8 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
 
     // Pharmacy Module
     Route::group(['prefix' => 'pharmacy', 'as' => 'pharmacy.'], function () {
+        
+        Route::get('/', 'PharmacyDashboardController@index')->name('index');
         // Pharmacy Purchase
         Route::middleware(['permission:view-pharmacy-purchase'])->group(function () {
             Route::resource('purchase', 'PharmacyPurchaseController')->only(['index', 'store']);
@@ -270,6 +276,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
 
         // Pharmacy Sale
         Route::middleware(['permission:view-pharmacy-sale'])->group(function () {
+            Route::post('dispense-queue/load', 'PharmacyDashboardController@loadDispenseQueue')->name('dispense-queue-load');
             Route::resource('sale', 'PharmacySaleController')->only(['index', 'store']);
             Route::post('sale/load', 'PharmacySaleController@loaddata')->name('sale-load');
             Route::post('sale/show-form', 'PharmacySaleController@showform')->name('sale.showform');
@@ -281,6 +288,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         // Pharmacy Stock
         Route::middleware(['permission:view-pharmacy-stock'])->group(function () {
             Route::get('stock', 'PharmacyStockController@index')->name('stock.index');
+            Route::get('stock/export', 'PharmacyStockController@export')->name('stock-export');
             Route::post('stock/load', 'PharmacyStockController@loaddata')->name('stock-load');
             Route::post('stock/show-bad-stock-form', 'PharmacyStockController@showBadStockForm')->name('stock.show-bad-stock-form');
             Route::post('stock/adjust-bad-stock', 'PharmacyStockController@adjustBadStock')
@@ -319,11 +327,66 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
 
     //HR
     Route::group(['prefix' => 'hr', 'as' => 'hr.'], function () {
+        Route::middleware(['permission:view-staff'])->group(function () {
+            Route::get('dashboard', 'HrDashboardController@index')->name('dashboard.index');
+            Route::get('dashboard/tab/{tab}', 'HrDashboardController@tab')->name('dashboard.tab');
+            Route::get('dashboard/directory-load', 'HrDashboardController@directoryLoad')->name('dashboard.directory-load');
+            Route::get('dashboard/directory-list-data', 'HrDashboardController@directoryListData')->name('dashboard.directory-list-data');
+            Route::get('dashboard/payroll-list-data', 'HrDashboardController@payrollListData')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-list-data');
+            Route::get('dashboard/payroll-payslip-card', 'HrDashboardController@payrollPayslipCard')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-payslip-card');
+            Route::get('dashboard/payroll-payslip-pdf/{record}', 'HrDashboardController@payrollPayslipPdf')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-payslip-pdf');
+            Route::post('dashboard/payroll-mark-paid/{record}', 'HrDashboardController@markPayrollPaid')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-mark-paid');
+            Route::get('dashboard/payroll-export-csv', 'HrDashboardController@payrollExportCsv')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-export-csv');
+            Route::post('dashboard/payroll-send-slip', 'HrDashboardController@sendPayrollSlip')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-send-slip');
+            Route::post('dashboard/payroll-send-selected', 'HrDashboardController@sendPayrollSelected')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-send-selected');
+            Route::post('dashboard/payroll-send-bulk', 'HrDashboardController@sendPayrollBulk')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-send-bulk');
+            Route::post('dashboard/payroll-mark-paid-bulk', 'HrDashboardController@markPayrollPaidBulk')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.payroll-mark-paid-bulk');
+            Route::post('dashboard/process-payroll', 'HrDashboardController@processPayroll')
+                ->middleware('permission:view-payroll|view-staff')
+                ->name('dashboard.process-payroll');
+            Route::get('dashboard/attendance-register-data', 'HrDashboardController@attendanceRegisterData')
+                ->middleware('permission:view-attendance|view-staff')
+                ->name('dashboard.attendance-register-data');
+            Route::get('dashboard/attendance-daily-data', 'HrDashboardController@attendanceDailyData')
+                ->middleware('permission:view-attendance|view-staff')
+                ->name('dashboard.attendance-daily-data');
+            Route::get('dashboard/attendance-export', 'HrDashboardController@attendanceExport')
+                ->middleware('permission:view-attendance|view-staff')
+                ->name('dashboard.attendance-export');
+            Route::post('dashboard/show-modal', 'HrDashboardController@showModal')->name('dashboard.show-modal');
+            Route::post('dashboard/store-staff', 'HrDashboardController@storeStaff')->name('dashboard.store-staff')
+                ->middleware('permission:create-staff');
+            Route::post('dashboard/store-attendance', 'HrDashboardController@storeAttendance')
+                ->middleware('permission:create-attendance|edit-attendance|create-staff|edit-staff')
+                ->name('dashboard.store-attendance');
+            Route::post('dashboard/store-leave', 'HrDashboardController@storeLeave')->name('dashboard.store-leave');
+            Route::post('dashboard/update-leave-status', 'HrDashboardController@updateLeaveStatus')->name('dashboard.update-leave-status');
+        });
+
         // Staff
         Route::middleware(['permission:view-staff'])->group(function () {
             Route::resource('staff', 'StaffController');
             Route::post('load-staff', 'StaffController@loaddata')->name('staff-load');  
             Route::post('show-staff-form', 'StaffController@showform')->name('staff.showform');
+            Route::get('staff/{staff}/view', 'StaffController@view')->name('staff.view');
         });
     });
 
@@ -617,6 +680,14 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
                 Route::resource('specialist', 'HrSpecialistController');
                 Route::post('load-specialist', 'HrSpecialistController@loaddata')->name('specialist-load');
                 Route::post('show-specialist-form', 'HrSpecialistController@showform')->name('specialist.showform');
+            });
+
+            // Payroll Settings
+            Route::middleware(['permission:view-staff'])->group(function () {
+                Route::get('payroll-settings', 'HrPayrollSettingController@index')->name('payroll-settings.index');
+                Route::post('payroll-settings/component', 'HrPayrollSettingController@storeComponent')->name('payroll-settings.component.store');
+                Route::delete('payroll-settings/component/{component}', 'HrPayrollSettingController@destroyComponent')->name('payroll-settings.component.destroy');
+                Route::post('payroll-settings/general', 'HrPayrollSettingController@saveGeneralSettings')->name('payroll-settings.general.save');
             });
         });
 

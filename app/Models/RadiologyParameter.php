@@ -10,10 +10,19 @@ class RadiologyParameter extends Model
     protected $guarded = [];
 
     protected $casts = [
+        'flag_rules' => 'array',
         'min_value' => 'decimal:4',
         'max_value' => 'decimal:4',
         'critical_low' => 'decimal:4',
         'critical_high' => 'decimal:4',
+        'min_value_male' => 'decimal:4',
+        'max_value_male' => 'decimal:4',
+        'critical_low_male' => 'decimal:4',
+        'critical_high_male' => 'decimal:4',
+        'min_value_female' => 'decimal:4',
+        'max_value_female' => 'decimal:4',
+        'critical_low_female' => 'decimal:4',
+        'critical_high_female' => 'decimal:4',
     ];
 
     /**

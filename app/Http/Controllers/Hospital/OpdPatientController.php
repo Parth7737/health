@@ -119,7 +119,7 @@ class OpdPatientController extends BaseHospitalController
             })
             ->select(
                 'opd_patients.*',
-                'patients.name as patient_name',
+                DB::raw("TRIM(CONCAT(CASE WHEN COALESCE(patients.title,'') = '' THEN '' ELSE CONCAT(patients.title, ' ') END, COALESCE(patients.name,''))) as patient_name"),
                 'patients.patient_id as patient_code',
                 'patients.phone as patient_phone',
                 DB::raw("TRIM(CONCAT(COALESCE(staff.first_name, ''), ' ', COALESCE(staff.last_name, ''))) as consultant_name"),
@@ -1561,7 +1561,7 @@ class OpdPatientController extends BaseHospitalController
                 'opd_patients.symptoms',
                 'opd_patients.absent_flag',
                 'opd_patients.appointment_date',
-                'patients.name as patient_name',
+                DB::raw("TRIM(CONCAT(CASE WHEN COALESCE(patients.title,'') = '' THEN '' ELSE CONCAT(patients.title, ' ') END, COALESCE(patients.name,''))) as patient_name"),
                 'patients.age_years as patient_age_years',
                 'patients.gender as patient_gender',
                 DB::raw("TRIM(CONCAT(COALESCE(staff.first_name, ''), ' ', COALESCE(staff.last_name, ''))) as consultant_name"),

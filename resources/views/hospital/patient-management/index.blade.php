@@ -437,6 +437,9 @@
         <div class="step-line"></div>
         <div class="step-item" id="step5"><div class="step-circle">5</div><div class="step-info"><div class="step-name">Confirm & Print</div></div></div>
       </div>
+      <div id="regKeyboardHints" style="margin:10px 0 14px;padding:10px 12px;border:1px dashed var(--border-light);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
+        Keyboard: Tab/Shift+Tab to move fields · Enter to continue · Alt+N for Next · Alt+B for Back
+      </div>
 
       <div id="regPane1">
         <div class="form-row cols-3">
@@ -925,7 +928,7 @@ window.PM_ROUTES = {
   ipdAdmissions: @json(route('hospital.patient-management.ipd-admissions')),
   searchPatients: @json(route('hospital.patient-management.search-patients')),
   patient360: @json(route('hospital.patient-management.patient-360')),
-  patientDetails: @json(route('hospital.patient-management.patient-details')),
+  patientDetails: @json(route('hospital.patient-management.patient-details', ['patient' => '__ID__'])),
   loadDoctors: @json(route('hospital.patient-management.load-doctors')),
   loadDoctorSlots: @json(route('hospital.patient-management.load-doctor-slots')),
   availableBeds: @json(route('hospital.patient-management.available-beds')),

@@ -38,21 +38,21 @@
         </li>
 
         <li class="sidebar-list">
-            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.opd-patient.*') ? 'active' : '' }}" href="{{ route('hospital.opd-patient.index') }}">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.patient-management.*') ? 'active' : '' }}" href="{{ route('hospital.patient-management.index') }}">
                 <span class="nav-icon">👤</span>
                 <span class="nav-label">Patient 360 / EMR</span>
             </a>
         </li>
 
         <li class="sidebar-list">
-            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.opd-patient.doctor-queue-list') || request()->routeIs('hospital.opd-patient.doctor-queue') ? 'active' : '' }}" href="{{ route('hospital.opd-patient.doctor-queue-list') }}">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.opd-patient.patient-management.*') ? 'active' : '' }}" href="{{ route('hospital.patient-management.index') }}">
                 <span class="nav-icon">📋</span>
                 <span class="nav-label">OPD Queue</span>
             </a>
         </li>
 
         <li class="sidebar-list">
-            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.ipd-patient.*') ? 'active' : '' }}" href="{{ route('hospital.ipd-patient.index') }}">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.opd-patient.patient-management.*') ? 'active' : '' }}" href="{{ route('hospital.patient-management.index') }}">
                 <span class="nav-icon">🛏️</span>
                 <span class="nav-label">My IPD Patients</span>
             </a>

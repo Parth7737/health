@@ -18,7 +18,7 @@
         $ageText .= ', ' . $patient->age_months . ' Months';
     }
 
-    $patientName = $patient->name ?: 'Unknown Patient';
+    $patientName = $patient->full_name ?: 'Unknown Patient';
     $initials = collect(preg_split('/\s+/', trim((string) $patientName)))
         ->filter()
         ->take(2)
@@ -33,6 +33,12 @@
 
     $wardName = data_get($activeIpdAllocation, 'bed.room.ward.ward_name') ?: data_get($activeIpdAllocation, 'bed.bedType.type_name') ?: 'Ward';
     $bedCode = data_get($activeIpdAllocation, 'bed.bed_code') ?: '-';
+    $stayDayText = '-';
+    if ($isIpdActive && !empty(data_get($activeIpdAllocation, 'admission_date'))) {
+        $admissionAt = \Carbon\Carbon::parse(data_get($activeIpdAllocation, 'admission_date'))->startOfDay();
+        $stayDays = $admissionAt->diffInDays(now()->startOfDay()) + 1;
+        $stayDayText = 'Day ' . max(1, $stayDays);
+    }
 
     $bpText = (filled(data_get($contextRecord, 'systolic_bp')) && filled(data_get($contextRecord, 'diastolic_bp')))
         ? data_get($contextRecord, 'systolic_bp') . '/' . data_get($contextRecord, 'diastolic_bp')
@@ -106,6 +112,7 @@
                         <span class="badge badge-danger p360-badge-chip">IPD — {{ $wardName }} · Bed {{ $bedCode }}</span>
                         <span class="badge badge-primary p360-badge-chip" title="{{ e($activeIpdAllocation->admission_no ?: '') }}">Adm: {{ \Illuminate\Support\Str::limit($activeIpdAllocation->admission_no ?: '—', 20, '…') }}</span>
                         <span class="badge {{ $p360VisitStatusBadgeClass }} p360-badge-chip">Status: {{ $p360VisitStatusLabel }}</span>
+                        <span class="badge badge-info p360-badge-chip">Stay: {{ $stayDayText }}</span>
                     @else
                         <span class="badge badge-primary p360-badge-chip">OPD — Visit {{ data_get($latestOpdVisit, 'case_no') ?: '—' }}</span>
                         <span class="badge badge-warning p360-badge-chip">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? \App\Services\OpdTokenNoService::formatForDisplay(data_get($latestOpdVisit, 'token_no')) : '—' }}</span>
@@ -174,6 +181,7 @@
         <div style="background:#fff;border-bottom:2px solid #e2ecf4;padding:0 24px">
             <div class="tab-bar" style="border:none;margin:0">
                 <button class="tab-btn active" data-tab="tabTimeline" onclick="switchEMRTab('tabTimeline',this)">📅 Timeline</button>
+                <button class="tab-btn" data-tab="tabProfile" onclick="switchEMRTab('tabProfile',this)">🧾 Patient Details</button>
                 <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">📋 Orders</button>
                 <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">💊 Medications</button>
                 <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">📝 Clinical Notes</button>
@@ -262,6 +270,119 @@
                                 <div class="ai-item"><div class="ai-dot" style="background:#e65100"></div><div>HbA1c trend worsening (7.9 to 8.4%). Consider dual therapy - add Sitagliptin or refer for endocrinology review.</div></div>
                                 <div class="ai-item"><div class="ai-dot"></div><div>BP target for DM+CKD is &lt;130/80 per ACC/AHA. Current 148/94 is above target - ARB preferred.</div></div>
                                 <div class="ai-item"><div class="ai-dot" style="background:#2e7d32"></div><div>Kidney function stable (Cr 1.1). Continue Metformin with monitoring. eGFR estimation recommended.</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- REGISTRATION DETAILS -->
+            <div class="tab-pane" id="tabProfile">
+                @php
+                    $profileChronicConditions = collect($patient->chronic_conditions ?? [])->filter()->values();
+                    $profileAddressParts = collect([
+                        $patient->address,
+                        $patient->district,
+                        $patient->state,
+                        $patient->pin_code,
+                    ])->filter(function ($v) {
+                        return filled($v);
+                    })->values();
+
+                    $profileCategoryLabel = data_get($patient, 'patientCategory.name')
+                        ?: (filled($patient->category) ? $patient->category : '-');
+                    $profileReligionLabel = data_get($patient, 'religion.name') ?: '-';
+                @endphp
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><div class="card-title">Identity & Demographics</div></div>
+                        <div class="card-body-sm">
+                            <div class="stat-row mb-3">
+                                <div class="stat-item"><div class="s-label">Gender</div><div class="s-value">{{ $patient->gender ?: '-' }}</div></div>
+                                <div class="stat-item"><div class="s-label">DOB</div><div class="s-value">{{ !empty($patient->date_of_birth) ? \Carbon\Carbon::parse($patient->date_of_birth)->format('d M Y') : '-' }}</div></div>
+                            </div>
+                            <div class="table-wrap">
+                                <table>
+                                    <tbody>
+                                        <tr><td style="width:220px">MRN</td><td>{{ $displayMrn }}</td></tr>
+                                        <tr><td>ABHA / Ayushman Bharat ID</td><td>{{ $displayAbha }}</td></tr>
+                                        <tr><td>Aadhaar Number</td><td>{{ $patient->aadhar_no ?: '-' }}</td></tr>
+                                        <tr><td>Blood Group</td><td>{{ $patient->blood_group ?: '-' }}</td></tr>
+                                        <tr><td>Marital Status</td><td>{{ $patient->marital_status ?: '-' }}</td></tr>
+                                        <tr><td>Religion</td><td>{{ $profileReligionLabel }}</td></tr>
+                                        <tr><td>Category</td><td>{{ $profileCategoryLabel }}</td></tr>
+                                        <tr><td>Occupation</td><td>{{ $patient->occupation ?: '-' }}</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><div class="card-title">Contact & Address</div></div>
+                        <div class="card-body-sm">
+                            <div class="table-wrap">
+                                <table>
+                                    <tbody>
+                                        <tr><td style="width:220px">Primary Phone</td><td>{{ $patient->phone ?: '-' }}</td></tr>
+                                        <tr><td>Alternate Phone</td><td>{{ $patient->alternate_phone ?: '-' }}</td></tr>
+                                        <tr><td>Email</td><td>{{ $patient->email ?: '-' }}</td></tr>
+                                        <tr><td>Address</td><td>{{ $profileAddressParts->isNotEmpty() ? $profileAddressParts->implode(', ') : '-' }}</td></tr>
+                                        <tr><td>Pin Code</td><td>{{ $patient->pin_code ?: '-' }}</td></tr>
+                                        <tr><td>District</td><td>{{ $patient->district ?: '-' }}</td></tr>
+                                        <tr><td>State</td><td>{{ $patient->state ?: '-' }}</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><div class="card-title">Emergency Contact</div></div>
+                        <div class="card-body-sm">
+                            <div class="table-wrap">
+                                <table>
+                                    <tbody>
+                                        <tr><td style="width:220px">Contact Name</td><td>{{ $patient->emergency_contact_name ?: '-' }}</td></tr>
+                                        <tr><td>Relation</td><td>{{ $patient->emergency_contact_relation ?: '-' }}</td></tr>
+                                        <tr><td>Phone</td><td>{{ $patient->emergency_contact_phone ?: '-' }}</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><div class="card-title">Medical Background (Registration)</div></div>
+                        <div class="card-body-sm">
+                            <div class="mb-3">
+                                <div class="fw-600 fs-12 mb-2">Known Allergies</div>
+                                <div class="fs-12 text-muted">{{ $patient->known_allergies ?: '-' }}</div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="fw-600 fs-12 mb-2">Chronic Conditions</div>
+                                @if($profileChronicConditions->isNotEmpty())
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                        @foreach($profileChronicConditions as $profileCondition)
+                                            <span class="badge badge-warning">{{ $profileCondition }}</span>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <div class="fs-12 text-muted">-</div>
+                                @endif
+                            </div>
+                            <div class="table-wrap">
+                                <table>
+                                    <tbody>
+                                        <tr><td style="width:220px">Past Surgical History</td><td>{{ $patient->past_surgical_history ?: '-' }}</td></tr>
+                                        <tr><td>Current Medications</td><td>{{ $patient->current_medications ?: '-' }}</td></tr>
+                                        <tr><td>Family History</td><td>{{ $patient->family_history ?: '-' }}</td></tr>
+                                        <tr><td>Smoking Status</td><td>{{ $patient->smoking_status ?: '-' }}</td></tr>
+                                        <tr><td>Alcohol Status</td><td>{{ $patient->alcohol_status ?: '-' }}</td></tr>
+                                        <tr><td>Vaccination Status</td><td>{{ $patient->vaccination_status ?: '-' }}</td></tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -615,6 +736,7 @@
                 </div>
             </div>
 
+
             <!-- BILLING -->
             <div class="tab-pane" id="tabBilling">
                 @php
@@ -964,6 +1086,24 @@ function switchEMRTab(id, btn) {
     if (btn) { btn.classList.add('active'); }
     if (id === 'tabVitals') { initVitalCharts(); }
 }
+
+function applyRequestedTabFromUrl() {
+    var params = new URLSearchParams(window.location.search || '');
+    var fromQuery = String(params.get('tab') || '').trim();
+    var fromHash = String(window.location.hash || '').replace(/^#/, '').trim();
+    var requestedTab = fromQuery || fromHash;
+    if (!requestedTab) { return; }
+
+    var pane = document.getElementById(requestedTab);
+    if (!pane) { return; }
+
+    var tabButton = document.querySelector('.tab-btn[data-tab="' + requestedTab + '"]');
+    switchEMRTab(requestedTab, tabButton || null);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    applyRequestedTabFromUrl();
+});
 
 /* ── Vitals chart (static demo data in chart tab) ───────────── */
 var vitalChartsInited = false;

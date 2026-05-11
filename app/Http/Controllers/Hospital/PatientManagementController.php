@@ -68,36 +68,55 @@ class PatientManagementController extends BaseHospitalController
     public function stats()
     {
         $today = now()->toDateString();
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
 
         $opdToday = OpdPatient::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
+            })
             ->whereDate('appointment_date', $today)
             ->count();
 
         $ipdActive = BedAllocation::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'consultant_doctor_id', $doctorStaffId);
+            })
             ->whereNull('discharge_date')
             ->count();
 
         $dischargedToday = BedAllocation::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'consultant_doctor_id', $doctorStaffId);
+            })
             ->whereDate('discharge_date', $today)
             ->count();
 
         $transferredToday = BedAllocation::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'consultant_doctor_id', $doctorStaffId);
+            })
             ->whereDate('discharge_date', $today)
             ->where('discharge_status', 'transferred')
             ->count();
 
         $opdEmergencyPatientIds = OpdPatient::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
+            })
             ->where('casualty', 'Yes')
             ->whereDate('appointment_date', $today)
             ->pluck('patient_id');
 
         $ipdEmergencyPatientIds = BedAllocation::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'consultant_doctor_id', $doctorStaffId);
+            })
             ->whereNull('discharge_date')
             ->where('admission_source', 'emergency')
             ->pluck('patient_id');
@@ -113,32 +132,66 @@ class PatientManagementController extends BaseHospitalController
         // Tab badge totals (no search/dept filters) — keeps counts accurate without loading each list on page init.
         $tabAllPatients = Patient::query()
             ->where('patients.hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $query->where(function ($sq) use ($doctorStaffId) {
+                    $sq->whereExists(function ($sub) use ($doctorStaffId) {
+                        $sub->select(DB::raw(1))
+                            ->from('opd_patients')
+                            ->whereColumn('opd_patients.patient_id', 'patients.id')
+                            ->where('opd_patients.hospital_id', $this->hospital_id);
+
+                        $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                    })->orWhereExists(function ($sub) use ($doctorStaffId) {
+                        $sub->select(DB::raw(1))
+                            ->from('bed_allocations')
+                            ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                            ->where('bed_allocations.hospital_id', $this->hospital_id);
+
+                        $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                    });
+                });
+            })
             ->count();
 
         $tabOpdQueue = OpdPatient::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
+            })
             ->whereDate('appointment_date', $today)
             ->count();
 
         $tabBooking = OpdPatient::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
+            })
             ->whereDate('appointment_date', '>', $today)
             ->whereNull('token_no')
             ->count();
 
         $tabIpd = BedAllocation::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'consultant_doctor_id', $doctorStaffId);
+            })
             ->whereNull('discharge_date')
             ->count();
 
         $tabEmergencyOpd = OpdPatient::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
+            })
             ->whereDate('appointment_date', $today)
             ->where('casualty', 'Yes')
             ->count();
 
         $tabEmergencyIpd = BedAllocation::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'consultant_doctor_id', $doctorStaffId);
+            })
             ->whereNull('discharge_date')
             ->where('admission_source', 'emergency')
             ->count();
@@ -147,12 +200,16 @@ class PatientManagementController extends BaseHospitalController
 
         $tabDischarged = Patient::query()
             ->where('patients.hospital_id', $this->hospital_id)
-            ->whereExists(function ($sub) use ($today) {
+            ->whereExists(function ($sub) use ($today, $isDoctorScoped, $doctorStaffId) {
                 $sub->select(DB::raw(1))
                     ->from('bed_allocations')
                     ->whereColumn('bed_allocations.patient_id', 'patients.id')
                     ->where('bed_allocations.hospital_id', $this->hospital_id)
                     ->whereDate('bed_allocations.discharge_date', $today);
+
+                if ($isDoctorScoped) {
+                    $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                }
             })
             ->count();
 
@@ -183,6 +240,7 @@ class PatientManagementController extends BaseHospitalController
         $deptId   = $request->input('dept_id', '');
         $perPage  = min((int) $request->input('per_page', 20), 100);
         $page     = max(1, (int) $request->input('page', 1));
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
 
         $query = Patient::query()
             ->where('patients.hospital_id', $this->hospital_id)
@@ -198,6 +256,26 @@ class PatientManagementController extends BaseHospitalController
                 'patients.created_at'
             );
 
+        if ($isDoctorScoped) {
+            $query->where(function ($sq) use ($doctorStaffId) {
+                $sq->whereExists(function ($sub) use ($doctorStaffId) {
+                    $sub->select(DB::raw(1))
+                        ->from('opd_patients')
+                        ->whereColumn('opd_patients.patient_id', 'patients.id')
+                        ->where('opd_patients.hospital_id', $this->hospital_id);
+
+                    $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                })->orWhereExists(function ($sub) use ($doctorStaffId) {
+                    $sub->select(DB::raw(1))
+                        ->from('bed_allocations')
+                        ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                        ->where('bed_allocations.hospital_id', $this->hospital_id);
+
+                    $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                });
+            });
+        }
+
         // Search
         if ($q !== '') {
             $query->where(function ($sq) use ($q) {
@@ -211,63 +289,91 @@ class PatientManagementController extends BaseHospitalController
 
         // Visit type filter via subquery
         if ($filter === 'opd') {
-            $query->whereExists(function ($sub) {
+            $query->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
                 $sub->select(DB::raw(1))
                     ->from('opd_patients')
                     ->whereColumn('opd_patients.patient_id', 'patients.id')
                     ->where('opd_patients.hospital_id', $this->hospital_id)
                     ->whereDate('opd_patients.appointment_date', now()->toDateString());
+
+                if ($isDoctorScoped) {
+                    $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                }
             });
         } elseif ($filter === 'ipd') {
-            $query->whereExists(function ($sub) {
+            $query->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
                 $sub->select(DB::raw(1))
                     ->from('bed_allocations')
                     ->whereColumn('bed_allocations.patient_id', 'patients.id')
                     ->where('bed_allocations.hospital_id', $this->hospital_id)
                     ->whereNull('bed_allocations.discharge_date');
+
+                if ($isDoctorScoped) {
+                    $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                }
             });
         } elseif ($filter === 'emergency') {
-            $query->where(function ($sq) {
-                $sq->whereExists(function ($sub) {
+            $query->where(function ($sq) use ($isDoctorScoped, $doctorStaffId) {
+                $sq->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
                     $sub->select(DB::raw(1))
                         ->from('opd_patients')
                         ->whereColumn('opd_patients.patient_id', 'patients.id')
                         ->where('opd_patients.hospital_id', $this->hospital_id)
                         ->where('opd_patients.casualty', 'Yes')
                         ->whereDate('opd_patients.appointment_date', now()->toDateString());
-                })->orWhereExists(function ($sub) {
+
+                    if ($isDoctorScoped) {
+                        $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                    }
+                })->orWhereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
                     $sub->select(DB::raw(1))
                         ->from('bed_allocations')
                         ->whereColumn('bed_allocations.patient_id', 'patients.id')
                         ->where('bed_allocations.hospital_id', $this->hospital_id)
                         ->whereNull('bed_allocations.discharge_date')
                         ->where('bed_allocations.admission_source', 'emergency');
+
+                    if ($isDoctorScoped) {
+                        $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                    }
                 });
             });
         } elseif ($filter === 'discharged') {
-            $query->whereExists(function ($sub) {
+            $query->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
                 $sub->select(DB::raw(1))
                     ->from('bed_allocations')
                     ->whereColumn('bed_allocations.patient_id', 'patients.id')
                     ->where('bed_allocations.hospital_id', $this->hospital_id)
                     ->whereDate('bed_allocations.discharge_date', now()->toDateString());
+
+                if ($isDoctorScoped) {
+                    $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                }
             });
         }
 
         if ($deptId) {
-            $query->where(function ($sq) use ($deptId) {
-                $sq->whereExists(function ($sub) use ($deptId) {
+            $query->where(function ($sq) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                $sq->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
                     $sub->select(DB::raw(1))
                         ->from('opd_patients')
                         ->whereColumn('opd_patients.patient_id', 'patients.id')
                         ->where('opd_patients.hospital_id', $this->hospital_id)
                         ->where('opd_patients.hr_department_id', $deptId);
-                })->orWhereExists(function ($sub) use ($deptId) {
+
+                    if ($isDoctorScoped) {
+                        $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                    }
+                })->orWhereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
                     $sub->select(DB::raw(1))
                         ->from('bed_allocations')
                         ->whereColumn('bed_allocations.patient_id', 'patients.id')
                         ->where('bed_allocations.hospital_id', $this->hospital_id)
                         ->where('bed_allocations.hr_department_id', $deptId);
+
+                    if ($isDoctorScoped) {
+                        $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                    }
                 });
             });
         }
@@ -288,6 +394,9 @@ class PatientManagementController extends BaseHospitalController
         $latestOpd = OpdPatient::query()
             ->whereIn('patient_id', $patientIds)
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
+            })
             ->select('id', 'patient_id', 'status', 'appointment_date', 'hr_department_id', 'visit_type', 'casualty')
             ->orderByDesc('id')
             ->get()
@@ -298,6 +407,9 @@ class PatientManagementController extends BaseHospitalController
         $activeIpd = BedAllocation::query()
             ->whereIn('patient_id', $patientIds)
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'consultant_doctor_id', $doctorStaffId);
+            })
             ->whereNull('discharge_date')
             ->select('patient_id', 'admission_no', 'admission_date', 'hr_department_id', 'admission_source')
             ->get()
@@ -338,7 +450,7 @@ class PatientManagementController extends BaseHospitalController
             return [
                 'id'         => $p->id,
                 'mrn'        => $p->mrn ?: $p->reg_no,
-                'name'       => $p->name,
+                'name'       => $p->full_name,
                 'age_sex'    => ($p->age_years ?? '-') . ' / ' . ($p->gender ? strtoupper(substr($p->gender, 0, 1)) : '-'),
                 'phone'      => $p->phone,
                 'blood_group' => $p->blood_group ?: '-',
@@ -370,10 +482,14 @@ class PatientManagementController extends BaseHospitalController
         $perPage       = min((int) $request->input('per_page', 12), 100);
         $page          = max(1, (int) $request->input('page', 1));
         $emergencyOnly = $request->boolean('emergency_only');
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
 
         if ($emergencyOnly) {
             $opdEmergency = OpdPatient::query()
                 ->where('opd_patients.hospital_id', $this->hospital_id)
+                ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                    $this->applyDoctorScopeConstraint($query, 'opd_patients.doctor_id', $doctorStaffId);
+                })
                 ->whereDate('opd_patients.appointment_date', $today)
                 ->where('opd_patients.casualty', 'Yes')
                 ->leftJoin('patients', 'patients.id', '=', 'opd_patients.patient_id')
@@ -387,7 +503,7 @@ class PatientManagementController extends BaseHospitalController
                     'opd_patients.status',
                     'opd_patients.slot',
                     'opd_patients.appointment_date as event_at',
-                    'patients.name as patient_name',
+                    DB::raw("TRIM(CONCAT(CASE WHEN COALESCE(patients.title,'') = '' THEN '' ELSE CONCAT(patients.title, ' ') END, COALESCE(patients.name,''))) as patient_name"),
                     'patients.mrn',
                     'patients.phone',
                     'patients.age_years',
@@ -398,6 +514,9 @@ class PatientManagementController extends BaseHospitalController
 
             $ipdEmergency = BedAllocation::query()
                 ->where('bed_allocations.hospital_id', $this->hospital_id)
+                ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                    $this->applyDoctorScopeConstraint($query, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                })
                 ->whereNull('bed_allocations.discharge_date')
                 ->where('bed_allocations.admission_source', 'emergency')
                 ->leftJoin('patients', 'patients.id', '=', 'bed_allocations.patient_id')
@@ -411,7 +530,7 @@ class PatientManagementController extends BaseHospitalController
                     DB::raw("'admitted' as status"),
                     DB::raw("'IPD Emergency Admission' as slot"),
                     'bed_allocations.admission_date as event_at',
-                    'patients.name as patient_name',
+                    DB::raw("TRIM(CONCAT(CASE WHEN COALESCE(patients.title,'') = '' THEN '' ELSE CONCAT(patients.title, ' ') END, COALESCE(patients.name,''))) as patient_name"),
                     'patients.mrn',
                     'patients.phone',
                     'patients.age_years',
@@ -487,6 +606,9 @@ class PatientManagementController extends BaseHospitalController
 
         $query = OpdPatient::query()
             ->where('opd_patients.hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'opd_patients.doctor_id', $doctorStaffId);
+            })
             ->whereDate('opd_patients.appointment_date', $today)
             ->leftJoin('patients', 'patients.id', '=', 'opd_patients.patient_id')
             ->leftJoin('staff', 'staff.id', '=', 'opd_patients.doctor_id')
@@ -502,7 +624,7 @@ class PatientManagementController extends BaseHospitalController
                 'opd_patients.casualty',
                 'opd_patients.visit_type',
                 'opd_patients.slot',
-                'patients.name as patient_name',
+                DB::raw("TRIM(CONCAT(CASE WHEN COALESCE(patients.title,'') = '' THEN '' ELSE CONCAT(patients.title, ' ') END, COALESCE(patients.name,''))) as patient_name"),
                 'patients.mrn',
                 'patients.phone',
                 'patients.age_years',
@@ -596,9 +718,13 @@ class PatientManagementController extends BaseHospitalController
         $today   = now()->toDateString();
         $perPage = min((int) $request->input('per_page', 12), 100);
         $page    = max(1, (int) $request->input('page', 1));
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
 
         $query = OpdPatient::query()
             ->where('opd_patients.hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'opd_patients.doctor_id', $doctorStaffId);
+            })
             ->whereDate('opd_patients.appointment_date', '>', $today)
             ->whereNull('opd_patients.token_no')
             ->leftJoin('patients', 'patients.id', '=', 'opd_patients.patient_id')
@@ -614,7 +740,7 @@ class PatientManagementController extends BaseHospitalController
                 'opd_patients.casualty',
                 'opd_patients.visit_type',
                 'opd_patients.slot',
-                'patients.name as patient_name',
+                DB::raw("TRIM(CONCAT(CASE WHEN COALESCE(patients.title,'') = '' THEN '' ELSE CONCAT(patients.title, ' ') END, COALESCE(patients.name,''))) as patient_name"),
                 'patients.mrn',
                 'patients.phone',
                 'patients.age_years',
@@ -839,9 +965,13 @@ class PatientManagementController extends BaseHospitalController
         $q       = trim((string) $request->input('q', ''));
         $perPage = min((int) $request->input('per_page', 10), 100);
         $page    = max(1, (int) $request->input('page', 1));
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
 
         $query = BedAllocation::query()
             ->where('bed_allocations.hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+            })
             ->whereNull('bed_allocations.discharge_date')
             ->leftJoin('patients', 'patients.id', '=', 'bed_allocations.patient_id')
             ->leftJoin('beds', 'beds.id', '=', 'bed_allocations.bed_id')
@@ -854,7 +984,7 @@ class PatientManagementController extends BaseHospitalController
                 'bed_allocations.admission_no',
                 'bed_allocations.admission_date',
                 'bed_allocations.admission_source',
-                'patients.name as patient_name',
+                DB::raw("TRIM(CONCAT(CASE WHEN COALESCE(patients.title,'') = '' THEN '' ELSE CONCAT(patients.title, ' ') END, COALESCE(patients.name,''))) as patient_name"),
                 'patients.mrn',
                 'patients.age_years',
                 'patients.gender',
@@ -894,6 +1024,9 @@ class PatientManagementController extends BaseHospitalController
         $latestOpdByPatient = OpdPatient::query()
             ->whereIn('patient_id', $patientIds)
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
+            })
             ->select('patient_id', 'visit_type', 'casualty')
             ->orderByDesc('id')
             ->get()
@@ -940,6 +1073,7 @@ class PatientManagementController extends BaseHospitalController
     public function searchPatients(Request $request)
     {
         $q = trim($request->input('q', ''));
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
 
         if (strlen($q) < 2) {
             return response()->json([]);
@@ -947,6 +1081,25 @@ class PatientManagementController extends BaseHospitalController
 
         $patients = Patient::query()
             ->where('hospital_id', $this->hospital_id)
+            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+                $query->where(function ($sq) use ($doctorStaffId) {
+                    $sq->whereExists(function ($sub) use ($doctorStaffId) {
+                        $sub->select(DB::raw(1))
+                            ->from('opd_patients')
+                            ->whereColumn('opd_patients.patient_id', 'patients.id')
+                            ->where('opd_patients.hospital_id', $this->hospital_id);
+
+                        $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                    })->orWhereExists(function ($sub) use ($doctorStaffId) {
+                        $sub->select(DB::raw(1))
+                            ->from('bed_allocations')
+                            ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                            ->where('bed_allocations.hospital_id', $this->hospital_id);
+
+                        $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                    });
+                });
+            })
             ->where(function ($sq) use ($q) {
                 $sq->where('name', 'like', "%{$q}%")
                     ->orWhere('mrn', 'like', "%{$q}%")
@@ -962,7 +1115,7 @@ class PatientManagementController extends BaseHospitalController
             return [
                 'id'         => $p->id,
                 'mrn'        => $p->mrn ?: $p->patient_id,
-                'name'       => $p->name,
+                'name'       => $p->full_name,
                 'phone'      => $p->phone,
                 'age_sex'    => ($p->age_years ?? '-') . '/' . ($p->gender ? strtoupper(substr($p->gender, 0, 1)) : '-'),
                 'blood_group' => $p->blood_group ?: '-',
@@ -979,6 +1132,7 @@ class PatientManagementController extends BaseHospitalController
     {
         $mrn = $request->input('mrn');
         $id  = $request->input('id');
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
 
         $patient = Patient::query()
             ->where('hospital_id', $this->hospital_id)
@@ -991,6 +1145,10 @@ class PatientManagementController extends BaseHospitalController
 
         if (!$patient) {
             return response()->json(['error' => 'Patient not found.'], 404);
+        }
+
+        if ($isDoctorScoped && !$this->doctorCanAccessPatient((int) $patient->id, $doctorStaffId)) {
+            return response()->json(['error' => 'You are not authorized to access this patient.'], 403);
         }
 
         // Last 5 OPD visits
@@ -1046,10 +1204,187 @@ class PatientManagementController extends BaseHospitalController
         $totalDue = max(0, $totalBilled - $paidAgainstCharges);
         $advanceBalance = max(0, $totalPaid - $paidAgainstCharges);
 
+        $todayDate = now()->startOfDay();
+        $activeMedications = collect();
+
+        $opdPrescriptionVisits = OpdPrescription::query()
+            ->where('patient_id', $patient->id)
+            ->with([
+                'opdPatient:id,case_no',
+                'doctor:id,first_name,last_name',
+                'items.medicine:id,name',
+                'items.dosage:id,dosage',
+                'items.frequency:id,frequency',
+            ])
+            ->latest('id')
+            ->get();
+
+        foreach ($opdPrescriptionVisits as $opdPrescription) {
+            $doctorName = trim(
+                data_get($opdPrescription, 'doctor.first_name', '') . ' ' . data_get($opdPrescription, 'doctor.last_name', '')
+            ) ?: '-';
+            $visitRef = 'OPD - ' . (data_get($opdPrescription, 'opdPatient.case_no') ?: '-');
+
+            foreach (($opdPrescription->items ?? collect()) as $item) {
+                $days = (int) ($item->no_of_day ?? 0);
+                $startedAt = Carbon::parse($item->created_at ?? $opdPrescription->created_at)->startOfDay();
+                $endsAt = $days > 0 ? $startedAt->copy()->addDays($days - 1) : null;
+                $isCompleted = $endsAt ? $todayDate->gt($endsAt) : false;
+
+                if ($isCompleted) {
+                    continue;
+                }
+
+                $activeMedications->push([
+                    'drug' => data_get($item, 'medicine.name') ?: '-',
+                    'dose' => data_get($item, 'dosage.dosage') ?: '-',
+                    'frequency' => data_get($item, 'frequency.frequency') ?: '-',
+                    'duration' => $days > 0 ? ($days . ' day(s)') : '-',
+                    'prescribed_by' => $doctorName,
+                    'reference' => $visitRef,
+                    'started_at' => $startedAt,
+                    'sort_ts' => Carbon::parse($item->created_at ?? $opdPrescription->created_at)->timestamp,
+                ]);
+            }
+        }
+
+        $ipdPrescriptionVisits = IpdPrescription::query()
+            ->where('patient_id', $patient->id)
+            ->with([
+                'allocation:id,admission_no',
+                'doctor:id,first_name,last_name',
+                'items.medicine:id,name',
+                'items.dosage:id,dosage',
+                'items.frequency:id,frequency',
+            ])
+            ->latest('id')
+            ->get();
+
+        foreach ($ipdPrescriptionVisits as $ipdPrescription) {
+            $doctorName = trim(
+                data_get($ipdPrescription, 'doctor.first_name', '') . ' ' . data_get($ipdPrescription, 'doctor.last_name', '')
+            ) ?: '-';
+            $visitRef = 'IPD - ' . (data_get($ipdPrescription, 'allocation.admission_no') ?: '-');
+
+            foreach (($ipdPrescription->items ?? collect()) as $item) {
+                $days = (int) ($item->no_of_day ?? 0);
+                $startedAt = Carbon::parse($item->created_at ?? $ipdPrescription->created_at)->startOfDay();
+                $endsAt = $days > 0 ? $startedAt->copy()->addDays($days - 1) : null;
+                $isCompleted = $endsAt ? $todayDate->gt($endsAt) : false;
+
+                if ($isCompleted) {
+                    continue;
+                }
+
+                $activeMedications->push([
+                    'drug' => data_get($item, 'medicine.name') ?: '-',
+                    'dose' => data_get($item, 'dosage.dosage') ?: '-',
+                    'frequency' => data_get($item, 'frequency.frequency') ?: '-',
+                    'duration' => $days > 0 ? ($days . ' day(s)') : '-',
+                    'prescribed_by' => $doctorName,
+                    'reference' => $visitRef,
+                    'started_at' => $startedAt,
+                    'sort_ts' => Carbon::parse($item->created_at ?? $ipdPrescription->created_at)->timestamp,
+                ]);
+            }
+        }
+
+        $activeMedications = $activeMedications
+            ->sortByDesc('sort_ts')
+            ->values()
+            ->take(12)
+            ->map(function ($row) {
+                return [
+                    'drug' => $row['drug'],
+                    'dose' => $row['dose'],
+                    'frequency' => $row['frequency'],
+                    'duration' => $row['duration'],
+                    'prescribed_by' => $row['prescribed_by'],
+                    'reference' => $row['reference'],
+                    'started_at' => !empty($row['started_at']) ? Carbon::parse($row['started_at'])->format('d M Y') : '-',
+                ];
+            })
+            ->values();
+
+        $latestPathologyItem = DiagnosticOrderItem::query()
+            ->where('department', 'pathology')
+            ->whereHas('order', function ($query) use ($patient) {
+                $query->where('patient_id', $patient->id);
+            })
+            ->with([
+                'order.visitable',
+                'parameters' => function ($q) {
+                    $q->orderBy('sort_order')->orderBy('id');
+                },
+            ])
+            ->orderByDesc('reported_at')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $latestLabNonNormal = collect();
+        $latestLabMeta = null;
+
+        if ($latestPathologyItem) {
+            $order = $latestPathologyItem->order;
+            $visitable = $order?->visitable;
+            $visitLabel = '—';
+
+            if ($order && (string) $order->visitable_type === OpdPatient::class && $visitable) {
+                $visitLabel = 'OPD · ' . ($visitable->case_no ?? '—');
+            } elseif ($order && (string) $order->visitable_type === BedAllocation::class && $visitable) {
+                $visitLabel = 'IPD · ' . ($visitable->admission_no ?? '—');
+            }
+
+            $reportedAt = $latestPathologyItem->reported_at ?? $latestPathologyItem->updated_at;
+            $latestLabMeta = [
+                'test_name' => $latestPathologyItem->test_name ?: '-',
+                'visit' => $visitLabel,
+                'reported_at' => $reportedAt ? Carbon::parse($reportedAt)->format('d M Y, h:i A') : '-',
+            ];
+
+            foreach (($latestPathologyItem->parameters ?? collect()) as $param) {
+                if (!filled($param->result_value)) {
+                    continue;
+                }
+
+                $flag = $param->result_flag;
+                if ($flag === 'normal') {
+                    continue;
+                }
+
+                $unit = filled($param->unit_name) ? ' ' . $param->unit_name : '';
+
+                $latestLabNonNormal->push([
+                    'parameter' => $param->parameter_name ?: '-',
+                    'result' => trim((string) $param->result_value . $unit),
+                    'ref_range' => $param->normal_range ?: '—',
+                    'result_flag' => $flag,
+                ]);
+            }
+
+            if ($latestLabNonNormal->isEmpty() && ($latestPathologyItem->status === 'completed')
+                && (filled($latestPathologyItem->report_summary) || filled($latestPathologyItem->report_text))) {
+                $summary = $latestPathologyItem->report_summary ?: strip_tags((string) $latestPathologyItem->report_text);
+
+                if (trim((string) $summary) !== '') {
+                    $latestLabNonNormal->push([
+                        'parameter' => 'Summary',
+                        'result' => Str::limit(trim((string) $summary), 220),
+                        'ref_range' => '—',
+                        'result_flag' => null,
+                    ]);
+                }
+            }
+        }
+
         return response()->json([
             'patient' => $patient,
             'opd_visits' => $opdVisits,
             'active_ipd' => $activeIpd,
+            'active_medications' => $activeMedications,
+            'latest_lab_meta' => $latestLabMeta,
+            'latest_lab_non_normal' => $latestLabNonNormal,
             'billing_summary' => [
                 'total_billed' => round($totalBilled, 2),
                 'total_paid' => round($totalPaid, 2),
@@ -1061,22 +1396,30 @@ class PatientManagementController extends BaseHospitalController
         ]);
     }
 
-    public function patientDetails(Request $request, ChargeLedgerService $chargeLedger)
+    public function patientDetails(Request $request, ChargeLedgerService $chargeLedger, $patient = null)
     {
-        $mrn = $request->input('mrn');
-        $id = $request->input('id');
+        $id = (int) $patient;
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
+
+        if ($id <= 0) {
+            abort(404, 'Patient not found.');
+        }
 
         $patient = Patient::query()
             ->where('hospital_id', $this->hospital_id)
-            ->when($id, fn ($q) => $q->where('id', $id))
-            ->when($mrn && !$id, fn ($q) => $q->where(function ($inner) use ($mrn) {
-                $inner->where('mrn', $mrn)
-                    ->orWhere('patient_id', $mrn);
-            }))
+            ->where('id', $id)
+            ->with([
+                'patientCategory:id,name',
+                'religion:id,name',
+            ])
             ->first();
 
         if (!$patient) {
             abort(404, 'Patient not found.');
+        }
+
+        if ($isDoctorScoped && !$this->doctorCanAccessPatient((int) $patient->id, $doctorStaffId)) {
+            abort(403, 'You are not authorized to access this patient.');
         }
 
         $activeIpdAllocation = BedAllocation::query()
@@ -1995,8 +2338,8 @@ class PatientManagementController extends BaseHospitalController
                 $patient->email                     = $request->email;
                 $patient->address                   = $request->address;
                 $patient->pin_code                  = $request->pin_code;
-                $patient->district                  = $request->district;
-                $patient->state                     = $request->state;
+                $patient->district                  = $this->sanitizeRegistrationSelectText($request->district, ['Select District']);
+                $patient->state                     = $this->sanitizeRegistrationSelectText($request->state, ['Select State']);
                 $patient->emergency_contact_name    = $request->emergency_contact_name;
                 $patient->emergency_contact_relation = $request->emergency_contact_relation;
                 $patient->emergency_contact_phone   = $request->emergency_contact_phone;
@@ -2229,7 +2572,7 @@ class PatientManagementController extends BaseHospitalController
                 'status'       => true,
                 'message'      => 'Registration successful.',
                 'mrn'          => $result['patient']->mrn,
-                'patient_name' => $result['patient']->name,
+                'patient_name' => $result['patient']->full_name,
                 'visit_type'   => $result['visitType'],
                 'token'        => $result['token'],
                 'booking_number' => $result['bookingNo'],
@@ -2598,6 +2941,55 @@ class PatientManagementController extends BaseHospitalController
             ->first();
     }
 
+    private function resolvePatientManagementDoctorScope(): array
+    {
+        $user = auth()->user();
+        if (!$user || !$user->hasRole('Doctor')) {
+            return [false, null];
+        }
+
+        $doctorStaffId = Staff::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('user_id', $user->id)
+            ->value('id');
+
+        return [true, $doctorStaffId ? (int) $doctorStaffId : null];
+    }
+
+    private function applyDoctorScopeConstraint($query, string $column, ?int $doctorStaffId): void
+    {
+        if ($doctorStaffId) {
+            $query->where($column, $doctorStaffId);
+            return;
+        }
+
+        // Doctor role without mapped staff profile should not see hospital-wide data.
+        $query->whereRaw('1 = 0');
+    }
+
+    private function doctorCanAccessPatient(int $patientId, ?int $doctorStaffId): bool
+    {
+        if (!$doctorStaffId) {
+            return false;
+        }
+
+        $hasOpdAccess = OpdPatient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('patient_id', $patientId)
+            ->where('doctor_id', $doctorStaffId)
+            ->exists();
+
+        if ($hasOpdAccess) {
+            return true;
+        }
+
+        return BedAllocation::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('patient_id', $patientId)
+            ->where('consultant_doctor_id', $doctorStaffId)
+            ->exists();
+    }
+
     private function activeOpdConflictMessage($visitOrEncodedMessage): string
     {
         if ($visitOrEncodedMessage instanceof OpdPatient) {
@@ -2712,6 +3104,22 @@ class PatientManagementController extends BaseHospitalController
     private function isEmergencyStyleOpdVisit(?string $visitType): bool
     {
         return strtoupper(trim((string) $visitType)) === 'EMERGENCY';
+    }
+
+    private function sanitizeRegistrationSelectText($value, array $placeholderLabels = []): ?string
+    {
+        $text = trim((string) ($value ?? ''));
+        if ($text === '') {
+            return null;
+        }
+
+        foreach ($placeholderLabels as $label) {
+            if (strcasecmp($text, trim((string) $label)) === 0) {
+                return null;
+            }
+        }
+
+        return $text;
     }
 
     /**

@@ -43,6 +43,20 @@
     return template.replace('__ID__', id);
   }
 
+  function patientDetailsHref(patientId) {
+    if (!patientId || !ROUTES.patientDetails) {
+      return null;
+    }
+
+    const base = String(ROUTES.patientDetails);
+    const id = encodeURIComponent(String(patientId));
+    if (base.includes('__ID__')) {
+      return base.replace('__ID__', id);
+    }
+
+    return `${base.replace(/\/+$/, '')}/${id}`;
+  }
+
   function getInitials(name) {
     const source = String(name || '').trim();
     if (!source) {
@@ -106,7 +120,7 @@
     const sub = caseNo ? `<div class="queue-patient-mrn-ref">${caseNo}</div>` : '';
     let nameHtml;
     if (pid && ROUTES.patientDetails) {
-      const href = `${ROUTES.patientDetails}?id=${encodeURIComponent(String(pid))}`;
+      const href = patientDetailsHref(pid);
       nameHtml = `<a class="queue-patient-name-ref queue-patient-360-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="Patient 360">${name}</a>`;
     } else {
       nameHtml = `<span class="queue-patient-name-ref">${name}</span>`;
@@ -119,7 +133,7 @@
     if (!pid || !ROUTES.patientDetails) {
       return '<span class="btn btn-secondary btn-xs queue-btn-emr queue-btn-p360" style="opacity:.45;cursor:not-allowed;pointer-events:none" title="Patient ID unavailable">360</span>';
     }
-    const href = `${ROUTES.patientDetails}?id=${encodeURIComponent(String(pid))}`;
+    const href = patientDetailsHref(pid);
     return `<a class="btn btn-secondary btn-xs queue-btn-emr queue-btn-p360" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="Patient 360">360</a>`;
   }
 
@@ -248,6 +262,9 @@
       diagnosticPriorityByType: {
         pathology: 'Routine',
         radiology: 'Routine'
+      },
+      diagnosticScheduleByType: {
+        radiology: ''
       }
     };
 
@@ -546,7 +563,8 @@
             type: orderType,
             id: String(option.value),
             label: option.textContent.trim(),
-            priority: String(option.dataset.selectedPriority || state.diagnosticPriorityByType[orderType] || 'Routine')
+            priority: String(option.dataset.selectedPriority || state.diagnosticPriorityByType[orderType] || 'Routine'),
+            scheduledFor: String(option.dataset.selectedScheduledFor || state.diagnosticScheduleByType.radiology || '')
           });
         });
       });
@@ -569,7 +587,8 @@
       listEl.innerHTML = selectedTests.map((test) => {
         const icon = test.type === 'radiology' ? '🩻' : '🧪';
         const priorityText = ` [${escapeHtml(test.priority)}]`;
-        return `<span class="doctor-care-test-badge">${icon} ${escapeHtml(test.label)}${priorityText} <button type="button" class="doctor-care-test-remove" data-type="${test.type}" data-test-id="${escapeHtml(test.id)}">✕</button></span>`;
+        const scheduleText = test.type === 'radiology' && test.scheduledFor ? ` [${escapeHtml(test.scheduledFor.replace('T', ' '))}]` : '';
+        return `<span class="doctor-care-test-badge">${icon} ${escapeHtml(test.label)}${priorityText}${scheduleText} <button type="button" class="doctor-care-test-remove" data-type="${test.type}" data-test-id="${escapeHtml(test.id)}">✕</button></span>`;
       }).join('');
     }
 
@@ -580,6 +599,8 @@
       const testEl = document.getElementById('doctorUnifiedTestSelect');
       const priorityWrapEl = document.getElementById('doctorUnifiedPriorityWrap');
       const priorityEl = document.getElementById('doctorUnifiedTestPriority');
+      const scheduleWrapEl = document.getElementById('doctorUnifiedScheduleWrap');
+      const scheduleEl = document.getElementById('doctorUnifiedTestSchedule');
       const listEl = document.getElementById('labTestsAdded');
 
       if (!addBtn || !blockEl || !typeEl || !testEl || !listEl) {
@@ -594,6 +615,22 @@
 
         priorityWrapEl.style.display = '';
         priorityEl.value = state.diagnosticPriorityByType[orderType] || 'Routine';
+
+        const isRadiology = orderType === 'radiology';
+        if (scheduleWrapEl && scheduleEl) {
+          scheduleWrapEl.style.display = isRadiology ? '' : 'none';
+          if (!state.diagnosticScheduleByType.radiology) {
+            state.diagnosticScheduleByType.radiology = scheduleEl.value || '';
+          }
+          if (isRadiology) {
+            scheduleEl.value = state.diagnosticScheduleByType.radiology || scheduleEl.value || '';
+          }
+        }
+
+        const hiddenScheduleInput = document.querySelector('#saveDiagnosticOrderForm_radiology input[name="scheduled_for"]');
+        if (hiddenScheduleInput && isRadiology && scheduleEl) {
+          hiddenScheduleInput.value = scheduleEl.value || hiddenScheduleInput.value || '';
+        }
       }
 
       const typeOptions = Array.from(typeEl.options)
@@ -640,6 +677,17 @@
         };
       }
 
+      if (scheduleEl) {
+        scheduleEl.onchange = function () {
+          state.diagnosticScheduleByType.radiology = scheduleEl.value || '';
+          const hiddenScheduleInput = document.querySelector('#saveDiagnosticOrderForm_radiology input[name="scheduled_for"]');
+          if (hiddenScheduleInput) {
+            hiddenScheduleInput.value = scheduleEl.value || hiddenScheduleInput.value || '';
+          }
+          renderUnifiedDiagnosticBadges();
+        };
+      }
+
       testEl.onchange = function () {
         if (!typeEl.value || !testEl.value) {
           return;
@@ -653,6 +701,7 @@
           : null;
         if (selectedHiddenOption) {
           selectedHiddenOption.dataset.selectedPriority = priorityEl ? (priorityEl.value || 'Routine') : 'Routine';
+          selectedHiddenOption.dataset.selectedScheduledFor = scheduleEl ? (scheduleEl.value || '') : '';
         }
         if (orderType) {
           state.diagnosticPriorityByType[orderType] = priorityEl ? (priorityEl.value || 'Routine') : 'Routine';
@@ -734,6 +783,9 @@
       state.diagnosticPriorityByType = {
         pathology: 'Routine',
         radiology: 'Routine'
+      };
+      state.diagnosticScheduleByType = {
+        radiology: ''
       };
 
       function bindUnifiedActionButtons() {
@@ -1065,6 +1117,14 @@
 
           if (orderType === 'pathology') {
             diagnosticBody.append('priority', payload.priority || 'Routine');
+          }
+
+          if (orderType === 'radiology') {
+            const scheduleInput = payload.selectEl.closest('form')?.querySelector('input[name="scheduled_for"]');
+            const scheduledFor = String(scheduleInput?.value || state.diagnosticScheduleByType.radiology || '').trim();
+            if (scheduledFor) {
+              diagnosticBody.append('scheduled_for', scheduledFor);
+            }
           }
 
           const diagnosticResponse = await fetch(routeWithId(ROUTES.diagnosticStore, state.opdPatientId), {

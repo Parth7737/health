@@ -129,6 +129,10 @@
                                             <option value="STAT">STAT</option>
                                         </select>
                                     </div>
+                                    <div class="doctor-care-form-group" id="doctorUnifiedScheduleWrap" style="display:none;">
+                                        <label>Radiology Schedule</label>
+                                        <input type="datetime-local" id="doctorUnifiedTestSchedule" class="form-control" value="{{ now()->format('Y-m-d\\TH:i') }}" min="{{ now()->format('Y-m-d\\TH:i') }}">
+                                    </div>
                                     <div class="doctor-care-form-group">
                                         <label>Test</label>
                                         <select id="doctorUnifiedTestSelect" class="form-control">

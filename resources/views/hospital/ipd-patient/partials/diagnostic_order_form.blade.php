@@ -26,6 +26,19 @@
                     </select>
                 </div>
             @endif
+            @if($orderType === 'radiology')
+                <div class="col-md-6">
+                    <label class="form-label">Scheduled Date & Time</label>
+                    <input
+                        type="datetime-local"
+                        name="scheduled_for"
+                        class="form-control"
+                        value="{{ now()->format('Y-m-d\\TH:i') }}"
+                        min="{{ now()->format('Y-m-d\\TH:i') }}"
+                    >
+                    <small class="text-muted">Leave as current date/time or choose a future slot.</small>
+                </div>
+            @endif
             <div class="col-md-12">
                 <label class="form-label">Select {{ ucfirst($orderType) }} Tests</label>
                 <select name="test_ids[]" id="ipd_diagnostic_test_ids" class="form-control select2-modal" multiple>

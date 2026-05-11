@@ -229,6 +229,65 @@
         }
         $el.select2({ width: '100%', dropdownParent: $modal });
       });
+
+      this.applyModalTabIndexOrder(form);
+    }
+
+    applyModalTabIndexOrder(form) {
+      if (!form) {
+        return;
+      }
+
+      const controls = Array.from(form.querySelectorAll('input, select, textarea, button'))
+        .filter((node) => this.isTabbableControl(node));
+
+      let index = 1;
+      controls.forEach((node) => {
+        if (node.tagName === 'SELECT' && node.classList.contains('select2-hidden-accessible')) {
+          node.dataset.modalTabindex = String(index);
+          node.setAttribute('tabindex', '-1');
+        } else {
+          node.setAttribute('tabindex', String(index));
+        }
+
+        if (node.tagName === 'SELECT') {
+          node.dataset.modalTabindex = String(index);
+        }
+
+        index += 1;
+      });
+
+      this.syncModalSelect2TabOrder(form);
+    }
+
+    syncModalSelect2TabOrder(form) {
+      if (!form || !(window.jQuery && jQuery.fn && jQuery.fn.select2)) {
+        return;
+      }
+
+      form.querySelectorAll('select[id]').forEach((selectNode) => {
+        const tabIndex = selectNode.dataset.modalTabindex || selectNode.getAttribute('tabindex');
+        if (!tabIndex) {
+          return;
+        }
+
+        const select2Selection = selectNode.nextElementSibling?.querySelector('.select2-selection');
+        if (select2Selection) {
+          select2Selection.setAttribute('tabindex', String(tabIndex));
+        }
+      });
+    }
+
+    isTabbableControl(node) {
+      if (!node || node.disabled) return false;
+      if (node.type === 'hidden') return false;
+      if (!this.isVisibleElement(node)) return false;
+      return true;
+    }
+
+    isVisibleElement(node) {
+      if (!node || !(node instanceof HTMLElement)) return false;
+      return !!(node.offsetParent || node.getClientRects().length);
     }
 
     observeModalState() {

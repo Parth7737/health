@@ -8,61 +8,55 @@
             </div>
         </div>
         <div class="rad-ris-card-body">
-            <div class="rad-ris-worklist-filters">
-                <div class="rad-ris-worklist-filters-row rad-ris-worklist-filters-row--controls">
-                    <div class="rad-ris-filter-group rad-ris-filter-group--modality">
-                        <label for="rad-ris-filter-modality">Modality</label>
-                        <select id="rad-ris-filter-modality" class="form-control rad-ris-select2" data-placeholder="All modalities">
-                            <option value="">All modalities</option>
-                            @foreach ($modalities as $m)
-                                <option value="{{ $m }}">{{ $m }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="rad-ris-filter-group rad-ris-filter-group--status">
-                        <label for="rad-ris-filter-status">Status</label>
-                        <select id="rad-ris-filter-status" class="form-control rad-ris-select2">
-                            <option value="">All status</option>
-                            <option value="ordered">Ordered</option>
-                            <option value="examination">Examination</option>
-                            <option value="in_progress">In progress (legacy)</option>
-                        </select>
-                    </div>
-                    <div class="rad-ris-filter-group rad-ris-filter-group--priority">
-                        <label for="rad-ris-filter-priority">Priority</label>
-                        <select id="rad-ris-filter-priority" class="form-control rad-ris-select2">
-                            <option value="">All priority</option>
-                            <option value="STAT">STAT</option>
-                            <option value="URGENT">Urgent</option>
-                            <option value="ROUTINE">Routine</option>
-                        </select>
-                    </div>
-                    <div class="rad-ris-filter-group rad-ris-filter-group--date">
-                        <label for="rad-ris-filter-date-from">From</label>
-                        <input type="text" id="rad-ris-filter-date-from" class="form-control rad-ris-flatpickr diagnosis-date" placeholder="dd-mm-yyyy" autocomplete="off">
-                    </div>
-                    <div class="rad-ris-filter-group rad-ris-filter-group--date">
-                        <label for="rad-ris-filter-date-to">To</label>
-                        <input type="text" id="rad-ris-filter-date-to" class="form-control rad-ris-flatpickr diagnosis-date" placeholder="dd-mm-yyyy" autocomplete="off">
-                    </div>
-                    <div class="rad-ris-filter-group rad-ris-filter-group--actions">
-                        <label class="rad-ris-filter-label-spacer" aria-hidden="true">Reset</label>
-                        <button type="button" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm" id="rad-ris-clear-filters" title="Clear modality, status, priority & dates">
-                            <i class="fa-solid fa-filter-circle-xmark"></i> Reset filters
-                        </button>
+            <div class="worklist-filters">
+                <div class="filter-group">
+                    <label for="rad-ris-filter-modality">Modality</label>
+                    <select id="rad-ris-filter-modality" class="form-control rad-ris-select2" data-placeholder="All modalities">
+                        <option value="">All modalities</option>
+                        @foreach ($modalities as $m)
+                            <option value="{{ $m }}">{{ $m }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="rad-ris-filter-status">Status</label>
+                    <select id="rad-ris-filter-status" class="form-control rad-ris-select2">
+                        <option value="">All status</option>
+                        <option value="ordered">Ordered</option>
+                        <option value="examination">Examination</option>
+                        <option value="in_progress">In progress (legacy)</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="rad-ris-filter-priority">Priority</label>
+                    <select id="rad-ris-filter-priority" class="form-control rad-ris-select2">
+                        <option value="">All priority</option>
+                        <option value="STAT">STAT</option>
+                        <option value="URGENT">Urgent</option>
+                        <option value="ROUTINE">Routine</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="rad-ris-filter-date-from">From</label>
+                    <input type="text" id="rad-ris-filter-date-from" class="form-control rad-ris-flatpickr diagnosis-date" placeholder="dd-mm-yyyy" autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <label for="rad-ris-filter-date-to">To</label>
+                    <input type="text" id="rad-ris-filter-date-to" class="form-control rad-ris-flatpickr diagnosis-date" placeholder="dd-mm-yyyy" autocomplete="off">
+                </div>
+                <div class="filter-group search-box">
+                    <label for="rad-ris-worklist-search">Search</label>
+                    <div class="search-wrap">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <input type="text" id="rad-ris-worklist-search" class="form-control" name="rad_ris_worklist_search" placeholder="Patient name, MRN, order no, accession, test…" autocomplete="off" aria-label="Search worklist">
                     </div>
                 </div>
-                <div class="rad-ris-worklist-filters-row rad-ris-worklist-filters-row--search">
-                    <label for="rad-ris-worklist-search">Search</label>
-                    <div class="rad-ris-search-input-row">
-                        <div class="rad-ris-search-wrap">
-                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                            <input type="search" id="rad-ris-worklist-search" name="rad_ris_worklist_search" placeholder="Patient name, MRN, order no, accession, test…" autocomplete="off" aria-label="Search worklist">
-                        </div>
-                        <button type="button" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm" id="rad-ris-clear-search" title="Clear search">
-                            <i class="fa-solid fa-xmark"></i> Clear
-                        </button>
-                    </div>
+                
+                <div class="filter-group filter-actions">
+                    <label class="invisible-label" aria-hidden="true">Actions</label>
+                    <button type="button" class="rad-ris-btn rad-ris-btn-outline rad-ris-btn-sm" id="rad-ris-clear-filters" title="Clear modality, status, priority, dates and search">
+                        <i class="fa-solid fa-filter-circle-xmark"></i> Reset filters
+                    </button>
                 </div>
             </div>
 
