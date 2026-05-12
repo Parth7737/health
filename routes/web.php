@@ -7,6 +7,12 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\CareersPortalController;
+
+Route::get('/careers/{uuid}', [CareersPortalController::class, 'index'])->name('careers.index');
+Route::post('/careers/{uuid}/apply', [CareersPortalController::class, 'apply'])
+    ->middleware('throttle:30,1')
+    ->name('careers.apply');
 
 Route::get('/forgot-password', 'PasswordResetLinkController@create')
     ->middleware('guest')

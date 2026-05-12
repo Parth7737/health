@@ -3,8 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Module;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class HospitalPermissionsSeeder extends Seeder
 {
@@ -85,6 +86,7 @@ class HospitalPermissionsSeeder extends Seeder
             'HR Department' => 'hr-department',
             'HR Department Unit' => 'hr-department-unit',
             'HR Leave Type' => 'hr-leave-type',
+            'HR Recruitment' => 'hr-recruitment',
 
             // Beds Management
             'Bed Type' => 'bed-type',
@@ -134,8 +136,19 @@ class HospitalPermissionsSeeder extends Seeder
             }
         }
 
+        $recruitmentPermissions = [
+            'view-hr-recruitment',
+            'create-hr-recruitment',
+            'edit-hr-recruitment',
+            'delete-hr-recruitment',
+        ];
+        foreach (['Master Admin', 'Administrator', 'Chairman'] as $roleName) {
+            $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
+            if ($role) {
+                $role->givePermissionTo($recruitmentPermissions);
+            }
+        }
 
-        
         // Hospital Data
         $manual_modules = [
             'hospital-data' => ['view', 'edit'],

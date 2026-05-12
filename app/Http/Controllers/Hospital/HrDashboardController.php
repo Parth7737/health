@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Hospital;
 use App\Http\Controllers\BaseHospitalController;
 use App\Models\HrAttendanceRecord;
 use App\Models\HrDepartment;
+use App\Models\HrDesignation;
 use App\Models\HrLeaveRequest;
 use App\Models\HrLeaveType;
+use App\Models\HrStaffLeaveBalance;
+use App\Models\HrRecruitmentApplication;
 use App\Models\HrPayrollRecord;
 use App\Models\HrRecruitmentVacancy;
 use App\Models\HrTrainingProgram;
@@ -14,6 +17,8 @@ use App\Models\HeaderFooter;
 use App\Models\Hospital;
 use App\Models\Role;
 use App\Models\Staff;
+use App\Services\HrLeaveAttendanceSyncService;
+use App\Services\HrLeaveBalanceService;
 use App\Services\PayrollProcessingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -68,6 +73,10 @@ class HrDashboardController extends BaseHospitalController
             return response()->json(['html' => '<div class="hrx-loading">You do not have permission to view attendance.</div>'], 403);
         }
 
+        if ($tab === 'recruitment' && !auth()->user()->can('view-hr-recruitment')) {
+            return response()->json(['html' => '<div class="hrx-loading">You do not have permission to view recruitment.</div>'], 403);
+        }
+
         $view = match ($tab) {
             'dashboard' => view('hospital.hr.dashboard.tabs.dashboard', $this->dashboardData()),
             'directory' => view('hospital.hr.dashboard.tabs.directory', $this->directoryData()),
@@ -88,11 +97,26 @@ class HrDashboardController extends BaseHospitalController
         $type = $request->string('type')->toString();
 
         $staffId = (int) $request->input('staff_id', 0);
+        $vacancyId = (int) $request->input('vacancy_id', 0);
         $attendanceDateInput = trim((string) $request->input('attendance_date', ''));
         try {
             $attendanceDate = $attendanceDateInput !== '' ? Carbon::parse($attendanceDateInput)->toDateString() : now()->toDateString();
         } catch (\Throwable $e) {
             $attendanceDate = now()->toDateString();
+        }
+
+        if ($type === 'recruitment-vacancy-form') {
+            if ($vacancyId > 0) {
+                if (!auth()->user()->can('edit-hr-recruitment')) {
+                    return response()->json(['status' => false, 'message' => 'You do not have permission to edit recruitment vacancies.'], 403);
+                }
+            } elseif (!auth()->user()->can('create-hr-recruitment')) {
+                return response()->json(['status' => false, 'message' => 'You do not have permission to post recruitment vacancies.'], 403);
+            }
+        }
+
+        if ($type === 'recruitment-vacancy-view' && !auth()->user()->can('view-hr-recruitment')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to view recruitment vacancies.'], 403);
         }
 
         $existingAttendance = null;
@@ -125,6 +149,16 @@ class HrDashboardController extends BaseHospitalController
             'leave-request-ajax' => view('hospital.hr.dashboard.modals.leave-request-ajax', [
                 'staffOptions' => Staff::query()->select('id', 'first_name', 'last_name', 'staff_id')->orderBy('first_name')->limit(300)->get(),
                 'leaveTypes' => HrLeaveType::query()->select('id', 'name')->orderBy('name')->get(),
+            ])->render(),
+            'recruitment-vacancy-form' => view('hospital.hr.dashboard.modals.recruitment-vacancy-form', [
+                'vacancy' => $vacancyId > 0 ? HrRecruitmentVacancy::query()->find($vacancyId) : null,
+                'departments' => HrDepartment::query()->select('id', 'name')->orderBy('name')->get(),
+                'designations' => HrDesignation::query()->select('id', 'name')->orderBy('name')->get(),
+            ])->render(),
+            'recruitment-vacancy-view' => view('hospital.hr.dashboard.modals.recruitment-vacancy-view', [
+                'vacancy' => HrRecruitmentVacancy::query()
+                    ->with(['department:id,name', 'designation:id,name', 'applications'])
+                    ->find($vacancyId),
             ])->render(),
             default => ''
         };
@@ -261,6 +295,177 @@ class HrDashboardController extends BaseHospitalController
         ]);
     }
 
+    public function leaveRequestsData(Request $request): JsonResponse
+    {
+        if (!Schema::hasTable('hr_leave_requests')) {
+            return response()->json([
+                'draw' => (int) $request->input('draw', 0),
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = min(max((int) $request->input('length', 10), 1), 100);
+
+        $searchCustom = trim((string) $request->input('search_custom', ''));
+        if ($searchCustom === '' && is_array($request->input('search'))) {
+            $searchCustom = trim((string) data_get($request->input('search'), 'value', ''));
+        }
+        $statusFilter = strtolower(trim((string) $request->input('status_filter', '')));
+
+        $totalRecords = HrLeaveRequest::query()->where('hospital_id', $this->hospital_id)->count();
+
+        $query = HrLeaveRequest::query()
+            ->leftJoin('staff', 'staff.id', '=', 'hr_leave_requests.staff_id')
+            ->leftJoin('hr_leave_types', 'hr_leave_types.id', '=', 'hr_leave_requests.hr_leave_type_id')
+            ->where('hr_leave_requests.hospital_id', $this->hospital_id)
+            ->select(['hr_leave_requests.*']);
+
+        if ($searchCustom !== '') {
+            $like = '%' . addcslashes($searchCustom, '%_\\') . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('hr_leave_requests.request_no', 'like', $like)
+                    ->orWhere('staff.first_name', 'like', $like)
+                    ->orWhere('staff.last_name', 'like', $like)
+                    ->orWhere('staff.staff_id', 'like', $like)
+                    ->orWhere('hr_leave_types.name', 'like', $like);
+            });
+        }
+
+        if ($statusFilter === 'pending') {
+            $query->where('hr_leave_requests.status', 'Pending');
+        } elseif ($statusFilter === 'approved') {
+            $query->where('hr_leave_requests.status', 'Approved');
+        } elseif ($statusFilter === 'rejected') {
+            $query->where('hr_leave_requests.status', 'Rejected');
+        }
+
+        $filteredRecords = (clone $query)->count();
+
+        $orderColumnIndex = (int) $request->input('order.0.column', 0);
+        $orderDir = strtolower((string) $request->input('order.0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        $columnMap = [
+            0 => 'hr_leave_requests.id',
+            1 => 'hr_leave_requests.request_no',
+            2 => 'staff.first_name',
+            3 => 'hr_leave_types.name',
+            4 => 'hr_leave_requests.from_date',
+            5 => 'hr_leave_requests.to_date',
+            6 => 'hr_leave_requests.total_days',
+            7 => 'hr_leave_requests.reason',
+            8 => 'hr_leave_requests.status',
+        ];
+
+        if (array_key_exists($orderColumnIndex, $columnMap)) {
+            $query->orderBy($columnMap[$orderColumnIndex], $orderDir);
+        } else {
+            $query->orderBy('hr_leave_requests.id', 'desc');
+        }
+
+        $rows = (clone $query)->skip($start)->take($length)->get();
+        $rows->load(['staff:id,first_name,last_name,staff_id', 'leaveType:id,name']);
+
+        $data = $rows->map(function ($row) {
+            $fullName = trim(($row->staff->first_name ?? '') . ' ' . ($row->staff->last_name ?? ''));
+            $typeName = $row->leaveType->name ?? 'General';
+            $statusLabel = $row->status ?: 'Unknown';
+            $statusClass = $statusLabel === 'Approved' ? 'green' : ($statusLabel === 'Rejected' ? 'red' : 'orange');
+            $reqAttr = htmlspecialchars((string) $row->request_no, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $noteAttr = htmlspecialchars((string) ($row->status_note ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $reasonAttr = htmlspecialchars((string) ($row->reason ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $typeAttr = htmlspecialchars((string) $typeName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $nameAttr = htmlspecialchars($fullName !== '' ? $fullName : '—', ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $statusLower = strtolower($statusLabel);
+
+            $staffId = (int) ($row->staff_id ?? 0);
+            $balanceCell = $staffId > 0
+                ? '<button type="button" class="hrx-btn-lite hrx-staff-leave-balance-open" data-staff-id="' . $staffId . '" data-staff-name="' . $nameAttr . '" title="Yearly leave balance"><i class="fa fa-bar-chart"></i></button>'
+                : '<span class="text-muted" style="font-size:12px">—</span>';
+
+            if ($statusLabel === 'Pending') {
+                $actions = '<div class="hrx-actions">'
+                    . '<button type="button" class="hrx-btn-lite hrx-leave-approve hrx-leave-approve-btn" data-request="' . $reqAttr . '" title="Approve"><i class="fa fa-check"></i></button>'
+                    . '<button type="button" class="hrx-btn-lite hrx-leave-reject hrx-leave-reject-btn" data-request="' . $reqAttr . '" title="Reject"><i class="fa fa-times"></i></button>'
+                    . '</div>';
+            } elseif ($statusLabel === 'Approved') {
+                $actions = '<div class="hrx-actions">'
+                    . '<button type="button" class="hrx-btn-lite hrx-leave-view hrx-leave-view-btn" data-request="' . $reqAttr . '" data-status="' . htmlspecialchars($statusLower, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '" data-note="' . $noteAttr . '" data-reason="' . $reasonAttr . '" data-type="' . $typeAttr . '" data-display-name="' . $nameAttr . '" title="View"><i class="fa fa-eye"></i></button>'
+                    . '<button type="button" class="hrx-btn-lite hrx-leave-withdraw hrx-leave-withdraw-btn" data-request="' . $reqAttr . '" title="Withdraw approval (removes linked attendance)"><i class="fa fa-undo"></i></button>'
+                    . '</div>';
+            } else {
+                $actions = '<div class="hrx-actions">'
+                    . '<button type="button" class="hrx-btn-lite hrx-leave-view hrx-leave-view-btn" data-request="' . $reqAttr . '" data-status="' . htmlspecialchars($statusLower, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '" data-note="' . $noteAttr . '" data-reason="' . $reasonAttr . '" data-type="' . $typeAttr . '" data-display-name="' . $nameAttr . '" title="View"><i class="fa fa-eye"></i></button>'
+                    . '</div>';
+            }
+
+            return [
+                'id' => (int) $row->id,
+                'request_no' => '<span style="font-family:monospace;font-size:12px">' . e($row->request_no) . '</span>',
+                'staff_name' => '<span style="font-weight:700">' . e($fullName !== '' ? $fullName : '—') . '</span>',
+                'type_name' => '<span class="hrx-badge blue">' . e($typeName) . '</span>',
+                'from_date' => '<span style="color:#5a7894;font-size:12px">' . e(optional($row->from_date)->format('d/m') ?: '—') . '</span>',
+                'to_date' => '<span style="color:#5a7894;font-size:12px">' . e(optional($row->to_date)->format('d/m') ?: '—') . '</span>',
+                'total_days' => '<span style="font-weight:700">' . e(number_format((float) $row->total_days, 1)) . '</span>',
+                'reason' => '<span style="font-size:12px;color:#5a7894;max-width:160px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' . $reasonAttr . '">' . ($row->reason ? e($row->reason) : '—') . '</span>',
+                'status' => '<span class="hrx-badge ' . $statusClass . '">' . e($statusLabel) . '</span>',
+                'balance' => $balanceCell,
+                'action' => $actions,
+            ];
+        })->values();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $totalRecords,
+            'recordsFiltered' => $filteredRecords,
+            'data' => $data,
+        ]);
+    }
+
+    public function staffLeaveBalance(Request $request): JsonResponse
+    {
+        $staffId = (int) $request->input('staff_id', 0);
+        $year = (int) $request->input('year', now()->year);
+        if ($staffId <= 0) {
+            return response()->json(['status' => false, 'message' => 'Staff is required.'], 422);
+        }
+
+        $staff = Staff::query()
+            ->where('id', $staffId)
+            ->where('hospital_id', $this->hospital_id)
+            ->first(['id', 'first_name', 'last_name', 'staff_id']);
+
+        if (!$staff) {
+            return response()->json(['status' => false, 'message' => 'Staff not found.'], 404);
+        }
+
+        $rows = collect();
+        if (Schema::hasTable('hr_staff_leave_balances')) {
+            $rows = HrStaffLeaveBalance::query()
+                ->where('staff_id', $staffId)
+                ->where('year', $year)
+                ->with('leaveType:id,name')
+                ->orderBy('hr_leave_type_id')
+                ->get();
+        }
+
+        $html = view('hospital.hr.dashboard.tabs.partials.staff-leave-balance-body', [
+            'rows' => $rows,
+            'year' => $year,
+            'staff' => $staff,
+        ])->render();
+
+        return response()->json([
+            'status' => true,
+            'html' => $html,
+            'staff_name' => trim(($staff->first_name ?? '') . ' ' . ($staff->last_name ?? '')),
+            'year' => $year,
+        ]);
+    }
+
     public function attendanceRegisterData(Request $request): JsonResponse
     {
         if (!$this->canViewAttendance()) {
@@ -284,7 +489,8 @@ class HrDashboardController extends BaseHospitalController
         $staffQuery = Staff::query()
             ->with(['department:id,name'])
             ->select('id', 'first_name', 'last_name', 'staff_id', 'hr_department_id', 'status')
-            ->where('status', 'Active');
+            ->where('status', 'Active')
+            ->where('hospital_id', (int) $this->hospital_id);
 
         if ($department !== '') {
             if (is_numeric($department)) {
@@ -313,38 +519,50 @@ class HrDashboardController extends BaseHospitalController
         $recordsByStaff = collect();
         if (Schema::hasTable('hr_attendance_records') && $staffRows->isNotEmpty()) {
             $recordsByStaff = HrAttendanceRecord::query()
+                ->where('hospital_id', (int) $this->hospital_id)
                 ->whereIn('staff_id', $staffRows->pluck('id'))
                 ->whereBetween('attendance_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
                 ->get()
                 ->groupBy('staff_id');
         }
 
-        $rows = $staffRows->map(function ($staff) use ($days, $recordsByStaff) {
+        $leaveCoverage = $this->approvedLeaveCoverageByStaff(
+            (int) $this->hospital_id,
+            $staffRows->pluck('id')->all(),
+            $weekStart->copy()->startOfDay(),
+            $weekEnd->copy()->startOfDay()
+        );
+
+        $rows = $staffRows->map(function ($staff) use ($days, $recordsByStaff, $leaveCoverage) {
             $name = trim(($staff->first_name ?? '') . ' ' . ($staff->last_name ?? ''));
             $departmentName = $staff->department->name ?? 'Unassigned';
             $staffRecs = $recordsByStaff[$staff->id] ?? collect();
             $recByDay = $staffRecs->keyBy(function ($rec) {
-                return $rec->attendance_date->toDateString();
+                return Carbon::parse($rec->attendance_date)->toDateString();
             });
 
-            $cells = collect($days)->map(function ($day) use ($recByDay) {
-                $dayKey = $day->toDateString();
+            $cells = collect($days)->map(function ($day) use ($recByDay, $staff, $leaveCoverage) {
+                $dayKey = $day->copy()->startOfDay()->toDateString();
                 $rec = $recByDay[$dayKey] ?? null;
-                $status = $rec->status ?? 'Absent';
+                $status = $rec?->status ?? 'Absent';
+                $onApprovedLeave = !empty($leaveCoverage[(int) $staff->id][$dayKey]);
 
                 $code = 'A';
-                if ($status === 'Present') {
+                $title = '';
+                if ($status == 'Present') {
                     $code = 'P';
-                } elseif ($status === 'Leave') {
-                    $code = 'L';
-                } elseif ($status === 'Holiday') {
+                } elseif ($status == 'Holiday') {
                     $code = 'H';
+                } elseif ($status == 'Leave' || ($onApprovedLeave && $status !== 'Present')) {
+                    $code = 'L';
+                    $title = 'On leave (approved)';
                 }
 
                 return [
                     'date' => $dayKey,
                     'code' => $code,
                     'class' => strtolower($code),
+                    'title' => $title,
                 ];
             })->values();
 
@@ -497,20 +715,32 @@ class HrDashboardController extends BaseHospitalController
                 ->keyBy('staff_id');
         }
 
+        $dayCarbon = Carbon::parse($attendanceDate)->startOfDay();
+        $leaveCoverage = $this->approvedLeaveCoverageByStaff(
+            (int) $this->hospital_id,
+            $staffRows->pluck('id')->all(),
+            $dayCarbon,
+            $dayCarbon->copy()
+        );
+
         $canEditAttendance = $this->canEditAttendance();
 
-        $data = $staffRows->map(function ($staff) use ($recordsByStaff, $attendanceDate, $canEditAttendance) {
+        $data = $staffRows->map(function ($staff) use ($recordsByStaff, $attendanceDate, $canEditAttendance, $leaveCoverage) {
             $name = trim(($staff->first_name ?? '') . ' ' . ($staff->last_name ?? ''));
             $record = $recordsByStaff[$staff->id] ?? null;
 
             $designation = $this->resolveStaffDesignation($staff);
-            $shift = $record->shift_name ?? 'General';
+            $shift = $record?->shift_name ?? 'General';
             $inTime = $record && $record->in_time ? Carbon::parse($record->in_time)->format('H:i') : '—';
             $outTime = $record && $record->out_time ? Carbon::parse($record->out_time)->format('H:i') : '—';
             $statusLabel = $record ? $record->combined_status_label : 'Absent';
+            $onApprovedLeave = !empty($leaveCoverage[(int) $staff->id][$attendanceDate]);
+            if ($onApprovedLeave && (!$record || (string) $record->status === 'Absent')) {
+                $statusLabel = 'OnLeave';
+            }
             $statusClass = $this->attendanceStatusBadgeClass($statusLabel);
 
-            $overtimeHours = (float) ($record->overtime_hours ?? 0);
+            $overtimeHours = (float) ($record?->overtime_hours ?? 0);
             $otDisplay = $overtimeHours > 0
                 ? rtrim(rtrim((string) number_format($overtimeHours, 2, '.', ''), '0'), '.') . 'h'
                 : '—';
@@ -1438,19 +1668,40 @@ class HrDashboardController extends BaseHospitalController
             return response()->json(['status' => false, 'message' => 'Leave request not found.'], 404);
         }
 
-        if ($leave->status !== 'Pending') {
-            return response()->json(['status' => false, 'message' => 'Only pending requests can be updated.'], 422);
+        $newStatus = $request->string('status')->toString();
+        $wasApproved = $leave->status === 'Approved';
+        $canUpdate = $leave->status === 'Pending'
+            || ($wasApproved && $newStatus === 'Rejected');
+
+        if (!$canUpdate) {
+            return response()->json(['status' => false, 'message' => 'Only pending requests can be approved or rejected, or approved leave can be withdrawn.'], 422);
         }
 
-        $leave->status = $request->string('status')->toString();
+        $leave->status = $newStatus;
         $leave->status_note = $request->string('note')->toString();
         $leave->approved_at = now();
         $leave->approved_by = auth()->id();
         $leave->save();
 
+        if (Schema::hasTable('hr_staff_leave_balances')) {
+            app(HrLeaveBalanceService::class)->syncUsedDaysForStaff((int) $leave->staff_id, (int) $leave->hospital_id);
+        }
+
+        $attendanceSync = app(HrLeaveAttendanceSyncService::class);
+        if ($leave->status === 'Approved') {
+            $attendanceSync->syncApprovedLeaveToAttendance($leave);
+        } elseif ($leave->status === 'Rejected') {
+            $attendanceSync->removeLinkedLeaveAttendance($leave);
+        }
+
+        $message = 'Leave request ' . $leave->request_no . ' ' . strtolower($leave->status) . ' successfully.';
+        if ($wasApproved && $leave->status === 'Rejected') {
+            $message = 'Approved leave withdrawn for ' . $leave->request_no . '. Linked attendance rows were removed.';
+        }
+
         return response()->json([
             'status' => true,
-            'message' => 'Leave request ' . $leave->request_no . ' ' . strtolower($leave->status) . ' successfully.',
+            'message' => $message,
         ]);
     }
 
@@ -1725,22 +1976,53 @@ class HrDashboardController extends BaseHospitalController
     private function leaveData(): array
     {
         if (!Schema::hasTable('hr_leave_requests')) {
-            return ['leaveRows' => collect(), 'leaveByStatus' => collect(), 'leaveBalance' => collect(), 'leaveCalendar' => collect()];
+            return [
+                'leaveByStatus' => collect(),
+                'leaveCalendar' => collect(),
+                'leaveBalance' => collect(),
+            ];
         }
-
-        $leaveRows = HrLeaveRequest::query()
-            ->with(['staff:id,first_name,last_name,staff_id', 'leaveType:id,name'])
-            ->latest('id')
-            ->limit(100)
-            ->get();
 
         $leaveByStatus = HrLeaveRequest::query()
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->get();
 
+        $leaveCalendar = HrLeaveRequest::query()
+            ->with(['staff:id,first_name,last_name,staff_id', 'leaveType:id,name'])
+            ->where('status', '!=', 'Rejected')
+            ->whereNotNull('from_date')
+            ->latest('id')
+            ->limit(40)
+            ->get()
+            ->map(fn ($r) => [
+                'name' => trim(($r->staff->first_name ?? '') . ' ' . ($r->staff->last_name ?? '')),
+                'type' => $r->leaveType->name ?? 'Leave',
+                'from' => optional($r->from_date)->format('d M'),
+                'to' => optional($r->to_date)->format('d M'),
+                'status' => $r->status,
+            ])
+            ->values();
+
         $leaveBalance = collect();
-        if (Schema::hasTable('hr_leave_types')) {
+        $year = (int) now()->year;
+        if (Schema::hasTable('hr_staff_leave_balances')) {
+            $leaveBalance = HrStaffLeaveBalance::query()
+                ->where('hr_staff_leave_balances.year', $year)
+                ->join('hr_leave_types', 'hr_leave_types.id', '=', 'hr_staff_leave_balances.hr_leave_type_id')
+                ->selectRaw('hr_leave_types.name as type_name')
+                ->selectRaw('SUM(hr_staff_leave_balances.entitled_days) as entitled_sum')
+                ->selectRaw('SUM(hr_staff_leave_balances.used_days) as used_sum')
+                ->groupBy('hr_leave_types.id', 'hr_leave_types.name')
+                ->orderBy('hr_leave_types.name')
+                ->get()
+                ->map(fn ($r) => [
+                    'name' => $r->type_name,
+                    'used' => (float) $r->used_sum,
+                    'available' => max(0, (float) $r->entitled_sum - (float) $r->used_sum),
+                ])
+                ->values();
+        } elseif (Schema::hasTable('hr_leave_types')) {
             $leaveBalance = HrLeaveType::query()
                 ->select('hr_leave_types.id', 'hr_leave_types.name')
                 ->selectRaw('COALESCE(SUM(CASE WHEN r.status = "Approved" THEN r.total_days ELSE 0 END), 0) as used_days')
@@ -1750,45 +2032,239 @@ class HrDashboardController extends BaseHospitalController
                 ->orderBy('hr_leave_types.name')
                 ->get()
                 ->map(fn ($t) => [
-                    'name'      => $t->name,
-                    'used'      => (float) $t->used_days,
+                    'name' => $t->name,
+                    'used' => (float) $t->used_days,
                     'available' => max(0, (float) $t->available_days),
                 ]);
         }
 
-        $leaveCalendar = $leaveRows
-            ->where('status', '!=', 'Rejected')
-            ->filter(fn ($r) => $r->from_date)
-            ->map(fn ($r) => [
-                'name'   => trim(($r->staff->first_name ?? '') . ' ' . ($r->staff->last_name ?? '')),
-                'type'   => $r->leaveType->name ?? 'Leave',
-                'from'   => optional($r->from_date)->format('d M'),
-                'to'     => optional($r->to_date)->format('d M'),
-                'status' => $r->status,
-            ])
-            ->values();
-
         return [
-            'leaveRows'     => $leaveRows,
             'leaveByStatus' => $leaveByStatus,
-            'leaveBalance'  => $leaveBalance,
             'leaveCalendar' => $leaveCalendar,
+            'leaveBalance' => $leaveBalance,
         ];
+    }
+
+    public function recruitmentVacanciesData(Request $request): JsonResponse
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = max((int) $request->input('length', 10), 1);
+        $search = trim((string) $request->input('search_custom', ''));
+        $status = trim((string) $request->input('status_filter', ''));
+
+        if (!Schema::hasTable('hr_recruitment_vacancies')) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $baseQuery = HrRecruitmentVacancy::query()
+            ->leftJoin('hr_departments', 'hr_departments.id', '=', 'hr_recruitment_vacancies.department_id')
+            ->leftJoin('hr_designations', 'hr_designations.id', '=', 'hr_recruitment_vacancies.hr_designation_id')
+            ->select('hr_recruitment_vacancies.*')
+            ->selectRaw('COALESCE(hr_departments.name, "General") as department_name')
+            ->selectRaw('COALESCE(hr_designations.name, hr_recruitment_vacancies.title) as designation_name');
+
+        $totalRecords = (clone $baseQuery)->count('hr_recruitment_vacancies.id');
+
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $baseQuery->where(function ($q) use ($like) {
+                $q->where('hr_recruitment_vacancies.title', 'like', $like)
+                    ->orWhere('hr_departments.name', 'like', $like)
+                    ->orWhere('hr_designations.name', 'like', $like);
+            });
+        }
+
+        if ($status !== '') {
+            $baseQuery->whereRaw('LOWER(hr_recruitment_vacancies.status) = ?', [strtolower($status)]);
+        }
+
+        $filteredRecords = (clone $baseQuery)->count('hr_recruitment_vacancies.id');
+
+        $rows = $baseQuery
+            ->orderByDesc('hr_recruitment_vacancies.id')
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        $canEditRecruitment = auth()->user()->can('edit-hr-recruitment');
+
+        $data = $rows->map(function ($row) use ($canEditRecruitment) {
+            $statusLower = strtolower((string) $row->status);
+            $statusClass = in_array($statusLower, ['open', 'in progress'], true)
+                ? 'orange'
+                : ($statusLower === 'closed' ? 'green' : 'blue');
+
+            $openRange = '-';
+            if ($row->open_from || $row->open_till) {
+                $openRange = (optional($row->open_from)->format('d M Y') ?: '-') . ' - ' . (optional($row->open_till)->format('d M Y') ?: '-');
+            }
+
+            $editBtn = $canEditRecruitment
+                ? '<button type="button" class="hrx-btn-lite hrx-recruitment-edit-btn hrx-recruitment-edit" data-vacancy-id="' . (int) $row->id . '" title="Edit"><i class="fa fa-edit"></i></button>'
+                : '';
+
+            return [
+                'id' => (int) $row->id,
+                'title' => '<span class="fw-700">' . e($row->designation_name ?: $row->title) . '</span>',
+                'department' => '<span class="hrx-badge recruitment-dept">' . e($row->department_name ?: 'General') . '</span>',
+                'required' => '<span class="fw-700">' . e((string) $row->required_positions) . '</span>',
+                'applicants' => e((string) ($row->applicants ?? 0)),
+                'shortlisted' => '<span style="color:#2e7d32;font-weight:700">' . e((string) ($row->shortlisted ?? 0)) . '</span>',
+                'status' => '<span class="hrx-badge ' . e($statusClass) . '">' . e($row->status ?: 'Open') . '</span>',
+                'open_range' => e($openRange),
+                'action' => '<div class="hrx-actions hrx-recruitment-table-actions">'
+                    . '<button type="button" class="hrx-btn-lite hrx-recruitment-view-btn hrx-recruitment-view" data-vacancy-id="' . (int) $row->id . '" title="View"><i class="fa fa-eye"></i></button>'
+                    . $editBtn
+                    . '</div>',
+            ];
+        })->values();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $totalRecords,
+            'recordsFiltered' => $filteredRecords,
+            'data' => $data,
+        ]);
+    }
+
+    public function storeRecruitmentVacancy(Request $request): JsonResponse
+    {
+        if (!Schema::hasTable('hr_recruitment_vacancies')) {
+            return response()->json(['status' => false, 'message' => 'Vacancy table not available. Run migrations first.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'id' => 'nullable|integer|exists:hr_recruitment_vacancies,id',
+            'hr_designation_id' => 'nullable|exists:hr_designations,id',
+            'department_id' => 'nullable|exists:hr_departments,id',
+            'title' => 'nullable|string|max:150',
+            'required_positions' => 'required|integer|min:1|max:999',
+            'status' => 'required|string|max:40',
+            'open_from' => 'nullable|date',
+            'open_till' => 'nullable|date|after_or_equal:open_from',
+            'description' => 'nullable|string|max:5000',
+            'is_published' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
+        }
+
+        $vacancyId = (int) $request->input('id', 0);
+        if ($vacancyId > 0 && !auth()->user()->can('edit-hr-recruitment')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to edit recruitment vacancies.'], 403);
+        }
+        if ($vacancyId === 0 && !auth()->user()->can('create-hr-recruitment')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to post recruitment vacancies.'], 403);
+        }
+
+        $vacancy = $vacancyId > 0
+            ? HrRecruitmentVacancy::query()->find($vacancyId)
+            : new HrRecruitmentVacancy();
+
+        if (!$vacancy) {
+            return response()->json(['status' => false, 'message' => 'Vacancy not found.'], 404);
+        }
+
+        $designation = null;
+        if ($request->filled('hr_designation_id')) {
+            $designation = HrDesignation::query()->find((int) $request->input('hr_designation_id'));
+        }
+
+        $vacancy->hospital_id = (int) $this->hospital_id;
+        $vacancy->hr_designation_id = $designation?->id;
+        $vacancy->department_id = $request->filled('department_id') ? (int) $request->input('department_id') : null;
+        $vacancy->title = $request->filled('title')
+            ? $request->string('title')->toString()
+            : ($designation?->name ?? 'Vacancy');
+        $vacancy->required_positions = (int) $request->input('required_positions');
+        $vacancy->status = $request->string('status')->toString();
+        $vacancy->open_from = $request->filled('open_from') ? Carbon::parse($request->input('open_from'))->toDateString() : null;
+        $vacancy->open_till = $request->filled('open_till') ? Carbon::parse($request->input('open_till'))->toDateString() : null;
+        $vacancy->last_date = $vacancy->open_till ?: $vacancy->last_date;
+        if (Schema::hasColumn('hr_recruitment_vacancies', 'description')) {
+            $vacancy->description = $request->filled('description') ? $request->string('description')->toString() : null;
+        }
+        if (Schema::hasColumn('hr_recruitment_vacancies', 'is_published')) {
+            $vacancy->is_published = $request->boolean('is_published', true);
+        }
+        $vacancy->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => $vacancyId > 0 ? 'Vacancy updated successfully.' : 'Vacancy posted successfully.',
+        ]);
+    }
+
+    public function updateRecruitmentApplicationStatus(Request $request): JsonResponse
+    {
+        if (!Schema::hasTable('hr_recruitment_applications')) {
+            return response()->json(['status' => false, 'message' => 'Applications table not found. Run migrations first.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'application_id' => 'required|integer|exists:hr_recruitment_applications,id',
+            'status' => 'required|in:Applied,Screening,Shortlisted,Interview,Selected,Rejected,Hired',
+            'status_note' => 'nullable|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
+        }
+
+        $app = HrRecruitmentApplication::query()->find((int) $request->input('application_id'));
+        if (!$app) {
+            return response()->json(['status' => false, 'message' => 'Application not found.'], 404);
+        }
+
+        $app->status = $request->string('status')->toString();
+        $app->status_note = $request->filled('status_note') ? $request->string('status_note')->toString() : null;
+        $app->reviewed_by = auth()->id();
+        $app->reviewed_at = now();
+        $app->save();
+
+        $this->refreshVacancyApplicantStats((int) $app->hr_recruitment_vacancy_id);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Application status updated successfully.',
+        ]);
+    }
+
+    private function refreshVacancyApplicantStats(int $vacancyId): void
+    {
+        if ($vacancyId <= 0 || !Schema::hasTable('hr_recruitment_applications')) {
+            return;
+        }
+
+        $vacancy = HrRecruitmentVacancy::withoutGlobalScopes()->find($vacancyId);
+        if (!$vacancy) {
+            return;
+        }
+
+        $applicants = HrRecruitmentApplication::withoutGlobalScopes()
+            ->where('hr_recruitment_vacancy_id', $vacancyId)
+            ->count();
+
+        $shortlisted = HrRecruitmentApplication::withoutGlobalScopes()
+            ->where('hr_recruitment_vacancy_id', $vacancyId)
+            ->whereIn('status', ['Shortlisted', 'Interview', 'Selected', 'Hired'])
+            ->count();
+
+        $vacancy->applicants = $applicants;
+        $vacancy->shortlisted = $shortlisted;
+        $vacancy->save();
     }
 
     private function recruitmentData(): array
     {
-        if (!Schema::hasTable('hr_recruitment_vacancies')) {
-            return ['vacancies' => collect()];
-        }
-
-        $vacancies = HrRecruitmentVacancy::query()
-            ->with(['department:id,name'])
-            ->latest('id')
-            ->limit(100)
-            ->get();
-
-        return ['vacancies' => $vacancies];
+        return ['vacancies' => collect()];
     }
 
     private function trainingData(): array
@@ -1846,7 +2322,7 @@ class HrDashboardController extends BaseHospitalController
             ];
         }
 
-        if (Schema::hasTable('hr_recruitment_vacancies')) {
+        if (Schema::hasTable('hr_recruitment_vacancies') && auth()->user()->can('view-hr-recruitment')) {
             $openVacancies = HrRecruitmentVacancy::query()->where('status', 'Open')->count();
             $alerts[] = [
                 'type' => 'info',
@@ -1903,6 +2379,47 @@ class HrDashboardController extends BaseHospitalController
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * Dates (Y-m-d) per staff that fall inside an approved leave overlapping the given inclusive range.
+     *
+     * @param  array<int>  $staffIds
+     * @return array<int, array<string, bool>>
+     */
+    private function approvedLeaveCoverageByStaff(int $hospitalId, array $staffIds, Carbon $rangeStart, Carbon $rangeEnd): array
+    {
+        $map = [];
+        if ($staffIds === [] || !Schema::hasTable('hr_leave_requests')) {
+            return $map;
+        }
+
+        $rangeStart = $rangeStart->copy()->startOfDay();
+        $rangeEnd = $rangeEnd->copy()->startOfDay();
+
+        $leaves = HrLeaveRequest::withoutGlobalScopes()
+            ->where('hospital_id', $hospitalId)
+            ->where('status', 'Approved')
+            ->whereIn('staff_id', $staffIds)
+            ->whereDate('from_date', '<=', $rangeEnd->toDateString())
+            ->whereDate('to_date', '>=', $rangeStart->toDateString())
+            ->get(['staff_id', 'from_date', 'to_date']);
+
+        foreach ($leaves as $lr) {
+            $sid = (int) $lr->staff_id;
+            if ($sid <= 0) {
+                continue;
+            }
+            $from = Carbon::parse($lr->from_date)->startOfDay();
+            $to = Carbon::parse($lr->to_date)->startOfDay();
+            $clipStart = $from->greaterThan($rangeStart) ? $from : $rangeStart->copy();
+            $clipEnd = $to->lessThan($rangeEnd) ? $to : $rangeEnd->copy();
+            for ($x = $clipStart->copy(); $x->lte($clipEnd); $x->addDay()) {
+                $map[$sid][$x->toDateString()] = true;
+            }
+        }
+
+        return $map;
+    }
+
     public function attendanceExport(Request $request)
     {
         if (!$this->canViewAttendance()) {
@@ -1936,12 +2453,20 @@ class HrDashboardController extends BaseHospitalController
 
         $recordsByStaff = collect();
         if (Schema::hasTable('hr_attendance_records') && $staffRows->isNotEmpty()) {
-            $recordsByStaff = HrAttendanceRecord::query()
+            $recordsByStaff = HrAttendanceRecord::withoutGlobalScopes()
+                ->where('hospital_id', (int) $this->hospital_id)
                 ->whereIn('staff_id', $staffRows->pluck('id'))
                 ->whereBetween('attendance_date', [$weekStartDate->toDateString(), $weekEndDate->toDateString()])
                 ->get()
                 ->groupBy('staff_id');
         }
+
+        $leaveCoverage = $this->approvedLeaveCoverageByStaff(
+            (int) $this->hospital_id,
+            $staffRows->pluck('id')->all(),
+            $weekStartDate->copy()->startOfDay(),
+            $weekStartDate->copy()->addDays(6)->startOfDay()
+        );
 
         // CSV Header
         $csv = "Staff ID,Name,Department," . implode(',', array_map(function ($d) {
@@ -1954,7 +2479,7 @@ class HrDashboardController extends BaseHospitalController
             $departmentName = $staff->department->name ?? 'Unassigned';
             $staffRecs = $recordsByStaff[$staff->id] ?? collect();
             $recByDay = $staffRecs->keyBy(function ($rec) {
-                return $rec->attendance_date->toDateString();
+                return Carbon::parse($rec->attendance_date)->toDateString();
             });
 
             $row = [
@@ -1964,17 +2489,18 @@ class HrDashboardController extends BaseHospitalController
             ];
 
             foreach ($days as $day) {
-                $dayKey = $day->toDateString();
+                $dayKey = $day->copy()->startOfDay()->toDateString();
                 $rec = $recByDay[$dayKey] ?? null;
-                $status = $rec->status ?? 'Absent';
+                $status = $rec?->status ?? 'Absent';
+                $onApprovedLeave = !empty($leaveCoverage[(int) $staff->id][$dayKey]);
 
                 $code = 'A';
                 if ($status === 'Present') {
                     $code = 'P';
-                } elseif ($status === 'Leave') {
-                    $code = 'L';
                 } elseif ($status === 'Holiday') {
                     $code = 'H';
+                } elseif ($status === 'Leave' || ($onApprovedLeave && $status !== 'Present')) {
+                    $code = 'L';
                 }
 
                 $row[] = $code;

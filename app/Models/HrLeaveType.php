@@ -9,6 +9,11 @@ class HrLeaveType extends Model
 {
     protected $guarded = [];
 
+    protected $casts = [
+        'is_paid_time_off' => 'boolean',
+        'annual_entitlement_days' => 'float',
+    ];
+
     /**
      * Boot the model and apply any global scopes.
      *
@@ -22,5 +27,10 @@ class HrLeaveType extends Model
     public function hospital()
     {
         return $this->belongsTo(Hospital::class);
+    }
+
+    public function staffBalances()
+    {
+        return $this->hasMany(HrStaffLeaveBalance::class, 'hr_leave_type_id');
     }
 }

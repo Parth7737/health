@@ -1,6 +1,6 @@
 <div id="hrx-panel-leave"
      data-status-chart='@json($leaveByStatus)'
-     data-balance-chart='@json($leaveBalance)'
+     data-balance-chart='@json($leaveBalance ?? [])'
      data-calendar='@json($leaveCalendar)'>
 
     <div class="hrx-toolbar">
@@ -20,7 +20,6 @@
     </div>
 
     <div class="hrx-grid-two">
-        {{-- ── LEFT : Leave Requests table ────────────────────────────── --}}
         <div>
             <div class="hrx-card">
                 <div class="hrx-card-header">
@@ -32,71 +31,29 @@
                     </button>
                 </div>
                 <div class="hrx-table-wrap">
-                    <table class="hrx-table">
+                    <table class="hrx-table display table-striped" id="hrxLeaveRequestsTable" style="width:100%;">
                         <thead>
-                            <tr>
-                                <th>Req No</th>
-                                <th>Staff</th>
-                                <th>Type</th>
-                                <th>From</th>
-                                <th>To</th>
-                                <th>Days</th>
-                                <th>Reason</th>
-                                <th>Status</th>
-                                <th>Action</th>
-                            </tr>
+                        <tr>
+                            <th style="display:none">ID</th>
+                            <th>Req No</th>
+                            <th>Staff</th>
+                            <th>Type</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Days</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Balance</th>
+                            <th>Action</th>
+                        </tr>
                         </thead>
-                        <tbody>
-                        @forelse($leaveRows as $row)
-                            <tr class="hrx-leave-row"
-                                data-request="{{ strtolower($row->request_no) }}"
-                                data-name="{{ strtolower(trim(($row->staff->first_name ?? '') . ' ' . ($row->staff->last_name ?? ''))) }}"
-                                data-status="{{ strtolower($row->status) }}"
-                                data-note="{{ e($row->status_note ?? '') }}"
-                                data-reason="{{ e($row->reason ?? '') }}"
-                                data-type="{{ e($row->leaveType->name ?? 'General') }}"
-                                data-display-name="{{ e(trim(($row->staff->first_name ?? '') . ' ' . ($row->staff->last_name ?? ''))) }}">
-                                <td style="font-family:monospace;font-size:12px">{{ $row->request_no }}</td>
-                                <td style="font-weight:700">{{ trim(($row->staff->first_name ?? '') . ' ' . ($row->staff->last_name ?? '')) }}</td>
-                                <td><span class="hrx-badge blue">{{ $row->leaveType->name ?? 'General' }}</span></td>
-                                <td style="color:#5a7894;font-size:12px">{{ optional($row->from_date)->format('d/m') }}</td>
-                                <td style="color:#5a7894;font-size:12px">{{ optional($row->to_date)->format('d/m') }}</td>
-                                <td style="font-weight:700">{{ number_format((float)$row->total_days, 1) }}</td>
-                                <td style="font-size:12px;color:#5a7894;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $row->reason ?? '' }}">{{ $row->reason ?? '—' }}</td>
-                                <td>
-                                    <span class="hrx-badge {{ $row->status === 'Approved' ? 'green' : ($row->status === 'Rejected' ? 'red' : 'orange') }}">
-                                        {{ $row->status }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="hrx-actions">
-                                        @if($row->status === 'Pending')
-                                            <button type="button" class="hrx-btn-lite hrx-leave-approve hrx-leave-approve-btn" data-request="{{ $row->request_no }}" title="Approve">
-                                                <i class="fa fa-check"></i>
-                                            </button>
-                                            <button type="button" class="hrx-btn-lite hrx-leave-reject hrx-leave-reject-btn" data-request="{{ $row->request_no }}" title="Reject">
-                                                <i class="fa fa-times"></i>
-                                            </button>
-                                        @else
-                                            <button type="button" class="hrx-btn-lite hrx-leave-view hrx-leave-view-btn" data-request="{{ $row->request_no }}" title="View">
-                                                <i class="fa fa-eye"></i>
-                                            </button>
-                                        @endif
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="9" style="text-align:center;color:#5a7894;padding:20px">No leave requests found.</td></tr>
-                        @endforelse
-                        </tbody>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        {{-- ── RIGHT : Charts + Calendar ───────────────────────────────── --}}
         <div>
-            {{-- Leave Balance Summary (stacked bar) --}}
             <div class="hrx-card">
                 <div class="hrx-card-header">
                     <div class="hrx-card-title">
@@ -108,7 +65,6 @@
                 </div>
             </div>
 
-            {{-- Leave Status Mix (doughnut) --}}
             <div class="hrx-card">
                 <div class="hrx-card-header">
                     <div class="hrx-card-title">
@@ -120,7 +76,6 @@
                 </div>
             </div>
 
-            {{-- Leave Calendar --}}
             <div class="hrx-card">
                 <div class="hrx-card-header">
                     <div class="hrx-card-title">
@@ -141,6 +96,27 @@
                             <span style="color:#5a7894;font-size:12px">No upcoming leaves.</span>
                         @endforelse
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="hrxStaffLeaveBalanceModal" tabindex="-1" aria-labelledby="hrxStaffLeaveBalanceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="hrxStaffLeaveBalanceModalLabel">Leave balance summary</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <label for="hrxStaffLeaveBalanceYear" class="mb-0" style="font-size:13px;font-weight:600;">Year</label>
+                    <select id="hrxStaffLeaveBalanceYear" class="form-select form-select-sm" style="max-width:140px;"></select>
+                    <button type="button" class="btn btn-sm btn-primary" id="hrxStaffLeaveBalanceReload">Load</button>
+                </div>
+                <div id="hrxStaffLeaveBalanceBody" style="min-height:80px;">
+                    <span class="text-muted" style="font-size:13px;">Select year and load.</span>
                 </div>
             </div>
         </div>

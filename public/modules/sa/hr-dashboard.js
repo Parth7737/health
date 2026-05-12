@@ -69,7 +69,9 @@
         }
 
         var dialog = $('.add-datamodal .modal-dialog');
-        dialog.removeClass('modal-xl modal-lg modal-sm hrx-leave-modal-dialog').addClass('modal-xl');
+        var $modalContent = $('.add-datamodal .modal-content');
+        dialog.removeClass('modal-xl modal-lg modal-sm hrx-leave-modal-dialog hrx-recruitment-modal-dialog').addClass('modal-xl');
+        $modalContent.removeClass('hrx-leave-modal-content hrx-recruitment-modal-content');
 
         loader();
         $.ajax({
@@ -88,7 +90,7 @@
 
                 if (type === 'leave-request-ajax') {
                     dialog.removeClass('modal-xl').addClass('hrx-leave-modal-dialog');
-                    $('.add-datamodal .modal-content').addClass('hrx-leave-modal-content');
+                    $modalContent.removeClass('hrx-recruitment-modal-content').addClass('hrx-leave-modal-content');
 
                     if ($.fn.select2) {
                         $('.add-datamodal .select2-modal').each(function () {
@@ -104,8 +106,8 @@
                         });
                     }
                 } else {
-                    dialog.removeClass('hrx-leave-modal-dialog').addClass('modal-xl');
-                    $('.add-datamodal .modal-content').removeClass('hrx-leave-modal-content');
+                    dialog.removeClass('hrx-leave-modal-dialog hrx-recruitment-modal-dialog').addClass('modal-xl');
+                    $modalContent.removeClass('hrx-leave-modal-content hrx-recruitment-modal-content');
                 }
 
                 $('.add-datamodal').modal('show');
@@ -129,6 +131,10 @@
                 _token: getCsrfToken()
             },
             success: function (response) {
+                var sd = $('.add-datamodal .modal-dialog');
+                var sc = $('.add-datamodal .modal-content');
+                sd.removeClass('hrx-leave-modal-dialog hrx-recruitment-modal-dialog').addClass('modal-xl');
+                sc.removeClass('hrx-leave-modal-content hrx-recruitment-modal-content');
                 $('#ajaxdata').html(response);
                 $('.add-datamodal').modal('show');
 

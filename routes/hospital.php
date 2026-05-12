@@ -332,6 +332,8 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::get('dashboard/tab/{tab}', 'HrDashboardController@tab')->name('dashboard.tab');
             Route::get('dashboard/directory-load', 'HrDashboardController@directoryLoad')->name('dashboard.directory-load');
             Route::get('dashboard/directory-list-data', 'HrDashboardController@directoryListData')->name('dashboard.directory-list-data');
+            Route::get('dashboard/leave-requests-data', 'HrDashboardController@leaveRequestsData')->name('dashboard.leave-requests-data');
+            Route::get('dashboard/staff-leave-balance', 'HrDashboardController@staffLeaveBalance')->name('dashboard.staff-leave-balance');
             Route::get('dashboard/payroll-list-data', 'HrDashboardController@payrollListData')
                 ->middleware('permission:view-payroll|view-staff')
                 ->name('dashboard.payroll-list-data');
@@ -379,6 +381,15 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
                 ->name('dashboard.store-attendance');
             Route::post('dashboard/store-leave', 'HrDashboardController@storeLeave')->name('dashboard.store-leave');
             Route::post('dashboard/update-leave-status', 'HrDashboardController@updateLeaveStatus')->name('dashboard.update-leave-status');
+            Route::get('dashboard/recruitment-vacancies-data', 'HrDashboardController@recruitmentVacanciesData')
+                ->middleware('permission:view-hr-recruitment')
+                ->name('dashboard.recruitment-vacancies-data');
+            Route::post('dashboard/store-recruitment-vacancy', 'HrDashboardController@storeRecruitmentVacancy')
+                ->middleware('permission:create-hr-recruitment|edit-hr-recruitment')
+                ->name('dashboard.store-recruitment-vacancy');
+            Route::post('dashboard/update-recruitment-application-status', 'HrDashboardController@updateRecruitmentApplicationStatus')
+                ->middleware('permission:edit-hr-recruitment')
+                ->name('dashboard.update-recruitment-application-status');
         });
 
         // Staff

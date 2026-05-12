@@ -27,6 +27,8 @@ $(document).ready(function() {
                 }
             },
             { data: 'name', name: 'name' },
+            { data: 'is_paid_time_off', name: 'is_paid_time_off' },
+            { data: 'annual_entitlement_days', name: 'annual_entitlement_days' },
             { data: 'actions', name: 'actions', orderable: false, searchable: false }
         ],
         dom: "fBrtip",
