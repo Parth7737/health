@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
+use App\Scopes\HospitalScope;
 
 /**
  * Public careers portal: list published vacancies for a hospital (by UUID) and accept applications.
@@ -27,7 +28,7 @@ class CareersPortalController extends Controller
         $vacancies = collect();
         if (Schema::hasTable('hr_recruitment_vacancies')) {
             $q = HrRecruitmentVacancy::query()
-                ->withoutGlobalScopes()
+                ->withoutGlobalScope(HospitalScope::class)
                 ->where('hospital_id', (int) $hospital->id)
                 ->whereRaw('LOWER(status) = ?', ['open']);
 

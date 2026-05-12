@@ -4,9 +4,9 @@
             <span class="hrx-card-title"><i class="fas fa-user-plus" style="color:#2e7d32"></i> Open Positions & Recruitment</span>
             <div class="hrx-actions">
                 @can('create-hr-recruitment')
-                <button type="button" class="hrx-btn-lite" id="hrxRecruitmentPost"><i class="fa fa-plus"></i> Post Vacancy</button>
+                <button type="button" class="hrx-btn-lite text-white" id="hrxRecruitmentPost" style="background-color:#2e7d32"><i class="fa fa-plus"></i> Post Vacancy</button>
                 @endcan
-                <button type="button" class="hrx-btn-lite" id="hrxRecruitmentExport"><i class="fa fa-download"></i> Export</button>
+                <button type="button" class="hrx-btn-lite btn-info  text-white" id="hrxRecruitmentExport"><i class="fa fa-download"></i> Export</button>
             </div>
         </div>
         <div class="hrx-toolbar" style="padding:10px 12px 0">

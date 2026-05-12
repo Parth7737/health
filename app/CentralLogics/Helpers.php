@@ -137,7 +137,7 @@ class Helpers
         return $binString;
     }
     public static function getHospitalId(){
-        return auth()->user()->hospital_id;
+        return auth()->user() ? auth()->user()->hospital_id : null;
     }
     public static function generateHospitalId($code) {
         if($code){
