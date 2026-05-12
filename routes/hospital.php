@@ -330,6 +330,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::middleware(['permission:view-staff'])->group(function () {
             Route::get('dashboard', 'HrDashboardController@index')->name('dashboard.index');
             Route::get('dashboard/tab/{tab}', 'HrDashboardController@tab')->name('dashboard.tab');
+            Route::get('dashboard/reports-data', 'HrDashboardController@reportsChartData')->name('dashboard.reports-data');
             Route::get('dashboard/directory-load', 'HrDashboardController@directoryLoad')->name('dashboard.directory-load');
             Route::get('dashboard/directory-list-data', 'HrDashboardController@directoryListData')->name('dashboard.directory-list-data');
             Route::get('dashboard/leave-requests-data', 'HrDashboardController@leaveRequestsData')->name('dashboard.leave-requests-data');
@@ -384,12 +385,36 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::get('dashboard/recruitment-vacancies-data', 'HrDashboardController@recruitmentVacanciesData')
                 ->middleware('permission:view-hr-recruitment')
                 ->name('dashboard.recruitment-vacancies-data');
+            Route::get('dashboard/recruitment-application/{applicationId}', 'HrDashboardController@recruitmentApplicationDetail')
+                ->middleware('permission:view-hr-recruitment')
+                ->whereNumber('applicationId')
+                ->name('dashboard.recruitment-application-detail');
             Route::post('dashboard/store-recruitment-vacancy', 'HrDashboardController@storeRecruitmentVacancy')
                 ->middleware('permission:create-hr-recruitment|edit-hr-recruitment')
                 ->name('dashboard.store-recruitment-vacancy');
             Route::post('dashboard/update-recruitment-application-status', 'HrDashboardController@updateRecruitmentApplicationStatus')
                 ->middleware('permission:edit-hr-recruitment')
                 ->name('dashboard.update-recruitment-application-status');
+            Route::get('dashboard/training-programs-data', 'HrDashboardController@trainingProgramsData')
+                ->name('dashboard.training-programs-data');
+            Route::post('dashboard/store-training-program', 'HrDashboardController@storeTrainingProgram')
+                ->middleware('permission:edit-staff')
+                ->name('dashboard.store-training-program');
+            Route::post('dashboard/add-training-participant', 'HrDashboardController@addTrainingParticipant')
+                ->middleware('permission:edit-staff')
+                ->name('dashboard.add-training-participant');
+            Route::post('dashboard/remove-training-participant', 'HrDashboardController@removeTrainingParticipant')
+                ->middleware('permission:edit-staff')
+                ->name('dashboard.remove-training-participant');
+            Route::post('dashboard/update-training-program-status', 'HrDashboardController@updateTrainingProgramStatus')
+                ->middleware('permission:edit-staff')
+                ->name('dashboard.update-training-program-status');
+            Route::post('dashboard/generate-training-participant-certificate', 'HrDashboardController@generateTrainingParticipantCertificate')
+                ->middleware('permission:edit-staff')
+                ->name('dashboard.generate-training-participant-certificate');
+            Route::get('dashboard/training-certificate/{participantId}', 'HrDashboardController@downloadTrainingCertificate')
+                ->name('dashboard.training-certificate')
+                ->whereNumber('participantId');
         });
 
         // Staff
@@ -664,7 +689,13 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
                 Route::post('load-leave-type', 'HrLeaveTypeController@loaddata')->name('leave-type-load');
                 Route::post('show-leave-type-form', 'HrLeaveTypeController@showform')->name('leave-type.showform');
             });
-            
+
+            Route::middleware(['permission:view-hr-training-category'])->group(function () {
+                Route::resource('training-category', 'HrTrainingCategoryController');
+                Route::post('load-training-category', 'HrTrainingCategoryController@loaddata')->name('training-category-load');
+                Route::post('show-training-category-form', 'HrTrainingCategoryController@showform')->name('training-category.showform');
+            });
+
             // Departments
             Route::middleware(['permission:view-hr-department'])->group(function () {
                 Route::resource('department', 'HrDepartmentController');

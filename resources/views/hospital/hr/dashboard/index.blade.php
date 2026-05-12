@@ -17,28 +17,28 @@
             <div class="hrx-stat-card purple">
                 <div class="hrx-label">Total Staff</div>
                 <div class="hrx-value">{{ number_format($stats['totalStaff']) }}</div>
-                <div class="hrx-meta">Across departments</div>
+                <div class="hrx-meta">Active employees (hospital-wide)</div>
             </div>
             <div class="hrx-stat-card green">
                 <div class="hrx-label">Present Today</div>
                 <div class="hrx-value">{{ number_format($stats['presentToday']) }}</div>
-                <div class="hrx-meta">Attendance captured live</div>
+                <div class="hrx-meta">Distinct staff marked present today</div>
             </div>
             <div class="hrx-stat-card orange">
                 <div class="hrx-label">On Leave</div>
                 <div class="hrx-value">{{ number_format($stats['onLeave']) }}</div>
-                <div class="hrx-meta">Approved active leaves</div>
+                <div class="hrx-meta">Distinct staff on approved leave today</div>
             </div>
             <div class="hrx-stat-card blue">
-                <div class="hrx-label">Monthly Payroll</div>
+                <div class="hrx-label">Payroll (last month)</div>
                 <div class="hrx-value">INR {{ number_format((float) $stats['monthlyPayroll']) }}</div>
-                <div class="hrx-meta">Current month net payout</div>
+                <div class="hrx-meta">Total net payout for {{ $stats['payrollMonthLabel'] }} (generated payroll records)</div>
             </div>
             @can('view-hr-recruitment')
             <div class="hrx-stat-card red">
                 <div class="hrx-label">Vacancies</div>
-                <div class="hrx-value">{{ number_format($stats['vacancies']) }}</div>
-                <div class="hrx-meta">Open positions</div>
+                <div class="hrx-value">{{ number_format($stats['vacancyPostings']) }}</div>
+                <div class="hrx-meta">{{ number_format($stats['vacancyPositions']) }} position(s) required across these posting(s)</div>
             </div>
             @endcan
         </div>
@@ -69,7 +69,7 @@
 <link rel="stylesheet" href="{{ asset('public/modules/sa/hr-dashboard/tabs/payroll.css') }}">
 <style>
     .hrx-page { --hr-primary:#4a148c; --hr-blue:#1565c0; --hr-green:#2e7d32; --hr-orange:#e65100; --hr-red:#c62828; }
-    .hrx-stats-grid { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:14px; margin-bottom:20px; }
+    .hrx-stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px; }
     .hrx-stat-card { background:#fff; border:1px solid #ccd8e8; border-radius:12px; padding:16px; position:relative; overflow:hidden; }
     .hrx-stat-card::before { content:''; position:absolute; left:0; top:0; right:0; height:3px; }
     .hrx-stat-card.purple::before { background:linear-gradient(90deg, #4a148c, #7b1fa2); }
@@ -306,6 +306,26 @@
     #hrxRecruitmentTable_wrapper .dt-layout-end {
         justify-content:flex-start !important;
     }
+    .add-datamodal .modal-dialog.hrx-training-modal-xl {
+        max-width: min(96vw, 1180px) !important;
+        width: 100% !important;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .hrx-training-modal-content .modal-body {
+        max-height: calc(100vh - 140px);
+        overflow-y: auto;
+    }
+    #hrxTrainingTable_wrapper .dt-buttons { display:flex !important; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    #hrxTrainingTable_wrapper .dataTables_paginate,
+    #hrxTrainingTable_wrapper .dt-paging {
+        float:none !important;
+        text-align:left !important;
+        margin-left:0 !important;
+    }
+    #hrxTrainingTable_wrapper .dt-layout-end {
+        justify-content:flex-start !important;
+    }
     @media (max-width: 1200px) { .hrx-stats-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 900px) { .hrx-grid-two, .hrx-grid-two-even { grid-template-columns:1fr; } }
 </style>
@@ -316,6 +336,7 @@
 <script>
     window.HRDashboardConfig = {
         tabUrl: @json(route('hospital.hr.dashboard.tab', ['tab' => '__TAB__'])),
+        reportsDataUrl: @json(route('hospital.hr.dashboard.reports-data')),
         directoryLoadUrl: @json(route('hospital.hr.dashboard.directory-load')),
         directoryListDataUrl: @json(route('hospital.hr.dashboard.directory-list-data')),
         payrollListDataUrl: @json(route('hospital.hr.dashboard.payroll-list-data')),
@@ -347,6 +368,13 @@
         recruitmentVacanciesDataUrl: @json(route('hospital.hr.dashboard.recruitment-vacancies-data')),
         storeRecruitmentVacancyUrl: @json(route('hospital.hr.dashboard.store-recruitment-vacancy')),
         updateRecruitmentApplicationStatusUrl: @json(route('hospital.hr.dashboard.update-recruitment-application-status')),
+        recruitmentApplicationDetailUrl: @json(route('hospital.hr.dashboard.recruitment-application-detail', ['applicationId' => '__ID__'])),
+        trainingProgramsDataUrl: @json(route('hospital.hr.dashboard.training-programs-data')),
+        storeTrainingProgramUrl: @json(route('hospital.hr.dashboard.store-training-program')),
+        addTrainingParticipantUrl: @json(route('hospital.hr.dashboard.add-training-participant')),
+        removeTrainingParticipantUrl: @json(route('hospital.hr.dashboard.remove-training-participant')),
+        updateTrainingProgramStatusUrl: @json(route('hospital.hr.dashboard.update-training-program-status')),
+        generateTrainingParticipantCertificateUrl: @json(route('hospital.hr.dashboard.generate-training-participant-certificate')),
         recruitmentCanView: @json(auth()->user()->can('view-hr-recruitment')),
         recruitmentCanCreate: @json(auth()->user()->can('create-hr-recruitment')),
         recruitmentCanEdit: @json(auth()->user()->can('edit-hr-recruitment')),

@@ -17,6 +17,9 @@
             @can('view-hr-leave-type')
                 <a class="nav-link {{ request()->routeIs('hospital.settings.hr.leave-type.index') ? 'active' : '' }}" href="{{ route('hospital.settings.hr.leave-type.index') }}">Leave Types</a>
             @endcan
+            @can('view-hr-training-category')
+                <a class="nav-link {{ request()->routeIs('hospital.settings.hr.training-category.index') ? 'active' : '' }}" href="{{ route('hospital.settings.hr.training-category.index') }}">Training Categories</a>
+            @endcan
             @can('view-staff')
                 <a class="nav-link {{ request()->routeIs('hospital.settings.hr.payroll-settings.index') ? 'active' : '' }}" href="{{ route('hospital.settings.hr.payroll-settings.index') }}">Payroll Settings</a>
             @endcan
