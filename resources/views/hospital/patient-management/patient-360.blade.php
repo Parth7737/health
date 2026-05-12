@@ -920,7 +920,7 @@
     </div>
 </div>
 
-{{-- Patient 360 — Treatment Plan (static UI; wire to backend later) --}}
+{{-- Patient 360 — Treatment Plan modal (masters + SHA-style show/hide) --}}
 <div class="modal fade" id="p360TreatmentPlanModal" tabindex="-1" aria-labelledby="p360TreatmentPlanModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
         <div class="modal-content p360-tp-modal opd-content-wrap">
@@ -932,68 +932,70 @@
             </div>
             <div class="modal-body p360-tp-modal-body">
                 <form id="p360TreatmentPlanForm" class="p360-tp-form" onsubmit="return false;">
-                    <div class="row g-3">
-                        <div class="col-md-6 col-lg-4">
+                    <div class="row g-3 justify-content-center">
+                        <div class="col-md-8 col-lg-6">
                             <div class="form-group">
                                 <label class="form-label" for="p360TpSpeciality">Speciality</label>
-                                <select class="form-control" id="p360TpSpeciality" aria-label="Speciality">
-                                    @forelse(($treatmentPlanSpecialities ?? collect()) as $tpSpec)
-                                        <option value="{{ $tpSpec->speciality_id }}" @selected($loop->first)>{{ $tpSpec->name }}</option>
-                                    @empty
-                                        <option value="">No specialities configured for this hospital</option>
-                                    @endforelse
+                                <select class="form-control p360-tp-s2" id="p360TpSpeciality" name="speciality_id" aria-label="Speciality">
+                                    <option value="">Select speciality</option>
+                                    @foreach(($treatmentPlanSpecialities ?? collect()) as $tpSpec)
+                                        <option value="{{ $tpSpec->speciality_id }}">{{ $tpSpec->name }}</option>
+                                    @endforeach
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-6 col-lg-8">
+                        <div class="col-md-8 col-lg-6">
                             <div class="form-group">
                                 <label class="form-label" for="p360TpProcedure">Procedure</label>
-                                <select class="form-control" id="p360TpProcedure" aria-label="Procedure">
-                                    <option value="SC080 (SC080A) Resuturing of Any Wound gap Surgeries" selected>SC080 (SC080A) Resuturing of Any Wound gap Surgeries</option>
-                                    <option value="Total knee replacement — primary">Total knee replacement — primary</option>
-                                    <option value="Skin graft — small area">Skin graft — small area</option>
+                                <select class="form-control p360-tp-s2" id="p360TpProcedure" name="procedure_id" aria-label="Procedure">
+                                    <option value="">Select procedure</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="col-6 col-md-4 col-lg-3">
+                        <div class="col-md-8 col-lg-6 p360-tp-implant-field d-none">
                             <div class="form-group">
-                                <label class="form-label" for="p360TpImplant">Implant</label>
-                                <input type="text" class="form-control" id="p360TpImplant" value="NA" autocomplete="off">
+                                <label class="form-label" for="p360TpImplantId">Implant</label>
+                                <select class="form-control p360-tp-s2" id="p360TpImplantId" name="implant_id" aria-label="Implant">
+                                    <option value="">Select implant</option>
+                                </select>
                             </div>
                         </div>
-                        <div class="col-6 col-md-4 col-lg-2">
+                        <div class="col-md-8 col-lg-6 p360-tp-implant-field d-none">
                             <div class="form-group">
-                                <label class="form-label" for="p360TpQuantity">Quantity</label>
-                                <input type="text" class="form-control" id="p360TpQuantity" value="1" inputmode="numeric" autocomplete="off">
+                                <label class="form-label" for="p360TpImplantQty">Quantity</label>
+                                <input type="text" class="form-control" id="p360TpImplantQty" name="implant_qty" value="" readonly autocomplete="off" inputmode="numeric">
+                            </div>
+                            <div id="p360TpImplantQtyError" class="small text-danger"></div>
+                        </div>
+                        <div class="col-md-8 col-lg-6 p360-tp-stratification-field d-none">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpStratificationId">Stratification</label>
+                                <select class="form-control p360-tp-s2" id="p360TpStratificationId" name="stratification_id" aria-label="Stratification">
+                                    <option value="">Select stratification</option>
+                                </select>
                             </div>
                         </div>
-                        <div class="col-md-4 col-lg-2">
+                        <div class="col-md-8 col-lg-6">
                             <div class="form-group">
-                                <label class="form-label" for="p360TpStratification">Stratification</label>
-                                <input type="text" class="form-control" id="p360TpStratification" value="NA" autocomplete="off">
+                                <label class="form-label" for="p360TpUnits">No. of days / units</label>
+                                <input type="text" class="form-control" id="p360TpUnits" name="no_of_days" value="" autocomplete="off" inputmode="numeric">
                             </div>
                         </div>
-                        <div class="col-md-4 col-lg-2">
+                        <div class="col-md-8 col-lg-6 p360-tp-u100-field d-none">
                             <div class="form-group">
-                                <label class="form-label" for="p360TpUnits">No. of units / days</label>
-                                <input type="text" class="form-control" id="p360TpUnits" value="NA" autocomplete="off">
+                                <label class="form-label" for="p360TpU100Amount">Unverified amount (₹)</label>
+                                <input type="number" step="0.01" min="0" class="form-control" id="p360TpU100Amount" name="u100_amount" value="" autocomplete="off">
                             </div>
                         </div>
-                        <div class="col-md-4 col-lg-2">
+                        <div class="col-md-8 col-lg-6">
                             <div class="form-group">
-                                <label class="form-label" for="p360TpUnverifiedAmount">Unverified amount (₹)</label>
-                                <input type="text" class="form-control" id="p360TpUnverifiedAmount" value="1500" inputmode="decimal" autocomplete="off">
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-lg-2">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpIchi">ICHI code</label>
-                                <input type="text" class="form-control" id="p360TpIchi" value="XXX" autocomplete="off">
+                                <label class="form-label" for="p360TpIchi">ICHI / ICD code</label>
+                                <input type="text" class="form-control" id="p360TpIchi" name="ichi" value="" readonly autocomplete="off">
                             </div>
                         </div>
                     </div>
                     <div class="text-center mt-4">
-                        <button type="button" class="btn btn-primary px-5" id="p360TreatmentPlanAddBtn">Add</button>
+                        <button type="button" class="btn btn-primary px-5" id="p360TreatmentPlanAddBtn" disabled>Add</button>
                     </div>
                 </form>
 
@@ -1081,125 +1083,6 @@ document.addEventListener('DOMContentLoaded', function () {
     applyRequestedTabFromUrl();
 });
 
-/* ── Treatment plan modal (static rows until API wired) ───── */
-(function () {
-    var PROC_PREVIEW_LEN = 72;
-    function escHtml(s) {
-        return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-    function formatInr(val) {
-        var n = parseFloat(String(val).replace(/[^\d.-]/g, ''));
-        if (isNaN(n)) {
-            n = 0;
-        }
-        try {
-            return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        } catch (e) {
-            return '₹' + n.toFixed(2);
-        }
-    }
-    function procedureCellHtml(full) {
-        var t = String(full || '');
-        if (t.length <= PROC_PREVIEW_LEN) {
-            return '<div class="p360-tp-proc-cell">' + escHtml(t) + '</div>';
-        }
-        var vis = escHtml(t.slice(0, PROC_PREVIEW_LEN)) + '…';
-        return (
-            '<div class="p360-tp-proc-cell p360-tp-proc-collapsed" data-full-text="' + escHtml(t) + '">' +
-            '<span class="p360-tp-proc-preview">' + vis + '</span> ' +
-            '<button type="button" class="btn btn-link btn-sm p-0 align-baseline p360-tp-show-more">Show more</button>' +
-            '</div>'
-        );
-    }
-    function renumberTreatmentPlanRows() {
-        var body = document.getElementById('p360TreatmentPlanTableBody');
-        if (!body) {
-            return;
-        }
-        var rows = body.querySelectorAll('tr');
-        rows.forEach(function (tr, i) {
-            var noCell = tr.querySelector('td.p360-tp-col-no');
-            if (noCell) {
-                noCell.textContent = String(i + 1);
-            }
-        });
-        var hint = document.getElementById('p360TreatmentPlanEmptyHint');
-        if (hint) {
-            hint.style.display = rows.length ? 'none' : '';
-        }
-    }
-    function bindTreatmentPlanTable(body) {
-        if (!body || body.dataset.p360TpBound) {
-            return;
-        }
-        body.dataset.p360TpBound = '1';
-        body.addEventListener('click', function (ev) {
-            var t = ev.target;
-            if (t && t.classList && t.classList.contains('p360-tp-show-more')) {
-                var wrap = t.closest('.p360-tp-proc-cell');
-                if (!wrap) {
-                    return;
-                }
-                var full = wrap.getAttribute('data-full-text') || '';
-                wrap.removeAttribute('data-full-text');
-                wrap.classList.remove('p360-tp-proc-collapsed');
-                wrap.innerHTML = escHtml(full);
-                return;
-            }
-            if (t && t.classList && t.classList.contains('p360-tp-remove-row')) {
-                var tr = t.closest('tr');
-                if (tr && tr.parentNode) {
-                    tr.parentNode.removeChild(tr);
-                    renumberTreatmentPlanRows();
-                }
-            }
-        });
-    }
-    document.addEventListener('DOMContentLoaded', function () {
-        var addBtn = document.getElementById('p360TreatmentPlanAddBtn');
-        var body = document.getElementById('p360TreatmentPlanTableBody');
-        if (!addBtn || !body) {
-            return;
-        }
-        bindTreatmentPlanTable(body);
-        addBtn.addEventListener('click', function () {
-            var spec = document.getElementById('p360TpSpeciality');
-            var proc = document.getElementById('p360TpProcedure');
-            var imp = document.getElementById('p360TpImplant');
-            var qty = document.getElementById('p360TpQuantity');
-            var strat = document.getElementById('p360TpStratification');
-            var units = document.getElementById('p360TpUnits');
-            var amt = document.getElementById('p360TpUnverifiedAmount');
-            var ichi = document.getElementById('p360TpIchi');
-            var tr = document.createElement('tr');
-            var specV = '';
-            if (spec && spec.selectedIndex >= 0 && spec.options[spec.selectedIndex]) {
-                specV = spec.options[spec.selectedIndex].text;
-            }
-            var procV = proc ? proc.value : '';
-            tr.innerHTML =
-                '<td class="p360-tp-col-no"></td>' +
-                '<td>' + escHtml(specV) + '</td>' +
-                '<td>' + procedureCellHtml(procV) + '</td>' +
-                '<td>' + escHtml(imp ? imp.value : '') + '</td>' +
-                '<td>' + escHtml(qty ? qty.value : '') + '</td>' +
-                '<td>' + escHtml(strat ? strat.value : '') + '</td>' +
-                '<td>' + escHtml(units ? units.value : '') + '</td>' +
-                '<td>' + escHtml(formatInr(amt ? amt.value : '')) + '</td>' +
-                '<td>' + escHtml(ichi ? ichi.value : '') + '</td>' +
-                '<td class="text-center">' +
-                '<button type="button" class="p360-tp-remove-row" title="Remove line" aria-label="Remove line">⋮</button>' +
-                '</td>';
-            body.appendChild(tr);
-            renumberTreatmentPlanRows();
-        });
-    });
-})();
-
 /* ── Vitals chart (static demo data in chart tab) ───────────── */
 var vitalChartsInited = false;
 function initVitalCharts() {
@@ -1255,6 +1138,12 @@ window.Patient360Config = {
         }
     },
     csrf: @json(csrf_token()),
+    treatmentPlan: {
+        procedures: @json(route('hospital.patient-management.treatment-plan.procedures')),
+        procedureDetail: @json(route('hospital.patient-management.treatment-plan.procedure-detail')),
+        implantDetail: @json(route('hospital.patient-management.treatment-plan.implant-detail')),
+        stratificationDetail: @json(route('hospital.patient-management.treatment-plan.stratification-detail')),
+    },
     permissions: {
         canPathology: @json(auth()->user()->can('create-pathology-order')),
         canRadiology: @json(auth()->user()->can('create-radiology-order'))
@@ -1271,5 +1160,6 @@ window.Patient360Config = {
     }
 };
 </script>
+<script src="{{ asset('public/modules/sa/patient-360-treatment-plan.js') }}"></script>
 <script src="{{ asset('public/modules/sa/patient-360.js') }}"></script>
 @endpush

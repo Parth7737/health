@@ -1457,6 +1457,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 #p360TreatmentPlanModal .p360-tp-form select.form-control {
   cursor: pointer;
 }
+/* Select2 inside scrollable Bootstrap modal */
+#p360TreatmentPlanModal .modal-content .select2-container--open,
+#p360TreatmentPlanModal .modal-content .select2-dropdown {
+  z-index: 2000;
+}
 #p360TreatmentPlanModal .p360-tp-table-border,
 .patient-360-body #tabProcedure .p360-tp-table-border {
   border: 1px solid #e2ecf4;

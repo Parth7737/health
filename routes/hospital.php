@@ -66,6 +66,10 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('ipd-admissions', 'PatientManagementController@ipdAdmissions')->name('ipd-admissions');
         Route::get('search-patients', 'PatientManagementController@searchPatients')->name('search-patients');
         Route::get('patient-360', 'PatientManagementController@patient360')->name('patient-360');
+        Route::post('treatment-plan/procedures', 'PatientManagementController@treatmentPlanProcedures')->name('treatment-plan.procedures');
+        Route::post('treatment-plan/procedure-detail', 'PatientManagementController@treatmentPlanProcedureDetail')->name('treatment-plan.procedure-detail');
+        Route::post('treatment-plan/implant-detail', 'PatientManagementController@treatmentPlanImplantDetail')->name('treatment-plan.implant-detail');
+        Route::post('treatment-plan/stratification-detail', 'PatientManagementController@treatmentPlanStratificationDetail')->name('treatment-plan.stratification-detail');
         Route::get('patient-details/{patient}', 'PatientManagementController@patientDetails')->name('patient-details');
         Route::get('load-doctors', 'PatientManagementController@loadDoctors')->name('load-doctors');
         Route::get('load-doctor-slots', 'PatientManagementController@loadDoctorSlots')->name('load-doctor-slots');

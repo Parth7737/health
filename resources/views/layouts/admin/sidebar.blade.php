@@ -83,6 +83,29 @@
                           <li><a href="{{route('admin.license-types.index')}}">License Types</a></li>
                         </ul>
                     </li>
+                    <!-- procedure masters -->
+                    <li class="sidebar-list"><i class="fa-solid fa-thumbtack"></i>
+                        <a class="sidebar-link sidebar-title" href="#">
+                            <svg class="stroke-icon"><use href="{{asset('public/front/assets/svg/icon-sprite.svg#stroke-widget')}}"></use></svg>
+                            <svg class="fill-icon"><use href="{{asset('public/front/assets/svg/icon-sprite.svg#fill-widget')}}"></use></svg>
+                            <span>Treatment plan masters</span>
+                        </a>
+                        <ul class="sidebar-submenu">
+                          <li><a href="{{ route('admin.scheme-types.index') }}">Scheme types</a></li>
+                          <li><a href="{{ route('admin.packages.index') }}">Packages</a></li>
+                          <li><a href="{{ route('admin.investigations.index') }}">Investigations</a></li>
+                          <li><a href="{{ route('admin.procedure-categories.index') }}">Procedure categories</a></li>
+                          <li><a href="{{ route('admin.procedures.index') }}">Procedures</a></li>
+                          <li><a href="{{ route('admin.implants.index') }}">Implants</a></li>
+                          <li><a href="{{ route('admin.stratification-categories.index') }}">Stratification categories</a></li>
+                          <li><a href="{{ route('admin.stratifications.index') }}">Stratifications</a></li>
+                          <li><a href="{{ route('admin.followup-links.index') }}">Follow-up procedures</a></li>
+                          <li><a href="{{ route('admin.addon-links.index') }}">Add-on procedures</a></li>
+                          <li><a href="{{ route('admin.addon-specialities.index') }}">Add-on to speciality</a></li>
+                          <li><a href="{{ route('admin.non-addon-links.index') }}">Non add-on related</a></li>
+                        </ul>
+                    </li>
+                     
                     <li class="sidebar-list"><i class="fa-solid fa-thumbtack"></i>
                         <a class="sidebar-link sidebar-title link-nav" href="{{ route('admin.settings.index') }}">
                             <svg class="stroke-icon">

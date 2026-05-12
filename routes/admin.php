@@ -44,6 +44,56 @@ Route::group(['namespace' => 'App\Http\Controllers\Admin', 'prefix' => 'admin', 
     Route::resource('specialities', 'SpecialityController');
     Route::post('load-specialities', 'SpecialityController@loaddata')->name('specialitiesload');  
     Route::post('show-specialities-form', 'SpecialityController@showform')->name('specialities.showform');
+
+    // Treatment plan masters (procedure / package related)
+    Route::resource('scheme-types', 'SchemeTypeController');
+    Route::post('load-scheme-types', 'SchemeTypeController@loaddata')->name('scheme-types-load');
+    Route::post('show-scheme-types-form', 'SchemeTypeController@showform')->name('scheme-types.showform');
+
+    Route::resource('packages', 'TreatmentPlanPackageController');
+    Route::post('load-packages', 'TreatmentPlanPackageController@loaddata')->name('packages-load');
+    Route::post('show-packages-form', 'TreatmentPlanPackageController@showform')->name('packages.showform');
+
+    Route::resource('investigations', 'TreatmentPlanInvestigationController');
+    Route::post('load-investigations', 'TreatmentPlanInvestigationController@loaddata')->name('investigations-load');
+    Route::post('show-investigations-form', 'TreatmentPlanInvestigationController@showform')->name('investigations.showform');
+
+    Route::resource('procedure-categories', 'TreatmentPlanProcedureCategoryController');
+    Route::post('load-procedure-categories', 'TreatmentPlanProcedureCategoryController@loaddata')->name('procedure-categories-load');
+    Route::post('show-procedure-categories-form', 'TreatmentPlanProcedureCategoryController@showform')->name('procedure-categories.showform');
+
+    Route::resource('procedures', 'TreatmentPlanProcedureController');
+    Route::post('load-procedures', 'TreatmentPlanProcedureController@loaddata')->name('procedures-load');
+    Route::post('show-procedures-form', 'TreatmentPlanProcedureController@showform')->name('procedures.showform');
+    Route::post('procedures/get-specialities', 'TreatmentPlanProcedureController@getSpecialitiesByScheme')->name('procedures.get-specialities');
+
+    Route::resource('implants', 'TreatmentPlanImplantController');
+    Route::post('load-implants', 'TreatmentPlanImplantController@loaddata')->name('implants-load');
+    Route::post('show-implants-form', 'TreatmentPlanImplantController@showform')->name('implants.showform');
+
+    Route::resource('stratification-categories', 'TreatmentPlanStratificationCategoryController');
+    Route::post('load-stratification-categories', 'TreatmentPlanStratificationCategoryController@loaddata')->name('stratification-categories-load');
+    Route::post('show-stratification-categories-form', 'TreatmentPlanStratificationCategoryController@showform')->name('stratification-categories.showform');
+
+    Route::resource('stratifications', 'TreatmentPlanStratificationController');
+    Route::post('load-stratifications', 'TreatmentPlanStratificationController@loaddata')->name('stratifications-load');
+    Route::post('show-stratifications-form', 'TreatmentPlanStratificationController@showform')->name('stratifications.showform');
+
+    Route::resource('followup-links', 'TreatmentPlanFollowupLinkController');
+    Route::post('load-followup-links', 'TreatmentPlanFollowupLinkController@loaddata')->name('followup-links-load');
+    Route::post('show-followup-links-form', 'TreatmentPlanFollowupLinkController@showform')->name('followup-links.showform');
+
+    Route::resource('addon-links', 'TreatmentPlanAddonLinkController');
+    Route::post('load-addon-links', 'TreatmentPlanAddonLinkController@loaddata')->name('addon-links-load');
+    Route::post('show-addon-links-form', 'TreatmentPlanAddonLinkController@showform')->name('addon-links.showform');
+
+    Route::resource('non-addon-links', 'TreatmentPlanNonAddonLinkController');
+    Route::post('load-non-addon-links', 'TreatmentPlanNonAddonLinkController@loaddata')->name('non-addon-links-load');
+    Route::post('show-non-addon-links-form', 'TreatmentPlanNonAddonLinkController@showform')->name('non-addon-links.showform');
+
+    Route::resource('addon-specialities', 'TreatmentPlanAddonSpecialityController');
+    Route::post('load-addon-specialities', 'TreatmentPlanAddonSpecialityController@loaddata')->name('addon-specialities-load');
+    Route::post('show-addon-specialities-form', 'TreatmentPlanAddonSpecialityController@showform')->name('addon-specialities.showform');
     
     // Services
     Route::resource('services', 'ServiceController');

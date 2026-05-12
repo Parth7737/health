@@ -3430,4 +3430,143 @@ class PatientManagementController extends BaseHospitalController
                 }
             });
     }
+
+    /**
+     * Patient 360 — treatment plan: procedures for speciality (SHA preauth-style HTML options).
+     */
+    public function treatmentPlanProcedures(Request $request)
+    {
+        $specialityId = (int) $request->input('id');
+        if ($specialityId <= 0) {
+            return response()->json(['success' => true, 'html' => '<option value="">Select procedure</option>']);
+        }
+
+        $query = \App\Models\TreatmentPlanProcedure::query()
+            ->with('package')
+            ->where('speciality_id', $specialityId)
+            ->where(function ($q) {
+                $q->whereNull('procedure_label')
+                    ->orWhere('procedure_label', 'Regular Procedure');
+            })
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '1');
+            });
+
+        if ($request->filled('scheme_type_id')) {
+            $schemeId = (int) $request->input('scheme_type_id');
+            $query->where(function ($q2) use ($schemeId) {
+                $q2->whereNull('scheme_type_id')
+                    ->orWhere('scheme_type_id', $schemeId);
+            });
+        }
+
+        $procedures = $query
+            ->orderBy('procedure_name')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        $html = '<option value="">Select procedure</option>';
+        foreach ($procedures as $procedure) {
+            $pkg = $procedure->package->code ?? '';
+            $code2 = $procedure->procedure_code_2 ?? '';
+            $pname = $procedure->procedure_name ?: $procedure->name ?: ('Procedure #'.$procedure->id);
+            $label = trim($pkg.' ('.$code2.') '.$pname);
+            $html .= '<option value="'.(int) $procedure->id.'">'.e($label).'</option>';
+        }
+
+        return response()->json(['success' => true, 'html' => $html]);
+    }
+
+    /**
+     * Patient 360 — procedure detail for stratification / implant toggles and LOS (SHA-compatible JSON).
+     */
+    public function treatmentPlanProcedureDetail(Request $request)
+    {
+        $procedure = \App\Models\TreatmentPlanProcedure::query()->find((int) $request->input('id'));
+        if (! $procedure) {
+            return response()->json(['success' => false, 'message' => 'Procedure not found.'], 404);
+        }
+
+        $stratificationOptions = '<option value="">Select stratification</option>';
+        if ($procedure->stratification_criteria === 'Yes') {
+            $rows = \App\Models\TreatmentPlanStratification::query()
+                ->where('procedure_id', $procedure->id)
+                ->orderBy('name')
+                ->get();
+            foreach ($rows as $s) {
+                $lbl = $s->name.' - ('.($s->code ?? '').')';
+                $stratificationOptions .= '<option value="'.(int) $s->id.'">'.e($lbl).'</option>';
+            }
+        }
+
+        $implantsOptions = '<option value="">Select implant</option>';
+        if ($procedure->implants_high_end_consumables === 'Yes') {
+            $imps = \App\Models\TreatmentPlanImplant::query()
+                ->where('procedure_id', $procedure->id)
+                ->orderBy('name')
+                ->get();
+            foreach ($imps as $imp) {
+                $lbl = $imp->name.' - ('.($imp->code ?? '').')';
+                $implantsOptions .= '<option value="'.(int) $imp->id.'">'.e($lbl).'</option>';
+            }
+        }
+
+        $isReadOnly = true;
+        $price = (float) ($procedure->price ?? 0);
+        if ($price != 0) {
+            $losVal = $procedure->los;
+            $los = ($losVal !== null && $losVal !== '' && (float) $losVal != 0) ? (string) $losVal : 'N/A';
+        } else {
+            $los = '1';
+        }
+
+        $usp = (($procedure->procedure_code_1 ?? '') === 'U100');
+
+        return response()->json([
+            'success' => true,
+            'no_of_days' => $los,
+            'is_read_only' => $isReadOnly,
+            'price' => $price,
+            'usp' => $usp,
+            'icd_code' => (string) ($procedure->icd_code ?? ''),
+            'is_implant' => $procedure->implants_high_end_consumables === 'Yes',
+            'is_stratification' => $procedure->stratification_criteria === 'Yes',
+            'stratification_options' => $stratificationOptions,
+            'implants_options' => $implantsOptions,
+        ]);
+    }
+
+    public function treatmentPlanImplantDetail(Request $request)
+    {
+        $implant = \App\Models\TreatmentPlanImplant::query()->find((int) $request->input('id'));
+        if (! $implant) {
+            return response()->json(['success' => false, 'message' => 'Implant not found.'], 404);
+        }
+
+        $max = max(1, (int) ($implant->no_of_multiplier ?? 1));
+        $isReadOnly = $max <= 1;
+        $qty = 1;
+
+        return response()->json([
+            'success' => true,
+            'qty' => $qty,
+            'max' => $max,
+            'is_read_only' => $isReadOnly,
+            'price' => (float) ($implant->price ?? 0),
+        ]);
+    }
+
+    public function treatmentPlanStratificationDetail(Request $request)
+    {
+        $row = \App\Models\TreatmentPlanStratification::query()->find((int) $request->input('id'));
+        if (! $row) {
+            return response()->json(['success' => false, 'message' => 'Stratification not found.'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'price' => (float) ($row->price ?? 0),
+        ]);
+    }
 }
