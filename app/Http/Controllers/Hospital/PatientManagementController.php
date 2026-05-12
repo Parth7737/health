@@ -13,6 +13,7 @@ use App\Models\DiagnosticOrderItem;
 use App\Models\Disease;
 use App\Models\DoctorSlot;
 use App\Models\Habit;
+use App\Models\HospitalSpeciality;
 use App\Models\HrDepartment;
 use App\Models\IndianDistrict;
 use App\Models\IndianState;
@@ -1874,6 +1875,19 @@ class PatientManagementController extends BaseHospitalController
             $patient360NewOrderBlockedReason = null;
         }
 
+        $treatmentPlanSpecialities = HospitalSpeciality::query()
+            ->join('specialities', 'specialities.id', '=', 'hospital_specialities.speciality_id')
+            ->where('hospital_specialities.hospital_id', $this->hospital_id)
+            ->where('hospital_specialities.available', 1)
+            ->orderBy('specialities.name')
+            ->select([
+                'hospital_specialities.id as hospital_speciality_id',
+                'hospital_specialities.speciality_id',
+                'specialities.name',
+                'specialities.code',
+            ])
+            ->get();
+
         return view('hospital.patient-management.patient-360', [
             'patient' => $patient,
             'activeIpdAllocation' => $activeIpdAllocation,
@@ -1897,6 +1911,7 @@ class PatientManagementController extends BaseHospitalController
             'totalCharges' => $totalCharges,
             'totalPaid' => $totalPaid,
             'totalDue' => $totalDue,
+            'treatmentPlanSpecialities' => $treatmentPlanSpecialities,
         ]);
     }
     public function mrnPreview()

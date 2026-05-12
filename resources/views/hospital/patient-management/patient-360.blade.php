@@ -85,7 +85,7 @@
 <div class="container-fluid px-0">
     <div class="opd-content-wrap">
         <!-- Patient Header -->
-        <div class="p360-patient-banner" style="background:linear-gradient(135deg,#071221,#0a1628);padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div class="p360-patient-banner">
             <div class="p360-banner-row1">
                 <div class="p360-banner-avatar">{{ $initials }}</div>
                 <div class="p360-banner-patient">
@@ -137,12 +137,18 @@
                         @else
                             disabled
                             aria-disabled="true"
-                            style="opacity:.55;cursor:not-allowed"
                             title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}"
                         @endif
                     >+ New Order</button>
                     @if($isIpdActive && $activeIpdAllocation)
                         @can('edit-patient-management')
+                            <button
+                                type="button"
+                                class="btn btn-primary btn-sm p360-treatment-plan-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#p360TreatmentPlanModal"
+                                aria-haspopup="dialog"
+                            >Treatment Plan</button>
                             <button
                                 type="button"
                                 class="btn btn-warning btn-sm p360-transfer-ipd-btn"
@@ -155,7 +161,6 @@
                                 @if(!($patient360CanIpdDischarge ?? false))
                                     disabled
                                     aria-disabled="true"
-                                    style="opacity:.55;cursor:not-allowed"
                                 @endif
                                 title="{{ ($patient360CanIpdDischarge ?? false) ? 'Discharge patient' : 'Clear outstanding bill before discharge' }}"
                             >{{ ($patient360CanIpdDischarge ?? false) ? 'Discharge' : 'Clear Bill To Discharge' }}</button>
@@ -165,29 +170,32 @@
             </div>
 
             <!-- Quick vitals strip -->
-            <div class="flex gap-4 mt-3 flex-wrap" style="border-top:1px solid rgba(255,255,255,.07);padding-top:12px">
-                <div style="text-align:center"><div style="font-size:10px;color:#4a6880;text-transform:uppercase;letter-spacing:.05em">BP</div><div style="font-size:15px;font-weight:700;color:#ef5350">{{ $bpText }}</div></div>
-                <div style="width:1px;background:rgba(255,255,255,.07)"></div>
-                <div style="text-align:center"><div style="font-size:10px;color:#4a6880;text-transform:uppercase">Pulse</div><div style="font-size:15px;font-weight:700;color:#e8f2fb">{{ $pulseText }}</div></div>
-                <div style="width:1px;background:rgba(255,255,255,.07)"></div>
-                <div style="text-align:center"><div style="font-size:10px;color:#4a6880;text-transform:uppercase">SpO2</div><div style="font-size:15px;font-weight:700;color:#66bb6a">{{ $spo2Text }}</div></div>
-                <div style="width:1px;background:rgba(255,255,255,.07)"></div>
-                <div style="text-align:center"><div style="font-size:10px;color:#4a6880;text-transform:uppercase">Temp</div><div style="font-size:15px;font-weight:700;color:#fb8c00">{{ $tempText }}</div></div>
-                <div style="width:1px;background:rgba(255,255,255,.07)"></div>
-                <div style="text-align:center"><div style="font-size:10px;color:#4a6880;text-transform:uppercase">RBS</div><div style="font-size:15px;font-weight:700;color:#ef5350">{{ $rbsText }}</div></div>
-                <div style="width:1px;background:rgba(255,255,255,.07)"></div>
-                <div style="text-align:center"><div style="font-size:10px;color:#4a6880;text-transform:uppercase">Weight</div><div style="font-size:15px;font-weight:700;color:#e8f2fb">{{ $weightText }}</div></div>
-                <div style="width:1px;background:rgba(255,255,255,.07)"></div>
-                <div style="text-align:center"><div style="font-size:10px;color:#4a6880;text-transform:uppercase">BMI</div><div style="font-size:15px;font-weight:700;color:#fb8c00">{{ $bmiText }}</div></div>
+            <div class="flex gap-4 mt-3 flex-wrap p360-vitals-strip">
+                <div class="p360-vital-cell"><div class="p360-vital-label">BP</div><div class="p360-vital-value p360-vital-value--bp">{{ $bpText }}</div></div>
+                <div class="p360-vitals-rule" aria-hidden="true"></div>
+                <div class="p360-vital-cell"><div class="p360-vital-label">Pulse</div><div class="p360-vital-value p360-vital-value--pulse">{{ $pulseText }}</div></div>
+                <div class="p360-vitals-rule" aria-hidden="true"></div>
+                <div class="p360-vital-cell"><div class="p360-vital-label">SpO2</div><div class="p360-vital-value p360-vital-value--spo2">{{ $spo2Text }}</div></div>
+                <div class="p360-vitals-rule" aria-hidden="true"></div>
+                <div class="p360-vital-cell"><div class="p360-vital-label">Temp</div><div class="p360-vital-value p360-vital-value--temp">{{ $tempText }}</div></div>
+                <div class="p360-vitals-rule" aria-hidden="true"></div>
+                <div class="p360-vital-cell"><div class="p360-vital-label">RBS</div><div class="p360-vital-value p360-vital-value--rbs">{{ $rbsText }}</div></div>
+                <div class="p360-vitals-rule" aria-hidden="true"></div>
+                <div class="p360-vital-cell"><div class="p360-vital-label">Weight</div><div class="p360-vital-value p360-vital-value--weight">{{ $weightText }}</div></div>
+                <div class="p360-vitals-rule" aria-hidden="true"></div>
+                <div class="p360-vital-cell"><div class="p360-vital-label">BMI</div><div class="p360-vital-value p360-vital-value--bmi">{{ $bmiText }}</div></div>
             </div>
         </div>
 
         <!-- Tab navigation -->
-        <div style="background:#fff;border-bottom:2px solid #e2ecf4;padding:0 24px">
-            <div class="tab-bar" style="border:none;margin:0">
+        <div class="p360-tab-shell">
+            <div class="tab-bar p360-tab-bar">
                 <button class="tab-btn active" data-tab="tabTimeline" onclick="switchEMRTab('tabTimeline',this)">📅 Timeline</button>
                 <button class="tab-btn" data-tab="tabProfile" onclick="switchEMRTab('tabProfile',this)">🧾 Details</button>
                 <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">📋 Orders</button>
+                @if($isIpdActive && $activeIpdAllocation)
+                    <button class="tab-btn" data-tab="tabProcedure" onclick="switchEMRTab('tabProcedure',this)">📋 Procedure</button>
+                @endif
                 <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">💊 Medications</button>
                 <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">📝 Clinical Notes</button>
                 <button class="tab-btn" data-tab="tabLab" onclick="switchEMRTab('tabLab',this)">🧪 Lab Results</button>
@@ -263,18 +271,18 @@
                         <div class="card">
                             <div class="card-header"><div class="card-title">Active Problem List</div></div>
                             <div class="card-body-sm">
-                                <div class="list-item"><div class="list-item-icon" style="background:#ffebee"></div><div class="list-item-body"><div class="li-title">Type 2 Diabetes Mellitus</div><div class="li-sub">ICD-10: E11.9 · Uncontrolled · Since 2018</div></div><span class="badge badge-danger">Active</span></div>
-                                <div class="list-item"><div class="list-item-icon" style="background:#fff3e0"></div><div class="list-item-body"><div class="li-title">Essential Hypertension</div><div class="li-sub">ICD-10: I10 · Poorly controlled · Since 2020</div></div><span class="badge badge-warning">Active</span></div>
-                                <div class="list-item"><div class="list-item-icon" style="background:#e3f2fd"></div><div class="list-item-body"><div class="li-title">Dyslipidaemia</div><div class="li-sub">ICD-10: E78.5 · On statin · LDL 142</div></div><span class="badge badge-primary">Active</span></div>
+                                <div class="list-item"><div class="list-item-icon p360-li-icon p360-li-icon--danger"></div><div class="list-item-body"><div class="li-title">Type 2 Diabetes Mellitus</div><div class="li-sub">ICD-10: E11.9 · Uncontrolled · Since 2018</div></div><span class="badge badge-danger">Active</span></div>
+                                <div class="list-item"><div class="list-item-icon p360-li-icon p360-li-icon--warning"></div><div class="list-item-body"><div class="li-title">Essential Hypertension</div><div class="li-sub">ICD-10: I10 · Poorly controlled · Since 2020</div></div><span class="badge badge-warning">Active</span></div>
+                                <div class="list-item"><div class="list-item-icon p360-li-icon p360-li-icon--primary"></div><div class="list-item-body"><div class="li-title">Dyslipidaemia</div><div class="li-sub">ICD-10: E78.5 · On statin · LDL 142</div></div><span class="badge badge-primary">Active</span></div>
                             </div>
                         </div>
                         <!-- AI -->
                         <div class="ai-insight-block">
                             <div class="ai-header">AI Clinical Copilot</div>
                             <div class="ai-body">
-                                <div class="ai-item"><div class="ai-dot" style="background:#e65100"></div><div>HbA1c trend worsening (7.9 to 8.4%). Consider dual therapy - add Sitagliptin or refer for endocrinology review.</div></div>
+                                <div class="ai-item"><div class="ai-dot p360-ai-dot p360-ai-dot--alert"></div><div>HbA1c trend worsening (7.9 to 8.4%). Consider dual therapy - add Sitagliptin or refer for endocrinology review.</div></div>
                                 <div class="ai-item"><div class="ai-dot"></div><div>BP target for DM+CKD is &lt;130/80 per ACC/AHA. Current 148/94 is above target - ARB preferred.</div></div>
-                                <div class="ai-item"><div class="ai-dot" style="background:#2e7d32"></div><div>Kidney function stable (Cr 1.1). Continue Metformin with monitoring. eGFR estimation recommended.</div></div>
+                                <div class="ai-item"><div class="ai-dot p360-ai-dot p360-ai-dot--ok"></div><div>Kidney function stable (Cr 1.1). Continue Metformin with monitoring. eGFR estimation recommended.</div></div>
                             </div>
                         </div>
                     </div>
@@ -310,7 +318,7 @@
                             <div class="table-wrap">
                                 <table>
                                     <tbody>
-                                        <tr><td style="width:220px">MRN</td><td>{{ $displayMrn }}</td></tr>
+                                        <tr><td class="p360-profile-label-col">MRN</td><td>{{ $displayMrn }}</td></tr>
                                         <tr><td>ABHA / Ayushman Bharat ID</td><td>{{ $displayAbha }}</td></tr>
                                         <tr><td>Aadhaar Number</td><td>{{ $patient->aadhar_no ?: '-' }}</td></tr>
                                         <tr><td>Blood Group</td><td>{{ $patient->blood_group ?: '-' }}</td></tr>
@@ -330,7 +338,7 @@
                             <div class="table-wrap">
                                 <table>
                                     <tbody>
-                                        <tr><td style="width:220px">Primary Phone</td><td>{{ $patient->phone ?: '-' }}</td></tr>
+                                        <tr><td class="p360-profile-label-col">Primary Phone</td><td>{{ $patient->phone ?: '-' }}</td></tr>
                                         <tr><td>Alternate Phone</td><td>{{ $patient->alternate_phone ?: '-' }}</td></tr>
                                         <tr><td>Email</td><td>{{ $patient->email ?: '-' }}</td></tr>
                                         <tr><td>Address</td><td>{{ $profileAddressParts->isNotEmpty() ? $profileAddressParts->implode(', ') : '-' }}</td></tr>
@@ -349,7 +357,7 @@
                             <div class="table-wrap">
                                 <table>
                                     <tbody>
-                                        <tr><td style="width:220px">Contact Name</td><td>{{ $patient->emergency_contact_name ?: '-' }}</td></tr>
+                                        <tr><td class="p360-profile-label-col">Contact Name</td><td>{{ $patient->emergency_contact_name ?: '-' }}</td></tr>
                                         <tr><td>Relation</td><td>{{ $patient->emergency_contact_relation ?: '-' }}</td></tr>
                                         <tr><td>Phone</td><td>{{ $patient->emergency_contact_phone ?: '-' }}</td></tr>
                                     </tbody>
@@ -368,7 +376,7 @@
                             <div class="mb-3">
                                 <div class="fw-600 fs-12 mb-2">Chronic Conditions</div>
                                 @if($profileChronicConditions->isNotEmpty())
-                                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                    <div class="p360-allergy-tags">
                                         @foreach($profileChronicConditions as $profileCondition)
                                             <span class="badge badge-warning">{{ $profileCondition }}</span>
                                         @endforeach
@@ -380,7 +388,7 @@
                             <div class="table-wrap">
                                 <table>
                                     <tbody>
-                                        <tr><td style="width:220px">Past Surgical History</td><td>{{ $patient->past_surgical_history ?: '-' }}</td></tr>
+                                        <tr><td class="p360-profile-label-col">Past Surgical History</td><td>{{ $patient->past_surgical_history ?: '-' }}</td></tr>
                                         <tr><td>Current Medications</td><td>{{ $patient->current_medications ?: '-' }}</td></tr>
                                         <tr><td>Family History</td><td>{{ $patient->family_history ?: '-' }}</td></tr>
                                         <tr><td>Smoking Status</td><td>{{ $patient->smoking_status ?: '-' }}</td></tr>
@@ -542,10 +550,79 @@
                 </div>
             </div>
 
+            @if($isIpdActive && $activeIpdAllocation)
+            <!-- PROCEDURE (IPD only — static until treatment plan API) -->
+            <div class="tab-pane" id="tabProcedure">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">Treatment plan</div></div>
+                    <div class="card-body">
+                        <div class="p360-tp-table-wrap">
+                            <div class="table-responsive rounded-2 p360-tp-table-border">
+                                <table class="" id="p360ProcedureTabTable" aria-label="Admission treatment plan (sample)">
+                                    <thead>
+                                        <tr>
+                                            <th class="p360-tp-th-no">No.</th>
+                                            <th>Speciality</th>
+                                            <th class="p360-tp-th-procedure">Procedure</th>
+                                            <th>Implant</th>
+                                            <th>Qty</th>
+                                            <th>Stratification</th>
+                                            <th>Day / units</th>
+                                            <th>Unverified amt.</th>
+                                            <th>ICHI code</th>
+                                            <th class="p360-tp-th-actions">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>1</td>
+                                            <td>Orthopedics</td>
+                                            <td>Total knee replacement — primary (sample)</td>
+                                            <td>NA</td>
+                                            <td>1</td>
+                                            <td>NA</td>
+                                            <td>5</td>
+                                            <td>₹1,85,000.00</td>
+                                            <td>N/A</td>
+                                            <td class="text-center text-muted">—</td>
+                                        </tr>
+                                        <tr>
+                                            <td>2</td>
+                                            <td>Burns Management</td>
+                                            <td>Skin graft — small area (sample)</td>
+                                            <td>—</td>
+                                            <td>1</td>
+                                            <td>N/A</td>
+                                            <td>NA</td>
+                                            <td>₹45,000.00</td>
+                                            <td>XXX</td>
+                                            <td class="text-center text-muted">—</td>
+                                        </tr>
+                                        <tr>
+                                            <td>3</td>
+                                            <td>General Surgery</td>
+                                            <td>SC080 (SC080A) Resuturing of wound gap — demo row</td>
+                                            <td>NA</td>
+                                            <td>2</td>
+                                            <td>NA</td>
+                                            <td>1</td>
+                                            <td>₹1,500.00</td>
+                                            <td>XXX</td>
+                                            <td class="text-center text-muted">—</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
+
             <!-- MEDICATIONS -->
             <div class="tab-pane" id="tabMeds">
                 <div class="card">
-                    <div class="card-header"><div class="card-title">💊 Current Medication Sheet</div><button type="button" class="btn btn-primary btn-sm" id="patient360PrescribeBtn" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if($canPatient360NewOrder ?? true) data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Alt+Shift+P — open prescription workspace from this page. Inside modal: Alt+S / Ctrl+S Save · Alt+B Close · Alt+D Add drug · Ctrl+Enter commit row · Alt+T lab test · Alt+1–9 sections" aria-keyshortcuts="Alt+Shift+P Alt+S Alt+B Alt+D Alt+T" @else disabled aria-disabled="true" style="opacity:.55;cursor:not-allowed" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Prescribe</button></div>
+                    <div class="card-header"><div class="card-title">💊 Current Medication Sheet</div><button type="button" class="btn btn-primary btn-sm" id="patient360PrescribeBtn" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if($canPatient360NewOrder ?? true) data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Alt+Shift+P — open prescription workspace from this page. Inside modal: Alt+S / Ctrl+S Save · Alt+B Close · Alt+D Add drug · Ctrl+Enter commit row · Alt+T lab test · Alt+1–9 sections" aria-keyshortcuts="Alt+Shift+P Alt+S Alt+B Alt+D Alt+T" @else disabled aria-disabled="true" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Prescribe</button></div>
                     <div class="table-wrap">
                         <table>
                             <thead><tr><th>Drug</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Prescribed By</th><th>Visit</th><th>Start Date</th><th>Status</th></tr></thead>
@@ -611,10 +688,10 @@
                                                 'normal' => 'badge-success',
                                                 default => 'badge-secondary',
                                             };
-                                            $resultStyle = match ($flag) {
-                                                'critical_low', 'critical_high', 'high' => 'color:#c62828',
-                                                'low' => 'color:#e65100',
-                                                'normal' => 'color:#2e7d32',
+                                            $resultClass = match ($flag) {
+                                                'critical_low', 'critical_high', 'high' => 'p360-lab-result--critical',
+                                                'low' => 'p360-lab-result--low',
+                                                'normal' => 'p360-lab-result--normal',
                                                 default => '',
                                             };
                                             $labDate = !empty($labRow['dated_at']) ? \Carbon\Carbon::parse($labRow['dated_at']) : null;
@@ -628,7 +705,7 @@
                                                 <div class="font-600">{{ $labRow['test_label'] }}</div>
                                                 <div class="fs-11 text-muted">{{ $labRow['context_line'] }}</div>
                                             </td>
-                                            <td class="font-600" @if($resultStyle !== '') style="{{ $resultStyle }}" @endif>{{ $labRow['result'] }}</td>
+                                            <td class="font-600{{ $resultClass !== '' ? ' ' . $resultClass : '' }}">{{ $labRow['result'] }}</td>
                                             <td>{{ $labRow['ref_range'] }}</td>
                                             <td>
                                                 @if($flag)
@@ -669,8 +746,8 @@
                                         ? route('hospital.radiology.worklist.print', ['item' => $radItem->id])
                                         : null;
                                 @endphp
-                                <div class="list-item" @if($radStatusKey !== 'completed') style="opacity:.75" @endif>
-                                    <div class="list-item-icon" style="background:#e3f2fd"></div>
+                                <div class="list-item{{ $radStatusKey !== 'completed' ? ' p360-rad-row-muted' : '' }}">
+                                    <div class="list-item-icon p360-li-icon p360-li-icon--rad"></div>
                                     <div class="list-item-body">
                                         <div class="li-title">{{ $radItem->test_name }} — {{ $radDateLabel }}</div>
                                         <div class="li-sub">{{ $radSubShort }}</div>
@@ -682,7 +759,7 @@
                                     @endif
                                 </div>
                             @empty
-                                <div class="fs-12 text-muted" style="padding:12px 16px">No radiology reports found for this patient.</div>
+                                <div class="fs-12 text-muted p360-rad-empty">No radiology reports found for this patient.</div>
                             @endforelse
                         </div>
                     </div>
@@ -692,8 +769,8 @@
             <!-- VITALS CHART -->
             <div class="tab-pane" id="tabVitals">
                 <div class="grid-2">
-                    <div class="card"><div class="card-header"><div class="card-title">BP Trend</div></div><div class="card-body"><div class="chart-container" style="height:220px"><canvas id="bpChart"></canvas></div></div></div>
-                    <div class="card"><div class="card-header"><div class="card-title">Blood Sugar Trend</div></div><div class="card-body"><div class="chart-container" style="height:220px"><canvas id="bsChart"></canvas></div></div></div>
+                    <div class="card"><div class="card-header"><div class="card-title">BP Trend</div></div><div class="card-body"><div class="chart-container p360-chart-container"><canvas id="bpChart"></canvas></div></div></div>
+                    <div class="card"><div class="card-header"><div class="card-title">Blood Sugar Trend</div></div><div class="card-body"><div class="chart-container p360-chart-container"><canvas id="bsChart"></canvas></div></div></div>
                 </div>
             </div>
 
@@ -763,9 +840,9 @@
                     </div>
                     <div class="card-body-sm">
                         <div class="stat-row mb-3">
-                            <div class="stat-item"><div class="s-label">Total Charges</div><div class="s-value" style="color:#1565c0">Rs {{ number_format((float) ($totalCharges ?? 0), 2) }}</div></div>
-                            <div class="stat-item"><div class="s-label">Paid Amount</div><div class="s-value" style="color:#2e7d32">Rs {{ number_format((float) ($totalPaid ?? 0), 2) }}</div></div>
-                            <div class="stat-item"><div class="s-label">Balance Due</div><div class="s-value" style="color:#c62828">Rs {{ number_format((float) ($totalDue ?? 0), 2) }}</div></div>
+                            <div class="stat-item"><div class="s-label">Total Charges</div><div class="s-value p360-stat-charge">Rs {{ number_format((float) ($totalCharges ?? 0), 2) }}</div></div>
+                            <div class="stat-item"><div class="s-label">Paid Amount</div><div class="s-value p360-stat-paid">Rs {{ number_format((float) ($totalPaid ?? 0), 2) }}</div></div>
+                            <div class="stat-item"><div class="s-label">Balance Due</div><div class="s-value p360-stat-due">Rs {{ number_format((float) ($totalDue ?? 0), 2) }}</div></div>
                         </div>
                         <div class="table-wrap">
                             <table>
@@ -809,7 +886,7 @@
             <!-- NOTES -->
             <div class="tab-pane" id="tabNotes">
                 <div class="card">
-                    <div class="card-header"><div class="card-title">Clinical Notes</div><button type="button" class="btn btn-primary btn-sm" id="patient360AddNoteBtn" data-open-context="note" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if($canPatient360NewOrder ?? true) data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Alt+Shift+N — open notes (SOAP) workspace from this page. Inside modal: Alt+S / Ctrl+S Save · Alt+B Close · Alt+D / Alt+T / Ctrl+Enter · Alt+1–9" aria-keyshortcuts="Alt+Shift+N Alt+S Alt+B Alt+D Alt+T" @else disabled aria-disabled="true" style="opacity:.55;cursor:not-allowed" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Add Note</button></div>
+                    <div class="card-header"><div class="card-title">Clinical Notes</div><button type="button" class="btn btn-primary btn-sm" id="patient360AddNoteBtn" data-open-context="note" data-mode="{{ $isIpdActive ? 'ipd' : 'opd' }}" data-opd-id="{{ data_get($latestOpdVisit, 'id', '') }}" data-allocation-id="{{ data_get($activeIpdAllocation, 'id', '') }}" data-can-new-order="{{ ($canPatient360NewOrder ?? true) ? '1' : '0' }}" data-block-reason="{{ e($patient360NewOrderBlockedReason ?? '') }}" @if($canPatient360NewOrder ?? true) data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Alt+Shift+N — open notes (SOAP) workspace from this page. Inside modal: Alt+S / Ctrl+S Save · Alt+B Close · Alt+D / Alt+T / Ctrl+Enter · Alt+1–9" aria-keyshortcuts="Alt+Shift+N Alt+S Alt+B Alt+D Alt+T" @else disabled aria-disabled="true" title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}" @endif>+ Add Note</button></div>
                     <div class="card-body">
                         @forelse(($clinicalNotes ?? collect()) as $note)
                             @php
@@ -822,21 +899,125 @@
                                             : $noteAt->format('d M Y, h:i A')))
                                     : '-';
                             @endphp
-                            <div style="border:1.5px solid #e2ecf4;border-radius:10px;padding:16px;margin-bottom:16px">
+                            <div class="p360-note-card">
                                 <div class="flex justify-between mb-2">
                                     <div>
                                         <strong>{{ $note['title'] }}</strong> - {{ $note['author'] }}
-                                        <span class="badge {{ $note['note_badge'] }}" style="margin-left:8px">{{ $note['author_role'] }}</span>
+                                        <span class="badge {{ $note['note_badge'] }} ms-2">{{ $note['author_role'] }}</span>
                                     </div>
                                     <div class="text-muted text-sm">{{ $noteAtLabel }}</div>
                                 </div>
                                 <div class="text-muted text-sm mb-2">{{ $note['context'] }}</div>
-                                <p style="font-size:13px;line-height:1.6;color:#344a5e;white-space:pre-line">{{ $note['body'] ?: '-' }}</p>
+                                <p class="p360-note-body">{{ $note['body'] ?: '-' }}</p>
                             </div>
                         @empty
-                            <div class="text-center text-muted" style="padding:24px">No clinical notes found for this patient.</div>
+                            <div class="text-center text-muted p360-empty-state-pad">No clinical notes found for this patient.</div>
                         @endforelse
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Patient 360 — Treatment Plan (static UI; wire to backend later) --}}
+<div class="modal fade" id="p360TreatmentPlanModal" tabindex="-1" aria-labelledby="p360TreatmentPlanModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+        <div class="modal-content p360-tp-modal opd-content-wrap">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title d-flex align-items-center gap-2 mb-0" id="p360TreatmentPlanModalLabel">
+                    <span class="p360-tp-title-text">Treatment plan</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p360-tp-modal-body">
+                <form id="p360TreatmentPlanForm" class="p360-tp-form" onsubmit="return false;">
+                    <div class="row g-3">
+                        <div class="col-md-6 col-lg-4">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpSpeciality">Speciality</label>
+                                <select class="form-control" id="p360TpSpeciality" aria-label="Speciality">
+                                    @forelse(($treatmentPlanSpecialities ?? collect()) as $tpSpec)
+                                        <option value="{{ $tpSpec->speciality_id }}" @selected($loop->first)>{{ $tpSpec->name }}</option>
+                                    @empty
+                                        <option value="">No specialities configured for this hospital</option>
+                                    @endforelse
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-8">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpProcedure">Procedure</label>
+                                <select class="form-control" id="p360TpProcedure" aria-label="Procedure">
+                                    <option value="SC080 (SC080A) Resuturing of Any Wound gap Surgeries" selected>SC080 (SC080A) Resuturing of Any Wound gap Surgeries</option>
+                                    <option value="Total knee replacement — primary">Total knee replacement — primary</option>
+                                    <option value="Skin graft — small area">Skin graft — small area</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-3">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpImplant">Implant</label>
+                                <input type="text" class="form-control" id="p360TpImplant" value="NA" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpQuantity">Quantity</label>
+                                <input type="text" class="form-control" id="p360TpQuantity" value="1" inputmode="numeric" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-lg-2">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpStratification">Stratification</label>
+                                <input type="text" class="form-control" id="p360TpStratification" value="NA" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-lg-2">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpUnits">No. of units / days</label>
+                                <input type="text" class="form-control" id="p360TpUnits" value="NA" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-lg-2">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpUnverifiedAmount">Unverified amount (₹)</label>
+                                <input type="text" class="form-control" id="p360TpUnverifiedAmount" value="1500" inputmode="decimal" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-lg-2">
+                            <div class="form-group">
+                                <label class="form-label" for="p360TpIchi">ICHI code</label>
+                                <input type="text" class="form-control" id="p360TpIchi" value="XXX" autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-4">
+                        <button type="button" class="btn btn-primary px-5" id="p360TreatmentPlanAddBtn">Add</button>
+                    </div>
+                </form>
+
+                <div class="p360-tp-table-wrap mt-4">
+                    <div class="table-responsive rounded-2 p360-tp-table-border">
+                        <table class="table table-hover mb-0 p360-tp-table" id="p360TreatmentPlanTable">
+                            <thead>
+                                <tr>
+                                    <th class="p360-tp-th-no">No.</th>
+                                    <th>Speciality</th>
+                                    <th class="p360-tp-th-procedure">Procedure</th>
+                                    <th>Implant</th>
+                                    <th>Qty</th>
+                                    <th>Stratification</th>
+                                    <th>Day / units</th>
+                                    <th>Unverified amt.</th>
+                                    <th>ICHI code</th>
+                                    <th class="p360-tp-th-actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="p360TreatmentPlanTableBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted small mt-2 mb-0" id="p360TreatmentPlanEmptyHint">No lines yet. Fill the form and tap <strong>Add</strong>.</p>
                 </div>
             </div>
         </div>
@@ -855,274 +1036,17 @@
                 <div class="p-4 text-center text-muted">Loading...</div>
             </div>
             <div class="modal-footer p360-modal-footer">
-                <button type="button" id="p360SaveBtn" class="btn btn-primary px-5" style="display:none" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Alt+S or Ctrl+S to save · Enter when Save is focused" aria-keyshortcuts="Alt+S Ctrl+S">Save</button>
+                <button type="button" id="p360SaveBtn" class="btn btn-primary px-5 d-none" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Alt+S or Ctrl+S to save · Enter when Save is focused" aria-keyshortcuts="Alt+S Ctrl+S">Save</button>
             </div>
         </div>
     </div>
 </div>
 
-{{-- Modal CSS in body so it loads AFTER bootstrap.css and wins on specificity --}}
-<style>
-/* Bootstrap tooltips above Patient 360 modal (Bootstrap 5 modal z-index ~1055) */
-.tooltip {
-    z-index: 1700;
-}
-
-#p360Modal { padding-right: 0 !important; }
-#p360Modal .modal-dialog {
-    max-width: none !important;
-    width: calc(100vw - 16px) !important;
-    height: calc(100vh - 48px) !important;
-    margin: 24px 8px !important;
-}
-#p360Modal .modal-content {
-    border-radius: 12px !important;
-    border: 2px solid #2c6db6 !important;
-    background: #fff !important;
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100% !important;
-    max-height: calc(100vh - 48px) !important;
-    overflow: hidden !important;
-    box-shadow: 0 18px 48px rgba(18,49,80,.28) !important;
-}
-#p360Modal .modal-header {
-    flex-shrink: 0;
-    border-bottom: 1px solid #e3edf8;
-    padding: 12px 16px;
-    background: #fff;
-    color: #0d1b2a;
-}
-#p360Modal .modal-body {
-    flex: 1 1 auto !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    min-height: 0 !important;
-    padding: 16px !important;
-    background: #fff !important;
-}
-#p360Modal .p360-modal-footer {
-    flex-shrink: 0;
-    border-top: 1px solid #e3edf8;
-    padding: 10px 16px;
-    display: flex;
-    justify-content: flex-end;
-    background: #f7fafd;
-}
-
-/* New Order keyboard UX: make active field clearly visible in repeated prescription flow */
-#p360Modal .prescription-entry-grid .form-control:focus-visible,
-#p360Modal .prescription-entry-grid .form-select:focus-visible,
-#p360Modal .prescription-entry-grid .select2-container .select2-selection:focus-visible,
-#p360Modal #doctorUnifiedTestBlock .form-control:focus-visible,
-#p360Modal #doctorUnifiedTestBlock .form-select:focus-visible,
-#p360Modal #doctorUnifiedTestBlock .select2-container .select2-selection:focus-visible {
-    outline: 2px solid #1565c0 !important;
-    outline-offset: 2px !important;
-    border-color: #1565c0 !important;
-    box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.18) !important;
-}
-
-#p360Modal .prescription-entry-grid .select2-container .select2-selection,
-#p360Modal #doctorUnifiedTestBlock .select2-container .select2-selection {
-    transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-/* Action buttons (edit/delete/remove): keyboard focus must be obvious */
-#p360Modal .prescription-icon-btn,
-#p360Modal .doctor-care-test-remove {
-    position: relative;
-}
-
-#p360Modal .prescription-icon-btn:focus-visible,
-#p360Modal .doctor-care-test-remove:focus-visible {
-    outline: 2px solid #1565c0 !important;
-    outline-offset: 2px !important;
-    box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.2) !important;
-}
-
-/* Lab chip remove button was too tiny to notice on keyboard focus */
-#p360Modal .doctor-care-test-remove {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    min-height: 22px;
-    border-radius: 6px;
-    padding: 0 4px;
-}
-
-/* Patient 360 — banner: identity row + toolbar row (badges / actions) */
-.p360-patient-banner .p360-banner-row1 {
-    display: flex;
-    align-items: flex-start;
-    gap: 16px;
-    width: 100%;
-}
-.p360-patient-banner .p360-banner-avatar {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #1565c0, #00695c);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    font-weight: 800;
-    flex-shrink: 0;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-}
-.p360-patient-banner .p360-banner-patient {
-    flex: 1;
-    min-width: 0;
-}
-.p360-patient-banner .p360-banner-name {
-    font-size: 18px;
-    font-weight: 800;
-    color: #e8f2fb;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
-}
-.p360-patient-banner .p360-banner-meta {
-    margin-top: 8px;
-    font-size: 12px;
-    color: #8aa9c4;
-    line-height: 1.55;
-}
-.p360-patient-banner .p360-meta-line {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 4px 0;
-    margin-bottom: 4px;
-}
-.p360-patient-banner .p360-meta-line:last-child {
-    margin-bottom: 0;
-}
-.p360-patient-banner .p360-meta-sep {
-    color: #4a6880;
-    padding: 0 8px;
-    user-select: none;
-}
-.p360-patient-banner .p360-meta-strong {
-    color: #c8dff2;
-    font-weight: 600;
-}
-.p360-patient-banner .p360-banner-row2 {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px 16px;
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-.p360-patient-banner .p360-banner-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-    flex: 1 1 200px;
-    min-width: 0;
-}
-.p360-patient-banner .p360-badge-chip {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 5px 10px;
-    border-radius: 6px;
-    max-width: 100%;
-}
-.p360-patient-banner .p360-banner-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-end;
-    flex: 0 1 auto;
-}
-@media (max-width: 640px) {
-    .p360-patient-banner .p360-meta-sep {
-        display: none;
-    }
-    .p360-patient-banner .p360-meta-line span {
-        display: block;
-        width: 100%;
-    }
-    .p360-patient-banner .p360-banner-actions {
-        width: 100%;
-        justify-content: stretch;
-    }
-    .p360-patient-banner .p360-banner-actions .btn {
-        flex: 1 1 auto;
-        justify-content: center;
-    }
-}
-
-/* Force patient.html button look for this page */
-.opd-content-wrap .btn {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 7px !important;
-    padding: 8px 18px !important;
-    border-radius: 8px !important;
-    font-size: 12.5px !important;
-    font-weight: 600 !important;
-    border: 1px solid transparent !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
-    transition: all .18s ease !important;
-}
-.opd-content-wrap .btn-sm { padding: 5px 12px !important; font-size: 11.5px !important; }
-.opd-content-wrap .btn-xs { padding: 3px 9px !important; font-size: 11px !important; }
-.opd-content-wrap .btn-primary {
-    background: #1565c0 !important;
-    border-color: #1565c0 !important;
-    color: #fff !important;
-    box-shadow: 0 2px 8px rgba(21,101,192,.3) !important;
-}
-.opd-content-wrap .btn-primary:hover {
-    background: #003580 !important;
-    border-color: #003580 !important;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(21,101,192,.4) !important;
-}
-.opd-content-wrap .btn-ghost {
-    background: transparent !important;
-    border-color: #ccd8e8 !important;
-    color: #2c4460 !important;
-}
-.opd-content-wrap .btn-ghost:hover { background: #eef3f8 !important; }
-
-.opd-content-wrap .tab-btn {
-    padding: 9px 16px !important;
-    font-size: 12.5px !important;
-    font-weight: 500 !important;
-    color: #5a7894 !important;
-    border-radius: 8px 8px 0 0 !important;
-    border: 1px solid transparent !important;
-    border-bottom: none !important;
-    background: transparent !important;
-    margin-bottom: -2px !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-}
-.opd-content-wrap .tab-btn:hover { color: #1565c0 !important; background: #e3f2fd !important; }
-.opd-content-wrap .tab-btn.active {
-    color: #1565c0 !important;
-    background: #fff !important;
-    border-color: #e2ecf4 !important;
-    border-bottom-color: #fff !important;
-    font-weight: 600 !important;
-}
-</style>
 @endsection
 
 @push('styles')
+<link rel="stylesheet" type="text/css" href="{{ asset('public/front/assets/css/gov.css') }}">
 @include('layouts.partials.flatpickr-css')
-<link rel="stylesheet" type="text/css" href="{{asset('public/front/assets/css/gov.css')}}">
 @endpush
 
 @push('scripts')
@@ -1156,6 +1080,125 @@ function applyRequestedTabFromUrl() {
 document.addEventListener('DOMContentLoaded', function () {
     applyRequestedTabFromUrl();
 });
+
+/* ── Treatment plan modal (static rows until API wired) ───── */
+(function () {
+    var PROC_PREVIEW_LEN = 72;
+    function escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    function formatInr(val) {
+        var n = parseFloat(String(val).replace(/[^\d.-]/g, ''));
+        if (isNaN(n)) {
+            n = 0;
+        }
+        try {
+            return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } catch (e) {
+            return '₹' + n.toFixed(2);
+        }
+    }
+    function procedureCellHtml(full) {
+        var t = String(full || '');
+        if (t.length <= PROC_PREVIEW_LEN) {
+            return '<div class="p360-tp-proc-cell">' + escHtml(t) + '</div>';
+        }
+        var vis = escHtml(t.slice(0, PROC_PREVIEW_LEN)) + '…';
+        return (
+            '<div class="p360-tp-proc-cell p360-tp-proc-collapsed" data-full-text="' + escHtml(t) + '">' +
+            '<span class="p360-tp-proc-preview">' + vis + '</span> ' +
+            '<button type="button" class="btn btn-link btn-sm p-0 align-baseline p360-tp-show-more">Show more</button>' +
+            '</div>'
+        );
+    }
+    function renumberTreatmentPlanRows() {
+        var body = document.getElementById('p360TreatmentPlanTableBody');
+        if (!body) {
+            return;
+        }
+        var rows = body.querySelectorAll('tr');
+        rows.forEach(function (tr, i) {
+            var noCell = tr.querySelector('td.p360-tp-col-no');
+            if (noCell) {
+                noCell.textContent = String(i + 1);
+            }
+        });
+        var hint = document.getElementById('p360TreatmentPlanEmptyHint');
+        if (hint) {
+            hint.style.display = rows.length ? 'none' : '';
+        }
+    }
+    function bindTreatmentPlanTable(body) {
+        if (!body || body.dataset.p360TpBound) {
+            return;
+        }
+        body.dataset.p360TpBound = '1';
+        body.addEventListener('click', function (ev) {
+            var t = ev.target;
+            if (t && t.classList && t.classList.contains('p360-tp-show-more')) {
+                var wrap = t.closest('.p360-tp-proc-cell');
+                if (!wrap) {
+                    return;
+                }
+                var full = wrap.getAttribute('data-full-text') || '';
+                wrap.removeAttribute('data-full-text');
+                wrap.classList.remove('p360-tp-proc-collapsed');
+                wrap.innerHTML = escHtml(full);
+                return;
+            }
+            if (t && t.classList && t.classList.contains('p360-tp-remove-row')) {
+                var tr = t.closest('tr');
+                if (tr && tr.parentNode) {
+                    tr.parentNode.removeChild(tr);
+                    renumberTreatmentPlanRows();
+                }
+            }
+        });
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        var addBtn = document.getElementById('p360TreatmentPlanAddBtn');
+        var body = document.getElementById('p360TreatmentPlanTableBody');
+        if (!addBtn || !body) {
+            return;
+        }
+        bindTreatmentPlanTable(body);
+        addBtn.addEventListener('click', function () {
+            var spec = document.getElementById('p360TpSpeciality');
+            var proc = document.getElementById('p360TpProcedure');
+            var imp = document.getElementById('p360TpImplant');
+            var qty = document.getElementById('p360TpQuantity');
+            var strat = document.getElementById('p360TpStratification');
+            var units = document.getElementById('p360TpUnits');
+            var amt = document.getElementById('p360TpUnverifiedAmount');
+            var ichi = document.getElementById('p360TpIchi');
+            var tr = document.createElement('tr');
+            var specV = '';
+            if (spec && spec.selectedIndex >= 0 && spec.options[spec.selectedIndex]) {
+                specV = spec.options[spec.selectedIndex].text;
+            }
+            var procV = proc ? proc.value : '';
+            tr.innerHTML =
+                '<td class="p360-tp-col-no"></td>' +
+                '<td>' + escHtml(specV) + '</td>' +
+                '<td>' + procedureCellHtml(procV) + '</td>' +
+                '<td>' + escHtml(imp ? imp.value : '') + '</td>' +
+                '<td>' + escHtml(qty ? qty.value : '') + '</td>' +
+                '<td>' + escHtml(strat ? strat.value : '') + '</td>' +
+                '<td>' + escHtml(units ? units.value : '') + '</td>' +
+                '<td>' + escHtml(formatInr(amt ? amt.value : '')) + '</td>' +
+                '<td>' + escHtml(ichi ? ichi.value : '') + '</td>' +
+                '<td class="text-center">' +
+                '<button type="button" class="p360-tp-remove-row" title="Remove line" aria-label="Remove line">⋮</button>' +
+                '</td>';
+            body.appendChild(tr);
+            renumberTreatmentPlanRows();
+        });
+    });
+})();
 
 /* ── Vitals chart (static demo data in chart tab) ───────────── */
 var vitalChartsInited = false;

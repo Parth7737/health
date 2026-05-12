@@ -1394,3 +1394,519 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   .gov-header-right .header-user-text { display: none; }
 
 }
+
+/* ══════════════════════════════════════════════════════════════
+   PATIENT 360 (EMR) — patient-management / patient-360.blade.php
+   Loaded via gov.css; scoped to .patient-360-body where needed.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Bootstrap tooltips above Patient 360 modals (BS5 modal z-index ~1055) */
+.tooltip {
+  z-index: 1700;
+}
+
+/* Patient 360 — Treatment plan modal */
+#p360TreatmentPlanModal .modal-content.p360-tp-modal {
+  border-radius: 12px;
+  border: 2px solid #2c6db6;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(18, 49, 80, 0.22);
+  background: #fff;
+}
+#p360TreatmentPlanModal .modal-header {
+  flex-shrink: 0;
+  border-color: #e3edf8 !important;
+  padding: 12px 16px;
+  background: #fff;
+  color: #0d1b2a;
+}
+#p360TreatmentPlanModal .p360-tp-title-text {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  color: #0d1b2a;
+}
+#p360TreatmentPlanModal .modal-body.p360-tp-modal-body {
+  padding: 16px;
+  background: var(--surface);
+}
+#p360TreatmentPlanModal .p360-tp-form .form-group {
+  margin-bottom: 0;
+}
+#p360TreatmentPlanModal .p360-tp-form .form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+#p360TreatmentPlanModal .p360-tp-form .form-control {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  padding: 9px 12px;
+  line-height: 1.4;
+}
+#p360TreatmentPlanModal .p360-tp-form .form-control:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.12);
+  outline: none;
+}
+#p360TreatmentPlanModal .p360-tp-form select.form-control {
+  cursor: pointer;
+}
+#p360TreatmentPlanModal .p360-tp-table-border,
+.patient-360-body #tabProcedure .p360-tp-table-border {
+  border: 1px solid #e2ecf4;
+  border-radius: 10px;
+  overflow: hidden;
+}
+#p360TreatmentPlanModal .p360-tp-table thead th,
+.patient-360-body #tabProcedure .p360-tp-table thead th {
+  background: #1565c0;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: none;
+  padding: 12px 10px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+#p360TreatmentPlanModal .p360-tp-table thead th.p360-tp-th-no,
+.patient-360-body #tabProcedure .p360-tp-table thead th.p360-tp-th-no { width: 48px; }
+#p360TreatmentPlanModal .p360-tp-table thead th.p360-tp-th-procedure,
+.patient-360-body #tabProcedure .p360-tp-table thead th.p360-tp-th-procedure { min-width: 200px; }
+#p360TreatmentPlanModal .p360-tp-table thead th.p360-tp-th-actions,
+.patient-360-body #tabProcedure .p360-tp-table thead th.p360-tp-th-actions { width: 56px; }
+#p360TreatmentPlanModal .p360-tp-table tbody td,
+.patient-360-body #tabProcedure .p360-tp-table tbody td {
+  font-size: 13px;
+  color: #2c4460;
+  vertical-align: middle;
+  padding: 12px 10px;
+  border-color: #e8eef4;
+}
+#p360TreatmentPlanModal .p360-tp-table tbody tr:hover,
+.patient-360-body #tabProcedure .p360-tp-table tbody tr:hover {
+  background: #f7fafd;
+}
+#p360TreatmentPlanModal .p360-tp-show-more {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1565c0 !important;
+  text-decoration: none;
+}
+#p360TreatmentPlanModal .p360-tp-show-more:hover {
+  color: #003580 !important;
+  text-decoration: underline;
+}
+#p360TreatmentPlanModal .p360-tp-remove-row {
+  border: none;
+  background: transparent;
+  color: #5a7894;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1;
+  font-size: 18px;
+}
+#p360TreatmentPlanModal .p360-tp-remove-row:hover {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+#p360TreatmentPlanModal .p360-tp-remove-row:focus-visible {
+  outline: 2px solid #1565c0;
+  outline-offset: 2px;
+}
+
+/* Patient 360 — New Order full-screen modal */
+#p360Modal { padding-right: 0 !important; }
+#p360Modal .modal-dialog {
+  max-width: none !important;
+  width: calc(100vw - 16px) !important;
+  height: calc(100vh - 48px) !important;
+  margin: 24px 8px !important;
+}
+#p360Modal .modal-content {
+  border-radius: 12px !important;
+  border: 2px solid #2c6db6 !important;
+  background: #fff !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: calc(100vh - 48px) !important;
+  overflow: hidden !important;
+  box-shadow: 0 18px 48px rgba(18, 49, 80, 0.28) !important;
+}
+#p360Modal .modal-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid #e3edf8;
+  padding: 12px 16px;
+  background: #fff;
+  color: #0d1b2a;
+}
+#p360Modal .modal-body {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  min-height: 0 !important;
+  padding: 16px !important;
+  background: #fff !important;
+}
+#p360Modal .p360-modal-footer {
+  flex-shrink: 0;
+  border-top: 1px solid #e3edf8;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: flex-end;
+  background: #f7fafd;
+}
+
+#p360Modal .prescription-entry-grid .form-control:focus-visible,
+#p360Modal .prescription-entry-grid .form-select:focus-visible,
+#p360Modal .prescription-entry-grid .select2-container .select2-selection:focus-visible,
+#p360Modal #doctorUnifiedTestBlock .form-control:focus-visible,
+#p360Modal #doctorUnifiedTestBlock .form-select:focus-visible,
+#p360Modal #doctorUnifiedTestBlock .select2-container .select2-selection:focus-visible {
+  outline: 2px solid #1565c0 !important;
+  outline-offset: 2px !important;
+  border-color: #1565c0 !important;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.18) !important;
+}
+
+#p360Modal .prescription-entry-grid .select2-container .select2-selection,
+#p360Modal #doctorUnifiedTestBlock .select2-container .select2-selection {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+#p360Modal .prescription-icon-btn,
+#p360Modal .doctor-care-test-remove {
+  position: relative;
+}
+
+#p360Modal .prescription-icon-btn:focus-visible,
+#p360Modal .doctor-care-test-remove:focus-visible {
+  outline: 2px solid #1565c0 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.2) !important;
+}
+
+#p360Modal .doctor-care-test-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  min-height: 22px;
+  border-radius: 6px;
+  padding: 0 4px;
+}
+
+/* Patient 360 — banner */
+.patient-360-body .p360-patient-banner {
+  background: linear-gradient(135deg, #071221, #0a1628);
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.patient-360-body .p360-patient-banner .p360-banner-row1 {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+}
+.patient-360-body .p360-patient-banner .p360-banner-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1565c0, #00695c);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 800;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+.patient-360-body .p360-patient-banner .p360-banner-patient {
+  flex: 1;
+  min-width: 0;
+}
+.patient-360-body .p360-patient-banner .p360-banner-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: #e8f2fb;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.patient-360-body .p360-patient-banner .p360-banner-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #8aa9c4;
+  line-height: 1.55;
+}
+.patient-360-body .p360-patient-banner .p360-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 0;
+  margin-bottom: 4px;
+}
+.patient-360-body .p360-patient-banner .p360-meta-line:last-child {
+  margin-bottom: 0;
+}
+.patient-360-body .p360-patient-banner .p360-meta-sep {
+  color: #4a6880;
+  padding: 0 8px;
+  user-select: none;
+}
+.patient-360-body .p360-patient-banner .p360-meta-strong {
+  color: #c8dff2;
+  font-weight: 600;
+}
+.patient-360-body .p360-patient-banner .p360-banner-row2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.patient-360-body .p360-patient-banner .p360-banner-badges {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: center;
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.patient-360-body .p360-patient-banner .p360-badge-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  line-height: 1.25;
+  border-radius: 4px;
+  max-width: 100%;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.patient-360-body .p360-patient-banner .p360-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+}
+
+.patient-360-body .p360-vitals-strip {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 12px;
+}
+.patient-360-body .p360-vitals-rule {
+  width: 1px;
+  align-self: stretch;
+  min-height: 36px;
+  background: rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+.patient-360-body .p360-vital-cell {
+  text-align: center;
+}
+.patient-360-body .p360-vital-label {
+  font-size: 10px;
+  color: #4a6880;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.patient-360-body .p360-vital-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+.patient-360-body .p360-vital-value--bp,
+.patient-360-body .p360-vital-value--rbs { color: #ef5350; }
+.patient-360-body .p360-vital-value--pulse,
+.patient-360-body .p360-vital-value--weight { color: #e8f2fb; }
+.patient-360-body .p360-vital-value--spo2 { color: #66bb6a; }
+.patient-360-body .p360-vital-value--temp,
+.patient-360-body .p360-vital-value--bmi { color: #fb8c00; }
+
+.patient-360-body .p360-tab-shell {
+  background: #fff;
+  border-bottom: 2px solid #e2ecf4;
+  padding: 0 24px;
+}
+.patient-360-body .p360-tab-shell .tab-bar.p360-tab-bar {
+  border: none;
+  margin: 0;
+}
+
+.patient-360-body .p360-li-icon {
+  flex-shrink: 0;
+}
+.patient-360-body .p360-li-icon--danger { background: #ffebee !important; }
+.patient-360-body .p360-li-icon--warning { background: #fff3e0 !important; }
+.patient-360-body .p360-li-icon--primary { background: #e3f2fd !important; }
+
+.patient-360-body .ai-insight-block .ai-item .ai-dot.p360-ai-dot--alert {
+  background: #e65100 !important;
+}
+.patient-360-body .ai-insight-block .ai-item .ai-dot.p360-ai-dot--ok {
+  background: #2e7d32 !important;
+}
+
+.patient-360-body .p360-profile-label-col {
+  width: 220px;
+}
+.patient-360-body .p360-allergy-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.patient-360-body .p360-lab-result--critical,
+.patient-360-body .p360-lab-result--high { color: #c62828; }
+.patient-360-body .p360-lab-result--low { color: #e65100; }
+.patient-360-body .p360-lab-result--normal { color: #2e7d32; }
+
+.patient-360-body .p360-rad-row-muted {
+  opacity: 0.75;
+}
+.patient-360-body .p360-li-icon--rad {
+  background: #e3f2fd;
+}
+
+.patient-360-body .p360-chart-container {
+  height: 220px;
+}
+
+.patient-360-body .p360-stat-charge { color: #1565c0; }
+.patient-360-body .p360-stat-paid { color: #2e7d32; }
+.patient-360-body .p360-stat-due { color: #c62828; }
+
+.patient-360-body .p360-note-card {
+  border: 1.5px solid #e2ecf4;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.patient-360-body .p360-note-body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #344a5e;
+  white-space: pre-line;
+}
+.patient-360-body .p360-empty-state-pad {
+  padding: 24px;
+}
+
+.patient-360-body .p360-rad-empty {
+  padding: 12px 16px;
+}
+
+.patient-360-body .opd-content-wrap .btn:disabled,
+.patient-360-body .opd-content-wrap .btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed !important;
+}
+
+.patient-360-body .opd-content-wrap .btn,
+#p360TreatmentPlanModal .modal-content.opd-content-wrap .btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 6px 14px !important;
+  border-radius: 7px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  border: 1px solid transparent !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  transition: all 0.18s ease !important;
+}
+.patient-360-body .opd-content-wrap .btn-sm,
+#p360TreatmentPlanModal .modal-content.opd-content-wrap .btn-sm {
+  padding: 4px 10px !important;
+  font-size: 10.5px !important;
+}
+.patient-360-body .opd-content-wrap .btn-xs,
+#p360TreatmentPlanModal .modal-content.opd-content-wrap .btn-xs {
+  padding: 2px 8px !important;
+  font-size: 10px !important;
+}
+.patient-360-body .opd-content-wrap .btn-primary,
+#p360TreatmentPlanModal .modal-content.opd-content-wrap .btn-primary {
+  background: #1565c0 !important;
+  border-color: #1565c0 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(21, 101, 192, 0.3) !important;
+}
+.patient-360-body .opd-content-wrap .btn-primary:hover,
+#p360TreatmentPlanModal .modal-content.opd-content-wrap .btn-primary:hover {
+  background: #003580 !important;
+  border-color: #003580 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(21, 101, 192, 0.4) !important;
+}
+.patient-360-body .opd-content-wrap .btn-ghost,
+#p360TreatmentPlanModal .modal-content.opd-content-wrap .btn-ghost {
+  background: transparent !important;
+  border-color: #ccd8e8 !important;
+  color: #2c4460 !important;
+}
+.patient-360-body .opd-content-wrap .btn-ghost:hover,
+#p360TreatmentPlanModal .modal-content.opd-content-wrap .btn-ghost:hover {
+  background: #eef3f8 !important;
+}
+
+.patient-360-body .opd-content-wrap .tab-btn {
+  padding: 7px 12px !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  color: #5a7894 !important;
+  border-radius: 8px 8px 0 0 !important;
+  border: 1px solid transparent !important;
+  border-bottom: none !important;
+  background: transparent !important;
+  margin-bottom: -2px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+.patient-360-body .opd-content-wrap .tab-btn:hover {
+  color: #1565c0 !important;
+  background: #e3f2fd !important;
+}
+.patient-360-body .opd-content-wrap .tab-btn.active {
+  color: #1565c0 !important;
+  background: #fff !important;
+  border-color: #e2ecf4 !important;
+  border-bottom-color: #fff !important;
+  font-weight: 600 !important;
+}
+
+@media (max-width: 640px) {
+  .patient-360-body .p360-patient-banner .p360-meta-sep {
+    display: none;
+  }
+  .patient-360-body .p360-patient-banner .p360-meta-line span {
+    display: block;
+    width: 100%;
+  }
+  .patient-360-body .p360-patient-banner .p360-banner-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .patient-360-body .p360-patient-banner .p360-banner-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}

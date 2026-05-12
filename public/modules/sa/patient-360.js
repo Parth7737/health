@@ -124,7 +124,7 @@
                 inst.dispose();
             } catch (e) { /* ignore */ }
         }
-        if (!enable || els.saveBtn.style.display === 'none' || els.saveBtn.disabled) {
+        if (!enable || els.saveBtn.classList.contains('d-none') || els.saveBtn.disabled) {
             return;
         }
         try {
@@ -233,7 +233,7 @@
         }
         if (els.saveBtn) {
             refreshP360SaveTooltip(false);
-            els.saveBtn.style.display = 'none';
+            els.saveBtn.classList.add('d-none');
             els.saveBtn.disabled      = true;
         }
 
@@ -623,7 +623,7 @@
     }
 
     function canTriggerSaveShortcut() {
-        return !!(els.saveBtn && els.saveBtn.style.display !== 'none' && !els.saveBtn.disabled);
+        return !!(els.saveBtn && !els.saveBtn.classList.contains('d-none') && !els.saveBtn.disabled);
     }
 
     function tryTriggerSaveFromShortcut(event) {
@@ -739,7 +739,7 @@
         if (!els.modal || els.modal.getAttribute('aria-hidden') === 'true') { return; }
         if (event.key === 'Enter' && !event.isComposing) {
             var active = doc.activeElement;
-            if (active === els.saveBtn && els.saveBtn && !els.saveBtn.disabled && els.saveBtn.style.display !== 'none') {
+            if (active === els.saveBtn && els.saveBtn && !els.saveBtn.disabled && !els.saveBtn.classList.contains('d-none')) {
                 event.preventDefault();
                 event.stopPropagation();
                 saveAll();
@@ -756,7 +756,7 @@
             if (key === 'n') {
                 event.preventDefault();
                 event.stopPropagation();
-                if (els.saveBtn && els.saveBtn.style.display !== 'none' && !els.saveBtn.disabled) {
+                if (els.saveBtn && !els.saveBtn.classList.contains('d-none') && !els.saveBtn.disabled) {
                     els.saveBtn.focus({ preventScroll: true });
                 }
                 return;
@@ -873,7 +873,7 @@
         if (!bodyFocusables.length) { return; }
         var last = bodyFocusables[bodyFocusables.length - 1];
         if (active !== last) { return; }
-        if (els.saveBtn && els.saveBtn.style.display !== 'none' && !els.saveBtn.disabled) {
+        if (els.saveBtn && !els.saveBtn.classList.contains('d-none') && !els.saveBtn.disabled) {
             event.preventDefault();
             event.stopPropagation();
             els.saveBtn.focus({ preventScroll: true });
@@ -978,7 +978,7 @@
 
     function showSaveBtn() {
         if (els.saveBtn) {
-            els.saveBtn.style.display = '';
+            els.saveBtn.classList.remove('d-none');
             els.saveBtn.disabled      = false;
             els.saveBtn.textContent   = 'Save';
             refreshP360SaveTooltip(true);
@@ -1445,7 +1445,7 @@
         if (els.body) { els.body.innerHTML = '<div class="p-4 text-center text-muted">Loading...</div>'; }
         if (els.saveBtn) {
             refreshP360SaveTooltip(false);
-            els.saveBtn.style.display = 'none';
+            els.saveBtn.classList.add('d-none');
         }
     }
 
