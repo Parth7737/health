@@ -644,7 +644,6 @@ class OpdPatientController extends BaseHospitalController
                 'diastolic_bp',
                 'diabetes',
                 'bmi',
-                'body_area',
                 'social_known_allergies',
                 'social_allergic_reactions',
                 'occupation',
@@ -830,7 +829,6 @@ class OpdPatientController extends BaseHospitalController
             'patient_instructions' => 'nullable|string|max:5000',
             'follow_up_date' => 'nullable|date',
             'disposition' => 'nullable|string|max:100',
-            'body_area' => 'nullable|string|max:100',
             'known_allergies' => 'nullable|array',
             'known_allergies.*' => 'nullable|integer|exists:allergies,id',
             'allergic_reactions' => 'nullable|array',
@@ -924,7 +922,6 @@ class OpdPatientController extends BaseHospitalController
             'patient_instructions' => $request->input('patient_instructions'),
             'follow_up_date' => $request->input('follow_up_date'),
             'disposition' => $request->input('disposition'),
-            'body_area' => $request->input('body_area'),
             'social_known_allergies' => collect($request->input('known_allergies', []))
                 ->filter(fn ($value) => $value !== null && $value !== '')
                 ->map(fn ($value) => (int) $value)
