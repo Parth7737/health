@@ -26,7 +26,7 @@ class DashboardController extends BaseHospitalController
      */
     public function index()
     {
-        if(Auth::user() && !Auth::user()->hasRole('Admininstrator')){
+        if(Auth::user() && !Auth::user()->hasRole('Admininstrator') && !Auth::user()->hasRole('Admin')){
             return view('hospital.dashboard');
         }
         if(Auth::user()->hasRole('Admin') && auth()->user()->is_complete_registration == 0){

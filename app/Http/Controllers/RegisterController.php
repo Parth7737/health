@@ -11,6 +11,7 @@ use Illuminate\Validation\ValidationException;
 use Hash;
 use App\CentralLogics\Helpers;
 use Illuminate\Support\Facades\Auth;
+// use Spatie\Permission\Models\Role;
 
 
 class RegisterController extends Controller
@@ -108,9 +109,17 @@ class RegisterController extends Controller
         $user->avatar = $draft_register->avatar;
         $user->mobile_no = $draft_register->mobile_no;
         $user->hospital_type = $draft_register->hospital_type;
-        $user->parent_id = $request->hospital;
+        $user->parent_id = $request->hospital ?? 0;
         $user->step = 2;
         $user->save();
+        $role = Role::updateOrCreate(
+            ['name' => 'Admin'],
+            [
+                'guard_name' => 'web',
+                'is_custom' => 0,
+                'hospital_id' => null,
+            ]
+        );
         $user->assignRole('Admin');
         $draft_register->delete();
         \Auth::login($user);
