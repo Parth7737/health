@@ -305,6 +305,10 @@ $roleEmojiMap = [
                         </div>
 
                         <button class="login-btn" id="loginBtn" type="submit">🔐 Secure Login to HIMS</button>
+                        <div style="text-align:center;margin-top:14px">
+                            <a href="{{ route('hospital.signup') }}" class="cfa-link" style="font-size:13px">🏥 Onboard
+                                Hospital</a>
+                        </div>
                     </form>
 
                     <div class="forgot-panel" id="forgotPanel">
