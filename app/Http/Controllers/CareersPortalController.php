@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Hospital;
 use App\Models\HrRecruitmentApplication;
+use App\Models\HrRecruitmentApplicationStatusLog;
 use App\Models\HrRecruitmentVacancy;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -112,7 +113,7 @@ class CareersPortalController extends Controller
             $resumePath = $request->file('resume')->store('recruitment/resumes', 'public');
         }
 
-        HrRecruitmentApplication::withoutGlobalScopes()->create([
+        $application = HrRecruitmentApplication::withoutGlobalScopes()->create([
             'hospital_id' => (int) $vacancy->hospital_id,
             'hr_recruitment_vacancy_id' => (int) $vacancy->id,
             'full_name' => $request->string('full_name')->toString(),
@@ -123,6 +124,22 @@ class CareersPortalController extends Controller
             'status' => 'Applied',
             'applied_at' => now(),
         ]);
+
+        if (Schema::hasTable('hr_recruitment_application_status_logs')) {
+            $initialNote = 'Application submitted via careers portal.';
+            if ($request->filled('cover_letter')) {
+                $initialNote .= ' (Cover letter attached.)';
+            }
+            HrRecruitmentApplicationStatusLog::query()->create([
+                'hospital_id' => (int) $application->hospital_id,
+                'hr_recruitment_application_id' => (int) $application->id,
+                'from_status' => null,
+                'to_status' => 'Applied',
+                'note' => $initialNote,
+                'created_by' => null,
+                'created_at' => now(),
+            ]);
+        }
 
         $this->refreshVacancyApplicantStats((int) $vacancy->id);
 

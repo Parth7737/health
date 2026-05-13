@@ -23,4 +23,11 @@ class HrRecruitmentApplication extends Model
     {
         return $this->belongsTo(HrRecruitmentVacancy::class, 'hr_recruitment_vacancy_id');
     }
+
+    public function statusLogs()
+    {
+        return $this->hasMany(HrRecruitmentApplicationStatusLog::class, 'hr_recruitment_application_id')
+            ->orderBy('created_at')
+            ->orderBy('id');
+    }
 }

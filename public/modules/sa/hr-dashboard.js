@@ -70,7 +70,7 @@
 
         var dialog = $('.add-datamodal .modal-dialog');
         var $modalContent = $('.add-datamodal .modal-content');
-        dialog.removeClass('modal-xl modal-lg modal-sm hrx-leave-modal-dialog hrx-recruitment-modal-dialog').addClass('modal-xl');
+        dialog.removeClass('modal-xl modal-lg modal-sm hrx-leave-modal-dialog hrx-recruitment-modal-dialog hrx-recruitment-modal-dialog-lg').addClass('modal-xl');
         $modalContent.removeClass('hrx-leave-modal-content hrx-recruitment-modal-content');
 
         loader();
@@ -106,7 +106,7 @@
                         });
                     }
                 } else {
-                    dialog.removeClass('hrx-leave-modal-dialog hrx-recruitment-modal-dialog').addClass('modal-xl');
+                    dialog.removeClass('hrx-leave-modal-dialog hrx-recruitment-modal-dialog hrx-recruitment-modal-dialog-lg').addClass('modal-xl');
                     $modalContent.removeClass('hrx-leave-modal-content hrx-recruitment-modal-content');
                 }
 
@@ -133,7 +133,7 @@
             success: function (response) {
                 var sd = $('.add-datamodal .modal-dialog');
                 var sc = $('.add-datamodal .modal-content');
-                sd.removeClass('hrx-leave-modal-dialog hrx-recruitment-modal-dialog').addClass('modal-xl');
+                sd.removeClass('hrx-leave-modal-dialog hrx-recruitment-modal-dialog hrx-recruitment-modal-dialog-lg').addClass('modal-xl');
                 sc.removeClass('hrx-leave-modal-content hrx-recruitment-modal-content');
                 $('#ajaxdata').html(response);
                 $('.add-datamodal').modal('show');

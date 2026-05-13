@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Hospital;
 
 use App\Http\Controllers\BaseHospitalController;
+use App\Http\Controllers\Hospital\Concerns\HandlesHrTraining;
 use App\Models\HrAttendanceRecord;
 use App\Models\HrDepartment;
 use App\Models\HrDesignation;
@@ -10,8 +11,10 @@ use App\Models\HrLeaveRequest;
 use App\Models\HrLeaveType;
 use App\Models\HrStaffLeaveBalance;
 use App\Models\HrRecruitmentApplication;
+use App\Models\HrRecruitmentApplicationStatusLog;
 use App\Models\HrPayrollRecord;
 use App\Models\HrRecruitmentVacancy;
+use App\Models\HrTrainingCategory;
 use App\Models\HrTrainingProgram;
 use App\Models\HeaderFooter;
 use App\Models\Hospital;
@@ -30,6 +33,8 @@ use Illuminate\Support\Facades\Validator;
 
 class HrDashboardController extends BaseHospitalController
 {
+    use HandlesHrTraining;
+
     private array $allowedTabs = [
         'dashboard',
         'directory',
@@ -85,7 +90,7 @@ class HrDashboardController extends BaseHospitalController
             'leave' => view('hospital.hr.dashboard.tabs.leave', $this->leaveData()),
             'recruitment' => view('hospital.hr.dashboard.tabs.recruitment', $this->recruitmentData()),
             'training' => view('hospital.hr.dashboard.tabs.training', $this->trainingData()),
-            'reports' => view('hospital.hr.dashboard.tabs.reports', $this->reportsData()),
+            'reports' => view('hospital.hr.dashboard.tabs.reports', $this->reportsTabViewData()),
             default => abort(404),
         };
 
@@ -98,6 +103,7 @@ class HrDashboardController extends BaseHospitalController
 
         $staffId = (int) $request->input('staff_id', 0);
         $vacancyId = (int) $request->input('vacancy_id', 0);
+        $trainingProgramId = (int) $request->input('training_program_id', 0);
         $attendanceDateInput = trim((string) $request->input('attendance_date', ''));
         try {
             $attendanceDate = $attendanceDateInput !== '' ? Carbon::parse($attendanceDateInput)->toDateString() : now()->toDateString();
@@ -117,6 +123,29 @@ class HrDashboardController extends BaseHospitalController
 
         if ($type === 'recruitment-vacancy-view' && !auth()->user()->can('view-hr-recruitment')) {
             return response()->json(['status' => false, 'message' => 'You do not have permission to view recruitment vacancies.'], 403);
+        }
+
+        if ($type === 'training-program-form' && !$this->userCanEditTraining()) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to schedule training.'], 403);
+        }
+
+        if ($type === 'training-program-view' && !Schema::hasTable('hr_training_programs')) {
+            return response()->json(['status' => false, 'message' => 'Training is not available.'], 422);
+        }
+
+        if ($type === 'training-program-view') {
+            if ($trainingProgramId <= 0) {
+                return response()->json(['status' => false, 'message' => 'Invalid training programme.'], 422);
+            }
+            if (!HrTrainingProgram::query()->whereKey($trainingProgramId)->exists()) {
+                return response()->json(['status' => false, 'message' => 'Training programme not found.'], 404);
+            }
+        }
+
+        if ($type === 'training-program-form' && $trainingProgramId > 0) {
+            if (!HrTrainingProgram::query()->whereKey($trainingProgramId)->exists()) {
+                return response()->json(['status' => false, 'message' => 'Training programme not found.'], 404);
+            }
         }
 
         $existingAttendance = null;
@@ -157,8 +186,38 @@ class HrDashboardController extends BaseHospitalController
             ])->render(),
             'recruitment-vacancy-view' => view('hospital.hr.dashboard.modals.recruitment-vacancy-view', [
                 'vacancy' => HrRecruitmentVacancy::query()
-                    ->with(['department:id,name', 'designation:id,name', 'applications'])
+                    ->with([
+                        'department:id,name',
+                        'designation:id,name',
+                        'applications' => static function ($q) {
+                            $q->orderBy('id');
+                        },
+                    ])
                     ->find($vacancyId),
+            ])->render(),
+            'training-program-form' => view('hospital.hr.dashboard.modals.training-program-form', [
+                'program' => $trainingProgramId > 0 ? HrTrainingProgram::query()->find($trainingProgramId) : null,
+                'trainingCategories' => Schema::hasTable('hr_training_categories')
+                    ? HrTrainingCategory::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name')->get()
+                    : collect(),
+                'hasTrainingCategoryMaster' => Schema::hasTable('hr_training_categories')
+                    && Schema::hasColumn('hr_training_programs', 'hr_training_category_id'),
+            ])->render(),
+            'training-program-view' => view('hospital.hr.dashboard.modals.training-program-view', [
+                'program' => HrTrainingProgram::query()
+                    ->with([
+                        'trainingCategory',
+                        'trainingParticipants.staff:id,first_name,last_name,staff_id',
+                        'logs.creator:id,name',
+                    ])
+                    ->find($trainingProgramId),
+                'staffOptions' => Staff::query()
+                    ->select('id', 'first_name', 'last_name', 'staff_id')
+                    ->where('status', 'Active')
+                    ->orderBy('first_name')
+                    ->limit(500)
+                    ->get(),
+                'trainingCanEdit' => $this->userCanEditTraining(),
             ])->render(),
             default => ''
         };
@@ -1705,39 +1764,54 @@ class HrDashboardController extends BaseHospitalController
         ]);
     }
 
+    /**
+     * Recruitment rows with Open status (case-insensitive), aligned with the recruitment listing filter.
+     */
+    private function queryRecruitmentVacanciesActivelyOpen()
+    {
+        return HrRecruitmentVacancy::query()
+            ->whereRaw('LOWER(TRIM(COALESCE(hr_recruitment_vacancies.status, \'\'))) = ?', ['open']);
+    }
+
     private function buildStats(): array
     {
-        $totalStaff = Staff::query()->count();
+        $totalStaff = Staff::query()->where('status', 'Active')->count();
 
         $presentToday = 0;
         if (Schema::hasTable('hr_attendance_records')) {
-            $presentToday = HrAttendanceRecord::query()
+            $presentToday = (int) (HrAttendanceRecord::query()
                 ->whereDate('attendance_date', now()->toDateString())
                 ->where('status', 'Present')
-                ->count();
+                ->selectRaw('COUNT(DISTINCT staff_id) as c')
+                ->value('c') ?? 0);
         }
 
         $onLeave = 0;
         if (Schema::hasTable('hr_leave_requests')) {
             $today = now()->toDateString();
-            $onLeave = HrLeaveRequest::query()
+            $onLeave = (int) (HrLeaveRequest::query()
                 ->where('status', 'Approved')
                 ->whereDate('from_date', '<=', $today)
                 ->whereDate('to_date', '>=', $today)
-                ->count();
+                ->selectRaw('COUNT(DISTINCT staff_id) as c')
+                ->value('c') ?? 0);
         }
 
-        $monthlyPayroll = 0;
+        $payrollMonthRef = now()->copy()->subMonth()->startOfMonth();
+        $monthlyPayroll = 0.0;
         if (Schema::hasTable('hr_payroll_records')) {
-            $monthlyPayroll = HrPayrollRecord::query()
-                ->whereMonth('payroll_month', now()->month)
-                ->whereYear('payroll_month', now()->year)
+            $monthlyPayroll = (float) HrPayrollRecord::query()
+                ->whereYear('payroll_month', $payrollMonthRef->year)
+                ->whereMonth('payroll_month', $payrollMonthRef->month)
                 ->sum('net_pay');
         }
 
-        $vacancies = 0;
+        $vacancyPostings = 0;
+        $vacancyPositions = 0;
         if (Schema::hasTable('hr_recruitment_vacancies')) {
-            $vacancies = HrRecruitmentVacancy::query()->sum('required_positions');
+            $openVacanciesQuery = $this->queryRecruitmentVacanciesActivelyOpen();
+            $vacancyPostings = (int) (clone $openVacanciesQuery)->count('hr_recruitment_vacancies.id');
+            $vacancyPositions = (int) (clone $openVacanciesQuery)->sum('hr_recruitment_vacancies.required_positions');
         }
 
         return [
@@ -1745,7 +1819,9 @@ class HrDashboardController extends BaseHospitalController
             'presentToday' => $presentToday,
             'onLeave' => $onLeave,
             'monthlyPayroll' => $monthlyPayroll,
-            'vacancies' => $vacancies,
+            'payrollMonthLabel' => $payrollMonthRef->translatedFormat('F Y'),
+            'vacancyPostings' => $vacancyPostings,
+            'vacancyPositions' => $vacancyPositions,
         ];
     }
 
@@ -2223,17 +2299,115 @@ class HrDashboardController extends BaseHospitalController
             return response()->json(['status' => false, 'message' => 'Application not found.'], 404);
         }
 
-        $app->status = $request->string('status')->toString();
-        $app->status_note = $request->filled('status_note') ? $request->string('status_note')->toString() : null;
+        $previousStatus = (string) $app->status;
+        $newStatus = $request->string('status')->toString();
+        $noteTrim = $request->filled('status_note') ? trim($request->string('status_note')->toString()) : null;
+
+        $app->status = $newStatus;
+        $app->status_note = $noteTrim;
         $app->reviewed_by = auth()->id();
         $app->reviewed_at = now();
         $app->save();
+
+        if ($previousStatus !== $newStatus || ($noteTrim !== null && $noteTrim !== '')) {
+            $this->appendRecruitmentApplicationStatusLog(
+                (int) $app->id,
+                (int) $app->hospital_id,
+                $previousStatus,
+                (string) $app->status,
+                $noteTrim ?: null,
+                auth()->id()
+            );
+        }
 
         $this->refreshVacancyApplicantStats((int) $app->hr_recruitment_vacancy_id);
 
         return response()->json([
             'status' => true,
             'message' => 'Application status updated successfully.',
+        ]);
+    }
+
+    public function recruitmentApplicationDetail(int $applicationId): JsonResponse
+    {
+        if (!auth()->user()->can('view-hr-recruitment')) {
+            return response()->json(['status' => false, 'message' => 'Forbidden.'], 403);
+        }
+
+        if (!Schema::hasTable('hr_recruitment_applications')) {
+            return response()->json(['status' => false, 'message' => 'Applications not available.'], 422);
+        }
+
+        $app = HrRecruitmentApplication::query()
+            ->with([
+                'vacancy:id,title,hr_designation_id',
+                'vacancy.designation:id,name',
+                'statusLogs' => static function ($q) {
+                    $q->orderBy('created_at')->orderBy('id');
+                },
+                'statusLogs.creator:id,name',
+            ])
+            ->find($applicationId);
+
+        if (!$app) {
+            return response()->json(['status' => false, 'message' => 'Application not found.'], 404);
+        }
+
+        $resumeUrl = $app->resume_path
+            ? asset('storage/' . $app->resume_path)
+            : null;
+
+        $vacancyLabel = $app->vacancy
+            ? (string) ($app->vacancy->designation->name ?? $app->vacancy->title ?? 'Vacancy')
+            : null;
+
+        $logs = $app->statusLogs->map(static function ($log) {
+            return [
+                'created_at' => optional($log->created_at)->toIso8601String(),
+                'from_status' => $log->from_status,
+                'to_status' => $log->to_status,
+                'note' => $log->note,
+                'changed_by' => $log->creator?->name,
+            ];
+        })->values();
+
+        return response()->json([
+            'status' => true,
+            'applicant' => [
+                'id' => (int) $app->id,
+                'full_name' => $app->full_name,
+                'email' => $app->email,
+                'phone' => $app->phone,
+                'current_status' => $app->status,
+                'status_note' => $app->status_note,
+                'applied_at' => optional($app->applied_at)->toIso8601String(),
+                'resume_url' => $resumeUrl,
+                'vacancy_title' => $vacancyLabel,
+            ],
+            'logs' => $logs,
+        ]);
+    }
+
+    private function appendRecruitmentApplicationStatusLog(
+        int $applicationId,
+        int $hospitalId,
+        ?string $fromStatus,
+        string $toStatus,
+        ?string $note,
+        ?int $createdById
+    ): void {
+        if (!Schema::hasTable('hr_recruitment_application_status_logs')) {
+            return;
+        }
+
+        HrRecruitmentApplicationStatusLog::query()->create([
+            'hospital_id' => $hospitalId,
+            'hr_recruitment_application_id' => $applicationId,
+            'from_status' => $fromStatus,
+            'to_status' => $toStatus,
+            'note' => $note,
+            'created_by' => $createdById,
+            'created_at' => now(),
         ]);
     }
 
@@ -2269,45 +2443,223 @@ class HrDashboardController extends BaseHospitalController
 
     private function trainingData(): array
     {
-        if (!Schema::hasTable('hr_training_programs')) {
-            return ['programs' => collect()];
-        }
-
-        $programs = HrTrainingProgram::query()
-            ->orderByDesc('schedule_date')
-            ->limit(100)
-            ->get();
-
-        return ['programs' => $programs];
+        return [];
     }
 
-    private function reportsData(): array
+    public function reportsChartData(Request $request): JsonResponse
     {
-        $monthlyStaff = Staff::query()
-            ->selectRaw("DATE_FORMAT(date_of_joining, '%Y-%m') as month_key")
-            ->selectRaw('COUNT(*) as total')
-            ->whereNotNull('date_of_joining')
-            ->whereDate('date_of_joining', '>=', now()->subMonths(5)->startOfMonth()->toDateString())
-            ->groupBy('month_key')
-            ->orderBy('month_key')
-            ->get();
+        $months = (int) $request->query('months', 6);
+        if (!in_array($months, [3, 6, 12], true)) {
+            $months = 6;
+        }
 
-        $payrollTrend = collect();
-        if (Schema::hasTable('hr_payroll_records')) {
-            $payrollTrend = HrPayrollRecord::query()
-                ->selectRaw("DATE_FORMAT(payroll_month, '%Y-%m') as month_key")
-                ->selectRaw('SUM(net_pay) as total_net')
-                ->whereDate('payroll_month', '>=', now()->subMonths(5)->startOfMonth()->toDateString())
+        return response()->json([
+            'status' => true,
+            'data' => $this->buildReportsPayload($months),
+        ]);
+    }
+
+    private function reportsTabViewData(): array
+    {
+        return [
+            'reports' => $this->buildReportsPayload(6),
+        ];
+    }
+
+    /**
+     * @return array{months:int,attendance_trend:array<int,array<string,mixed>>,leave_by_type:array<int,array<string,mixed>>,payroll_trend:array<int,array<string,mixed>>,staff_joining_trend:array<int,array<string,mixed>>,department_staff:array<int,array<string,mixed>>}
+     */
+    private function buildReportsPayload(int $months): array
+    {
+        if (!in_array($months, [3, 6, 12], true)) {
+            $months = 6;
+        }
+
+        $periodStart = now()->copy()->subMonths($months - 1)->startOfMonth();
+        $periodStartDate = $periodStart->toDateString();
+        $today = now()->toDateString();
+
+        $monthKeys = [];
+        $cursor = $periodStart->copy();
+        while ($cursor->lte(now()->copy()->endOfMonth())) {
+            $monthKeys[] = $cursor->format('Y-m');
+            $cursor->addMonth();
+        }
+
+        $staffJoinMap = [];
+        if (Schema::hasTable('staff')) {
+            $rows = Staff::query()
+                ->selectRaw("DATE_FORMAT(date_of_joining, '%Y-%m') as month_key")
+                ->selectRaw('COUNT(*) as total')
+                ->whereNotNull('date_of_joining')
+                ->whereDate('date_of_joining', '>=', $periodStartDate)
+                ->whereDate('date_of_joining', '<=', now()->toDateString())
                 ->groupBy('month_key')
                 ->orderBy('month_key')
                 ->get();
+            foreach ($rows as $row) {
+                $staffJoinMap[(string) $row->month_key] = (int) $row->total;
+            }
         }
 
+        $staffJoiningTrend = [];
+        foreach ($monthKeys as $mk) {
+            $label = Carbon::createFromFormat('Y-m', $mk)->translatedFormat('M Y');
+            $staffJoiningTrend[] = [
+                'month_key' => $mk,
+                'month_label' => $label,
+                'total' => (int) ($staffJoinMap[$mk] ?? 0),
+            ];
+        }
+
+        $payrollMap = [];
+        if (Schema::hasTable('hr_payroll_records')) {
+            $prows = HrPayrollRecord::query()
+                ->selectRaw("DATE_FORMAT(payroll_month, '%Y-%m') as month_key")
+                ->selectRaw('SUM(net_pay) as total_net')
+                ->whereDate('payroll_month', '>=', $periodStartDate)
+                ->groupBy('month_key')
+                ->orderBy('month_key')
+                ->get();
+            foreach ($prows as $row) {
+                $payrollMap[(string) $row->month_key] = (float) $row->total_net;
+            }
+        }
+
+        $payrollTrend = [];
+        foreach ($monthKeys as $mk) {
+            $net = (float) ($payrollMap[$mk] ?? 0.0);
+            $label = Carbon::createFromFormat('Y-m', $mk)->translatedFormat('M Y');
+            $payrollTrend[] = [
+                'month_key' => $mk,
+                'month_label' => $label,
+                'total_net' => $net,
+                'total_lakhs' => round($net / 100000, 2),
+            ];
+        }
+
+        $leaveByType = [];
+        if (Schema::hasTable('hr_leave_requests') && Schema::hasTable('hr_leave_types')) {
+            $leaveByType = HrLeaveRequest::query()
+                ->join('hr_leave_types', 'hr_leave_types.id', '=', 'hr_leave_requests.hr_leave_type_id')
+                ->where('hr_leave_requests.status', 'Approved')
+                ->whereDate('hr_leave_requests.from_date', '<=', $today)
+                ->whereDate('hr_leave_requests.to_date', '>=', $periodStartDate)
+                ->selectRaw('hr_leave_types.name as leave_type_name')
+                ->selectRaw('SUM(hr_leave_requests.total_days) as days_used')
+                ->groupBy('hr_leave_types.id', 'hr_leave_types.name')
+                ->orderByDesc('days_used')
+                ->get()
+                ->map(static function ($row) {
+                    return [
+                        'name' => (string) $row->leave_type_name,
+                        'days' => round((float) $row->days_used, 1),
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        $departmentStaff = HrDepartment::query()
+            ->withCount([
+                'staff',
+                'staff as doctors_count' => static function ($q) {
+                    $q->whereHas('role', static function ($r) {
+                        $r->where('name', 'Doctor');
+                    });
+                },
+                'staff as nurses_count' => static function ($q) {
+                    $q->whereHas('role', static function ($r) {
+                        $r->where('name', 'Nurse');
+                    });
+                },
+            ])
+            ->orderByDesc('staff_count')
+            ->limit(20)
+            ->get()
+            ->map(static function ($d) {
+                $total = (int) $d->staff_count;
+                $doctors = (int) $d->doctors_count;
+                $nurses = (int) $d->nurses_count;
+                $support = max(0, $total - $doctors - $nurses);
+
+                return [
+                    'dept' => (string) $d->name,
+                    'total' => $total,
+                    'doctors' => $doctors,
+                    'nurses' => $nurses,
+                    'support' => $support,
+                ];
+            })
+            ->values()
+            ->all();
+
         return [
-            'monthlyStaff' => $monthlyStaff,
-            'payrollTrend' => $payrollTrend,
-            'departmentBreakup' => HrDepartment::query()->withCount('staff')->orderByDesc('staff_count')->limit(10)->get(),
+            'months' => $months,
+            'attendance_trend' => $this->attendanceTrendLastDays(7),
+            'leave_by_type' => $leaveByType,
+            'payroll_trend' => $payrollTrend,
+            'staff_joining_trend' => $staffJoiningTrend,
+            'department_staff' => $departmentStaff,
         ];
+    }
+
+    /**
+     * @return array<int, array{label:string,present_pct:float,absent_pct:float}>
+     */
+    private function attendanceTrendLastDays(int $days): array
+    {
+        $days = max(1, min(31, $days));
+        $out = [];
+
+        if (!Schema::hasTable('hr_attendance_records')) {
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $day = now()->copy()->subDays($i)->startOfDay();
+                $out[] = [
+                    'label' => $day->format('M j'),
+                    'present_pct' => 0.0,
+                    'absent_pct' => 0.0,
+                ];
+            }
+
+            return $out;
+        }
+
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $day = now()->copy()->subDays($i)->startOfDay();
+            $dateStr = $day->toDateString();
+
+            $total = (int) HrAttendanceRecord::query()
+                ->whereDate('attendance_date', $dateStr)
+                ->count();
+
+            if ($total === 0) {
+                $out[] = [
+                    'label' => $day->format('M j'),
+                    'present_pct' => 0.0,
+                    'absent_pct' => 0.0,
+                ];
+                continue;
+            }
+
+            $present = (int) HrAttendanceRecord::query()
+                ->whereDate('attendance_date', $dateStr)
+                ->where('status', 'Present')
+                ->count();
+
+            $absent = (int) HrAttendanceRecord::query()
+                ->whereDate('attendance_date', $dateStr)
+                ->where('status', 'Absent')
+                ->count();
+
+            $out[] = [
+                'label' => $day->format('M j'),
+                'present_pct' => round($present / $total * 100, 1),
+                'absent_pct' => round($absent / $total * 100, 1),
+            ];
+        }
+
+        return $out;
     }
 
     private function buildAlerts(): array
@@ -2323,10 +2675,10 @@ class HrDashboardController extends BaseHospitalController
         }
 
         if (Schema::hasTable('hr_recruitment_vacancies') && auth()->user()->can('view-hr-recruitment')) {
-            $openVacancies = HrRecruitmentVacancy::query()->where('status', 'Open')->count();
+            $openVacancies = (int) $this->queryRecruitmentVacanciesActivelyOpen()->count('hr_recruitment_vacancies.id');
             $alerts[] = [
                 'type' => 'info',
-                'text' => $openVacancies . ' active recruitment vacancies are open.',
+                'text' => $openVacancies . ' active recruitment vacancy posting(s) are open.',
             ];
         }
 

@@ -86,6 +86,7 @@ class HospitalPermissionsSeeder extends Seeder
             'HR Department' => 'hr-department',
             'HR Department Unit' => 'hr-department-unit',
             'HR Leave Type' => 'hr-leave-type',
+            'HR Training Category' => 'hr-training-category',
             'HR Recruitment' => 'hr-recruitment',
 
             // Beds Management
@@ -146,6 +147,19 @@ class HospitalPermissionsSeeder extends Seeder
             $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
             if ($role) {
                 $role->givePermissionTo($recruitmentPermissions);
+            }
+        }
+
+        $trainingCategoryPermissions = [
+            'view-hr-training-category',
+            'create-hr-training-category',
+            'edit-hr-training-category',
+            'delete-hr-training-category',
+        ];
+        foreach (['Master Admin', 'Administrator', 'Chairman'] as $roleName) {
+            $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
+            if ($role) {
+                $role->givePermissionTo($trainingCategoryPermissions);
             }
         }
 

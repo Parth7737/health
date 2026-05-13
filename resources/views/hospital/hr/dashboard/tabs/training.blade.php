@@ -1,27 +1,32 @@
 <div id="hrx-panel-training">
-    <div class="hrx-toolbar">
-        <div class="hrx-filters">
-            <input type="text" id="hrxTrainingSearch" class="hrx-input" placeholder="Search programme">
-            <select id="hrxTrainingStatus" class="hrx-select">
-                <option value="">All Status</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-            </select>
-        </div>
-        <div class="hrx-actions">
-            <button type="button" class="hrx-btn-lite" id="hrxTrainingSchedule"><i class="fa fa-calendar-plus-o"></i>Schedule</button>
-            <button type="button" class="hrx-btn-lite" id="hrxTrainingExport"><i class="fa fa-download"></i>Export</button>
-        </div>
-    </div>
     <div class="hrx-card">
         <div class="hrx-card-header">
-            <div class="hrx-card-title"><i class="fa fa-graduation-cap" style="color:#4a148c"></i>Training & CPD Programmes</div>
+            <span class="hrx-card-title"><i class="fa fa-graduation-cap" style="color:#4a148c"></i> Training &amp; CPD Programmes</span>
+            <div class="hrx-actions">
+                @can('edit-staff')
+                    <button type="button" class="hrx-btn-lite text-white" id="hrxTrainingSchedule" style="background-color:#4a148c">
+                        <i class="fa fa-calendar-plus-o"></i> Schedule training
+                    </button>
+                @endcan
+                <button type="button" class="hrx-btn-lite btn-info text-white" id="hrxTrainingExport"><i class="fa fa-download"></i> Export</button>
+            </div>
         </div>
-        <div class="hrx-table-wrap">
-            <table class="hrx-table">
+        <div class="hrx-toolbar" style="padding:10px 12px 0">
+            <div class="hrx-filters">
+                <input type="text" id="hrxTrainingSearch" class="hrx-input" placeholder="Search programme / category / trainer">
+                <select id="hrxTrainingStatus" class="hrx-select">
+                    <option value="">All status</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+        </div>
+        <div class="hrx-table-wrap" style="padding:10px 12px 12px">
+            <table id="hrxTrainingTable" class="hrx-table display table-striped" style="width:100%">
                 <thead>
                 <tr>
+                    <th style="display:none">ID</th>
                     <th>Programme</th>
                     <th>Category</th>
                     <th>Date</th>
@@ -31,21 +36,7 @@
                     <th>Action</th>
                 </tr>
                 </thead>
-                <tbody>
-                @forelse($programs as $row)
-                    <tr class="hrx-training-row" data-title="{{ strtolower($row->title) }}" data-status="{{ strtolower($row->status) }}">
-                        <td>{{ $row->title }}</td>
-                        <td>{{ $row->category ?: '-' }}</td>
-                        <td>{{ optional($row->schedule_date)->format('d M Y') }}</td>
-                        <td>{{ $row->trainer_name ?: '-' }}</td>
-                        <td>{{ $row->participants }}</td>
-                        <td><span class="hrx-badge {{ $row->status === 'Completed' ? 'green' : ($row->status === 'Cancelled' ? 'red' : 'blue') }}">{{ $row->status }}</span></td>
-                        <td><button type="button" class="hrx-btn-lite hrx-training-view" data-title="{{ $row->title }}"><i class="fa fa-eye"></i></button></td>
-                    </tr>
-                @empty
-                    <tr><td colspan="7">No training programmes found.</td></tr>
-                @endforelse
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
     </div>
