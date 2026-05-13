@@ -146,7 +146,7 @@
 
         <li class="sidebar-list"><a class="sidebar-link sidebar-title" href="{{ route('hospital.dashboard') }}"><span class="nav-icon">🚑</span><span>Ambulance</span></a></li>
         <li class="sidebar-list"><a class="sidebar-link sidebar-title" href="{{ route('hospital.dashboard') }}"><span class="nav-icon">📝</span><span>Birth &amp; Death Record</span></a></li>
-        <li class="sidebar-list"><a class="sidebar-link sidebar-title {{ request()->is('hospital/hr/*') ? 'active' : '' }}" href="{{ route('hospital.hr.staff.index') }}"><span class="nav-icon">👨‍⚕️</span><span>Human Resources</span></a></li>
+        <li class="sidebar-list"><a class="sidebar-link sidebar-title {{ request()->is('hospital/hr/*') ? 'active' : '' }}" href="{{ route('hospital.hr.dashboard.index') }}"><span class="nav-icon">👨‍⚕️</span><span>Human Resources</span></a></li>
         <li class="sidebar-list"><a class="sidebar-link sidebar-title" href="{{ route('hospital.dashboard') }}"><span class="nav-icon">💬</span><span>Messaging</span></a></li>
         <li class="sidebar-list"><a class="sidebar-link sidebar-title" href="{{ route('hospital.dashboard') }}"><span class="nav-icon">⬇️</span><span>Download Center</span></a></li>
         <li class="sidebar-list"><a class="sidebar-link sidebar-title" href="{{ route('hospital.dashboard') }}"><span class="nav-icon">📦</span><span>Inventory</span></a></li>
