@@ -180,7 +180,6 @@ return new class extends Migration
         });
 
         try {
-            DB::statement('ALTER TABLE `procedures` MODIFY `name` TEXT NULL');
             DB::statement('ALTER TABLE `procedures` MODIFY `price` DOUBLE(24,2) NOT NULL DEFAULT 0');
             DB::statement('ALTER TABLE `procedures` MODIFY `status` VARCHAR(64) NULL');
         } catch (\Throwable $e) {

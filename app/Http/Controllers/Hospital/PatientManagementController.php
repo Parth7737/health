@@ -18,6 +18,7 @@ use App\Models\HrDepartment;
 use App\Models\IndianDistrict;
 use App\Models\IndianState;
 use App\Models\OpdPatient;
+use App\Models\IpdAllocationTreatmentPlanProcedure;
 use App\Models\IpdPrescription;
 use App\Models\IpdProgressNote;
 use App\Models\OpdPrescription;
@@ -39,6 +40,7 @@ use App\Services\PatientTimelineService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
@@ -1888,6 +1890,15 @@ class PatientManagementController extends BaseHospitalController
             ])
             ->get();
 
+        $ipdTreatmentPlanProcedures = collect();
+        if ($activeIpdAllocation) {
+            $ipdTreatmentPlanProcedures = IpdAllocationTreatmentPlanProcedure::query()
+                ->where('bed_allocation_id', $activeIpdAllocation->id)
+                ->orderBy('line_order')
+                ->orderBy('id')
+                ->get();
+        }
+
         return view('hospital.patient-management.patient-360', [
             'patient' => $patient,
             'activeIpdAllocation' => $activeIpdAllocation,
@@ -1912,6 +1923,7 @@ class PatientManagementController extends BaseHospitalController
             'totalPaid' => $totalPaid,
             'totalDue' => $totalDue,
             'treatmentPlanSpecialities' => $treatmentPlanSpecialities,
+            'ipdTreatmentPlanProcedures' => $ipdTreatmentPlanProcedures,
         ]);
     }
     public function mrnPreview()
@@ -3470,7 +3482,7 @@ class PatientManagementController extends BaseHospitalController
         foreach ($procedures as $procedure) {
             $pkg = $procedure->package->code ?? '';
             $code2 = $procedure->procedure_code_2 ?? '';
-            $pname = $procedure->procedure_name ?: $procedure->name ?: ('Procedure #'.$procedure->id);
+            $pname = $procedure->procedure_name ?? ('Procedure #'.$procedure->id);
             $label = trim($pkg.' ('.$code2.') '.$pname);
             $html .= '<option value="'.(int) $procedure->id.'">'.e($label).'</option>';
         }
@@ -3490,8 +3502,16 @@ class PatientManagementController extends BaseHospitalController
 
         $stratificationOptions = '<option value="">Select stratification</option>';
         if ($procedure->stratification_criteria === 'Yes') {
+            $pid = $procedure->id;
             $rows = \App\Models\TreatmentPlanStratification::query()
-                ->where('procedure_id', $procedure->id)
+                ->where(function ($q) use ($pid) {
+                    $q->where('procedure_id', $pid);
+                    if (Schema::hasTable('stratification_procedures')) {
+                        $q->orWhereHas('procedures', function ($q2) use ($pid) {
+                            $q2->where('procedures.id', $pid);
+                        });
+                    }
+                })
                 ->orderBy('name')
                 ->get();
             foreach ($rows as $s) {
@@ -3502,8 +3522,16 @@ class PatientManagementController extends BaseHospitalController
 
         $implantsOptions = '<option value="">Select implant</option>';
         if ($procedure->implants_high_end_consumables === 'Yes') {
+            $pid = $procedure->id;
             $imps = \App\Models\TreatmentPlanImplant::query()
-                ->where('procedure_id', $procedure->id)
+                ->where(function ($q) use ($pid) {
+                    $q->where('procedure_id', $pid);
+                    if (Schema::hasTable('implant_procedures')) {
+                        $q->orWhereHas('procedures', function ($q2) use ($pid) {
+                            $q2->where('procedures.id', $pid);
+                        });
+                    }
+                })
                 ->orderBy('name')
                 ->get();
             foreach ($imps as $imp) {
@@ -3567,6 +3595,132 @@ class PatientManagementController extends BaseHospitalController
         return response()->json([
             'success' => true,
             'price' => (float) ($row->price ?? 0),
+        ]);
+    }
+
+    /**
+     * Patient 360 — saved treatment plan lines for an IPD bed allocation.
+     */
+    public function treatmentPlanLines(Request $request)
+    {
+        $allocationId = (int) $request->query('bed_allocation_id');
+        if ($allocationId <= 0) {
+            return response()->json(['success' => false, 'message' => 'Invalid allocation.'], 422);
+        }
+
+        $allocation = BedAllocation::query()->whereKey($allocationId)->first();
+        if (! $allocation || (int) $allocation->hospital_id !== (int) $this->hospital_id) {
+            return response()->json(['success' => false, 'message' => 'Admission not found.'], 404);
+        }
+
+        $rows = IpdAllocationTreatmentPlanProcedure::query()
+            ->where('bed_allocation_id', $allocationId)
+            ->orderBy('line_order')
+            ->orderBy('id')
+            ->get();
+
+        $lines = $rows->map(function (IpdAllocationTreatmentPlanProcedure $row) {
+            return [
+                'speciality_id' => $row->speciality_id ? (int) $row->speciality_id : null,
+                'procedure_id' => $row->procedure_id ? (int) $row->procedure_id : null,
+                'implant_id' => $row->implant_id ? (int) $row->implant_id : null,
+                'stratification_id' => $row->stratification_id ? (int) $row->stratification_id : null,
+                'speciality_name' => (string) ($row->speciality_name ?? ''),
+                'procedure_label' => (string) ($row->procedure_label ?? ''),
+                'implant_label' => (string) ($row->implant_label ?? ''),
+                'implant_qty' => (string) ($row->implant_qty ?? ''),
+                'stratification_label' => (string) ($row->stratification_label ?? ''),
+                'no_of_days' => (string) ($row->no_of_days ?? ''),
+                'amount_value' => (float) $row->amount_value,
+                'is_unverified_price' => (bool) $row->is_unverified_price,
+                'u100_amount' => $row->u100_amount !== null ? (float) $row->u100_amount : null,
+                'ichi_code' => (string) ($row->ichi_code ?? ''),
+            ];
+        })->values()->all();
+
+        return response()->json(['success' => true, 'lines' => $lines]);
+    }
+
+    /**
+     * Patient 360 — replace treatment plan lines for an IPD allocation (draft until billing links).
+     */
+    public function treatmentPlanSave(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'bed_allocation_id' => 'required|integer|exists:bed_allocations,id',
+            'lines' => 'present|array|max:500',
+            'lines.*.speciality_id' => 'nullable|integer|min:1',
+            'lines.*.procedure_id' => 'required|integer|min:1',
+            'lines.*.implant_id' => 'nullable|integer|min:1',
+            'lines.*.stratification_id' => 'nullable|integer|min:1',
+            'lines.*.speciality_name' => 'nullable|string|max:255',
+            'lines.*.procedure_label' => 'nullable|string|max:65000',
+            'lines.*.implant_label' => 'nullable|string|max:512',
+            'lines.*.implant_qty' => 'nullable|string|max:32',
+            'lines.*.stratification_label' => 'nullable|string|max:512',
+            'lines.*.no_of_days' => 'nullable|string|max:64',
+            'lines.*.amount_value' => 'required|numeric|min:0|max:999999999999.99',
+            'lines.*.is_unverified_price' => 'nullable|boolean',
+            'lines.*.u100_amount' => 'nullable|numeric|min:0|max:999999999999.99',
+            'lines.*.ichi_code' => 'nullable|string|max:128',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please check the treatment plan lines.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $allocationId = (int) $request->input('bed_allocation_id');
+        $allocation = BedAllocation::query()->whereKey($allocationId)->first();
+        if (! $allocation || (int) $allocation->hospital_id !== (int) $this->hospital_id) {
+            return response()->json(['success' => false, 'message' => 'Admission not found.'], 404);
+        }
+
+        if ($allocation->isDischarged()) {
+            return response()->json(['success' => false, 'message' => 'Cannot update treatment plan for a discharged admission.'], 422);
+        }
+
+        $lines = $request->input('lines', []);
+        $userId = auth()->id();
+
+        DB::transaction(function () use ($allocation, $lines, $userId) {
+            IpdAllocationTreatmentPlanProcedure::query()
+                ->where('bed_allocation_id', $allocation->id)
+                ->delete();
+
+            foreach ($lines as $idx => $line) {
+                IpdAllocationTreatmentPlanProcedure::query()->create([
+                    'bed_allocation_id' => $allocation->id,
+                    'hospital_id' => (int) $allocation->hospital_id,
+                    'line_order' => (int) $idx,
+                    'speciality_id' => ! empty($line['speciality_id']) ? (int) $line['speciality_id'] : null,
+                    'procedure_id' => (int) $line['procedure_id'],
+                    'implant_id' => ! empty($line['implant_id']) ? (int) $line['implant_id'] : null,
+                    'stratification_id' => ! empty($line['stratification_id']) ? (int) $line['stratification_id'] : null,
+                    'speciality_name' => (string) ($line['speciality_name'] ?? ''),
+                    'procedure_label' => (string) ($line['procedure_label'] ?? ''),
+                    'implant_label' => (string) ($line['implant_label'] ?? ''),
+                    'implant_qty' => (string) ($line['implant_qty'] ?? ''),
+                    'stratification_label' => (string) ($line['stratification_label'] ?? ''),
+                    'no_of_days' => (string) ($line['no_of_days'] ?? ''),
+                    'amount_value' => (float) $line['amount_value'],
+                    'is_unverified_price' => (bool) ($line['is_unverified_price'] ?? false),
+                    'u100_amount' => isset($line['u100_amount']) && $line['u100_amount'] !== '' && $line['u100_amount'] !== null
+                        ? (float) $line['u100_amount']
+                        : null,
+                    'ichi_code' => (string) ($line['ichi_code'] ?? ''),
+                    'created_by' => $userId ? (int) $userId : null,
+                ]);
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Treatment plan saved.',
+            'count' => count($lines),
         ]);
     }
 }

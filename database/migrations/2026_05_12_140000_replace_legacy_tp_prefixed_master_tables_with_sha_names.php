@@ -51,7 +51,6 @@ return new class extends Migration
             $table->unsignedBigInteger('package_id')->nullable();
             $table->unsignedBigInteger('procedure_category_id')->nullable();
             $table->unsignedBigInteger('speciality_id')->nullable();
-            $table->string('name');
             $table->string('procedure_code', 128)->nullable();
             $table->decimal('price', 14, 2)->default(0);
             $table->string('status', 32)->default('active');

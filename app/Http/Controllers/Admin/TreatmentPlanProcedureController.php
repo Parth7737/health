@@ -50,7 +50,7 @@ class TreatmentPlanProcedureController extends Controller
             ->orderByDesc('id');
 
         return DataTables::of($data)
-            ->addColumn('display_name', fn ($row) => $row->procedure_name ?: $row->name ?: '—')
+            ->addColumn('display_name', fn ($row) => $row->procedure_name ?? '—')
             ->addColumn('scheme_type_name', fn ($row) => $row->schemeType?->name ?? '—')
             ->addColumn('package_name', fn ($row) => $row->package?->name ?? '—')
             ->addColumn('category_name', fn ($row) => $row->category?->name ?? '—')
@@ -66,7 +66,6 @@ class TreatmentPlanProcedureController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'scheme_type_id' => 'nullable|exists:scheme_types,id',
-            'name' => 'nullable|string',
             'package_id' => 'nullable|exists:packages,id',
             'procedure_category_id' => 'nullable|exists:procedure_categories,id',
             'speciality_id' => 'nullable|exists:specialities,id',
@@ -108,7 +107,6 @@ class TreatmentPlanProcedureController extends Controller
 
         $payload = [
             'scheme_type_id' => $request->scheme_type_id ?: null,
-            'name' => $request->name,
             'package_id' => $request->package_id ?: null,
             'procedure_category_id' => $request->procedure_category_id ?: null,
             'speciality_id' => $request->speciality_id ?: null,

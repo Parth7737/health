@@ -70,6 +70,10 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::post('treatment-plan/procedure-detail', 'PatientManagementController@treatmentPlanProcedureDetail')->name('treatment-plan.procedure-detail');
         Route::post('treatment-plan/implant-detail', 'PatientManagementController@treatmentPlanImplantDetail')->name('treatment-plan.implant-detail');
         Route::post('treatment-plan/stratification-detail', 'PatientManagementController@treatmentPlanStratificationDetail')->name('treatment-plan.stratification-detail');
+        Route::get('treatment-plan/lines', 'PatientManagementController@treatmentPlanLines')->name('treatment-plan.lines');
+        Route::post('treatment-plan/save', 'PatientManagementController@treatmentPlanSave')
+            ->middleware('permission:edit-patient-management')
+            ->name('treatment-plan.save');
         Route::get('patient-details/{patient}', 'PatientManagementController@patientDetails')->name('patient-details');
         Route::get('load-doctors', 'PatientManagementController@loadDoctors')->name('load-doctors');
         Route::get('load-doctor-slots', 'PatientManagementController@loadDoctorSlots')->name('load-doctor-slots');

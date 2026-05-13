@@ -98,6 +98,12 @@ class BedAllocation extends Model
         return $this->hasMany(IpdProgressNote::class, 'bed_allocation_id');
     }
 
+    public function treatmentPlanProcedures(): HasMany
+    {
+        return $this->hasMany(IpdAllocationTreatmentPlanProcedure::class, 'bed_allocation_id')
+            ->orderBy('line_order');
+    }
+
     /**
      * Check if allocation is active (not discharged).
      */

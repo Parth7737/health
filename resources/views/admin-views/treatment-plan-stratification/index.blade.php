@@ -17,7 +17,7 @@
       <div class="dt-ext table-responsive custom-scrollbar html-expert-table">
           <table id="xin-table" class="display table-striped">
             <thead class="table-light">
-                <tr><th>#</th><th>Category</th><th>Procedure</th><th>Name</th><th>Code</th><th>Price</th><th>Action</th></tr>
+                <tr><th>#</th><th>Category</th><th>Name</th><th>Code</th><th>Price</th><th>Action</th></tr>
             </thead>
             <tbody></tbody>
         </table>

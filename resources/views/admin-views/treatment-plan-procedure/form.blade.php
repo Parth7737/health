@@ -16,7 +16,6 @@
 <form method="POST" id="savedata" enctype="multipart/form-data">
     <div class="modal-body">
         <input type="hidden" id="id" name="id" value="{{ $id }}">
-        <p class="text-muted small mb-2">Fields mirror SHA procedure master.</p>
 
         <div class="accordion" id="procFormAcc">
             <div class="accordion-item">
@@ -89,10 +88,6 @@
                                 <option value="Follow-up Procedure" @selected(@$data->procedure_label === 'Follow-up Procedure')>Follow-up Procedure</option>
                                 <option value="Stand Alone Procedure" @selected(@$data->procedure_label === 'Stand Alone Procedure')>Stand Alone Procedure</option>
                             </select>
-                        </div>
-                        <div class="col-md-12">
-                            <label class="form-label">Name (legacy / short)</label>
-                            <input type="text" name="name" class="form-control" value="{{ old('name', @$data->name) }}">
                         </div>
                         <div class="col-md-12">
                             <label class="form-label">Procedure name</label>

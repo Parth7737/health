@@ -5,7 +5,6 @@ $(document).ready(function() {
         columns: [
             { data: null, name: 'serial_no', orderable: false, searchable: false, render: function (data, type, row, meta) { return meta.row + meta.settings._iDisplayStart + 1; } },
             { data: 'name', name: 'name' }, { data: 'code', name: 'code' },
-            { data: 'procedure_name', name: 'procedure_name', orderable: false, searchable: false },
             { data: 'speciality_name', name: 'speciality_name', orderable: false, searchable: false },
             { data: 'no_of_multiplier', name: 'no_of_multiplier' },
             { data: 'price', name: 'price' },
@@ -34,7 +33,7 @@ $(document).ready(function() {
             url: route('showform'), type: "POST", data: {id: $(this).data('id'), _token: token},
             success: function (response) {
                 loader('hide');
-                if (response) { $("#ajaxdata").html(response); $(".add-datamodal").modal('show'); $(".add-datamodal .modal-dialog").removeClass('modal-xl'); }
+                if (response) { $("#ajaxdata").html(response); $(".add-datamodal").modal('show'); $(".add-datamodal .modal-dialog").removeClass('modal-xl'); $(".select2").select2(); }
             },
             error: function () { loader('hide'); }
         });

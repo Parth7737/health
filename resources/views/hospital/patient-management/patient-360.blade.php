@@ -112,7 +112,7 @@
                         <span class="badge badge-danger p360-badge-chip">IPD — {{ $wardName }} · Bed {{ $bedCode }}</span>
                         <span class="badge badge-primary p360-badge-chip" title="{{ e($activeIpdAllocation->admission_no ?: '') }}">Adm: {{ \Illuminate\Support\Str::limit($activeIpdAllocation->admission_no ?: '—', 20, '…') }}</span>
                         <span class="badge {{ $p360VisitStatusBadgeClass }} p360-badge-chip">Status: {{ $p360VisitStatusLabel }}</span>
-                        <span class="badge badge-info p360-badge-chip">Stay: {{ $stayDayText }}</span>
+                        <span class="badge badge-info p360-badge-chip">LOS: {{ $stayDayText }}</span>
                     @else
                         <span class="badge badge-primary p360-badge-chip">OPD — Visit {{ data_get($latestOpdVisit, 'case_no') ?: '—' }}</span>
                         <span class="badge badge-warning p360-badge-chip">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? \App\Services\OpdTokenNoService::formatForDisplay(data_get($latestOpdVisit, 'token_no')) : '—' }}</span>
@@ -194,7 +194,7 @@
                 <button class="tab-btn" data-tab="tabProfile" onclick="switchEMRTab('tabProfile',this)">🧾 Details</button>
                 <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">📋 Orders</button>
                 @if($isIpdActive && $activeIpdAllocation)
-                    <button class="tab-btn" data-tab="tabProcedure" onclick="switchEMRTab('tabProcedure',this)">📋 Procedure</button>
+                    <button class="tab-btn" data-tab="tabProcedure" onclick="switchEMRTab('tabProcedure',this)">📋 Treatment Procedures</button>
                 @endif
                 <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">💊 Medications</button>
                 <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">📝 Clinical Notes</button>
@@ -551,14 +551,18 @@
             </div>
 
             @if($isIpdActive && $activeIpdAllocation)
-            <!-- PROCEDURE (IPD only — static until treatment plan API) -->
             <div class="tab-pane" id="tabProcedure">
                 <div class="card">
-                    <div class="card-header"><div class="card-title">Treatment plan</div></div>
+                    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div class="card-title mb-0">Treatment plan</div>
+                        @can('edit-patient-management')
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#p360TreatmentPlanModal" aria-haspopup="dialog">Edit plan</button>
+                        @endcan
+                    </div>
                     <div class="card-body">
                         <div class="p360-tp-table-wrap">
                             <div class="table-responsive rounded-2 p360-tp-table-border">
-                                <table class="" id="p360ProcedureTabTable" aria-label="Admission treatment plan (sample)">
+                                <table class="table table-hover mb-0 p360-tp-table" id="p360ProcedureTabTable" aria-label="Admission treatment plan">
                                     <thead>
                                         <tr>
                                             <th class="p360-tp-th-no">No.</th>
@@ -573,43 +577,29 @@
                                             <th class="p360-tp-th-actions">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>1</td>
-                                            <td>Orthopedics</td>
-                                            <td>Total knee replacement — primary (sample)</td>
-                                            <td>NA</td>
-                                            <td>1</td>
-                                            <td>NA</td>
-                                            <td>5</td>
-                                            <td>₹1,85,000.00</td>
-                                            <td>N/A</td>
-                                            <td class="text-center text-muted">—</td>
-                                        </tr>
-                                        <tr>
-                                            <td>2</td>
-                                            <td>Burns Management</td>
-                                            <td>Skin graft — small area (sample)</td>
-                                            <td>—</td>
-                                            <td>1</td>
-                                            <td>N/A</td>
-                                            <td>NA</td>
-                                            <td>₹45,000.00</td>
-                                            <td>XXX</td>
-                                            <td class="text-center text-muted">—</td>
-                                        </tr>
-                                        <tr>
-                                            <td>3</td>
-                                            <td>General Surgery</td>
-                                            <td>SC080 (SC080A) Resuturing of wound gap — demo row</td>
-                                            <td>NA</td>
-                                            <td>2</td>
-                                            <td>NA</td>
-                                            <td>1</td>
-                                            <td>₹1,500.00</td>
-                                            <td>XXX</td>
-                                            <td class="text-center text-muted">—</td>
-                                        </tr>
+                                    <tbody id="p360ProcedureTabTableBody">
+                                        @forelse(($ipdTreatmentPlanProcedures ?? collect()) as $tpRow)
+                                            @php
+                                                $tpAmt = (float) ($tpRow->amount_value ?? 0);
+                                                $tpAmtLabel = '₹' . number_format($tpAmt, 2);
+                                            @endphp
+                                            <tr>
+                                                <td class="p360-tp-col-no">{{ $loop->iteration }}</td>
+                                                <td>{{ $tpRow->speciality_name ?: '—' }}</td>
+                                                <td><div class="p360-tp-proc-cell">{{ $tpRow->procedure_label ?: '—' }}</div></td>
+                                                <td>{{ $tpRow->implant_label ?: '—' }}</td>
+                                                <td>{{ $tpRow->implant_qty !== null && $tpRow->implant_qty !== '' ? $tpRow->implant_qty : '—' }}</td>
+                                                <td>{{ $tpRow->stratification_label ?: '—' }}</td>
+                                                <td>{{ $tpRow->no_of_days !== null && $tpRow->no_of_days !== '' ? $tpRow->no_of_days : '—' }}</td>
+                                                <td>{{ $tpAmtLabel }}</td>
+                                                <td>{{ $tpRow->ichi_code ?: '—' }}</td>
+                                                <td class="text-center text-muted">—</td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="10" class="text-center text-muted">No treatment plan lines saved for this admission yet. Use <strong>Treatment Plan</strong> in the banner to add and save lines.</td>
+                                            </tr>
+                                        @endforelse
                                     </tbody>
                                 </table>
                             </div>
@@ -1021,6 +1011,10 @@
                     </div>
                     <p class="text-muted small mt-2 mb-0" id="p360TreatmentPlanEmptyHint">No lines yet. Fill the form and tap <strong>Add</strong>.</p>
                 </div>
+                <div class="text-center mt-4 pt-2 border-top">
+                    <button type="button" class="btn btn-success px-5" id="p360TreatmentPlanSaveBtn" disabled>Save treatment plan</button>
+                    <p class="text-muted small mt-2 mb-0" id="p360TreatmentPlanSaveHint">Saves all lines for this IPD admission. You can update charges and billing from these records later.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -1138,11 +1132,14 @@ window.Patient360Config = {
         }
     },
     csrf: @json(csrf_token()),
+    ipdAllocationId: @json(($isIpdActive && $activeIpdAllocation) ? $activeIpdAllocation->id : null),
     treatmentPlan: {
         procedures: @json(route('hospital.patient-management.treatment-plan.procedures')),
         procedureDetail: @json(route('hospital.patient-management.treatment-plan.procedure-detail')),
         implantDetail: @json(route('hospital.patient-management.treatment-plan.implant-detail')),
         stratificationDetail: @json(route('hospital.patient-management.treatment-plan.stratification-detail')),
+        lines: @json(route('hospital.patient-management.treatment-plan.lines')),
+        save: @json(route('hospital.patient-management.treatment-plan.save')),
     },
     permissions: {
         canPathology: @json(auth()->user()->can('create-pathology-order')),

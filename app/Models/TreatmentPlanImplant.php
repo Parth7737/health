@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class TreatmentPlanImplant extends Model
 {
@@ -32,5 +33,16 @@ class TreatmentPlanImplant extends Model
     public function speciality(): BelongsTo
     {
         return $this->belongsTo(Speciality::class);
+    }
+
+    /** SHA-style: many procedures per implant (procedure_id[]). */
+    public function procedures(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            TreatmentPlanProcedure::class,
+            'implant_procedures',
+            'implant_id',
+            'procedure_id'
+        )->withTimestamps();
     }
 }

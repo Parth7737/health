@@ -5,7 +5,6 @@ $(document).ready(function() {
         columns: [
             { data: null, name: 'serial_no', orderable: false, searchable: false, render: function (data, type, row, meta) { return meta.row + meta.settings._iDisplayStart + 1; } },
             { data: 'category_name', name: 'category_name', orderable: false, searchable: false },
-            { data: 'procedure_name', name: 'procedure_name', orderable: false, searchable: false },
             { data: 'name', name: 'name' },
             { data: 'code', name: 'code' },
             { data: 'price', name: 'price' },
@@ -27,6 +26,24 @@ $(document).ready(function() {
     function initTooltips() { $('[data-bs-toggle="tooltip"]').tooltip('dispose'); $('[data-bs-toggle="tooltip"]').tooltip({ container: 'body' }); }
     xintable.on('draw.dt', initTooltips); initTooltips();
 
+    /** SHA stratification: code2 = code + rule when code is non-empty */
+    function tpStratificationSyncCode2() {
+        var $form = $('#savedata[data-tp-strat-form="1"]');
+        if (!$form.length) {
+            return;
+        }
+        var rule = String($form.find('#rule').val() || '');
+        var code = String($form.find('#code').val() || '');
+        if (code !== '') {
+            $form.find('#code2').val(code + rule);
+        } else {
+            $form.find('#code2').val('');
+        }
+    }
+
+    $(document).on('change input', '#savedata[data-tp-strat-form="1"] #code', tpStratificationSyncCode2);
+    $(document).on('change select2:select', '#savedata[data-tp-strat-form="1"] #rule', tpStratificationSyncCode2);
+
     $(document).on('click', '.adddata, .editdata', async function() {
         loader();
         const token = await csrftoken();
@@ -34,7 +51,13 @@ $(document).ready(function() {
             url: route('showform'), type: "POST", data: {id: $(this).data('id'), _token: token},
             success: function (response) {
                 loader('hide');
-                if (response) { $("#ajaxdata").html(response); $(".add-datamodal").modal('show'); $(".add-datamodal .modal-dialog").addClass('modal-xl'); }
+                if (response) {
+                    $("#ajaxdata").html(response);
+                    $(".add-datamodal").modal('show');
+                    $(".add-datamodal .modal-dialog").removeClass('modal-xl');
+                    $(".select2").select2();
+                    tpStratificationSyncCode2();
+                }
             },
             error: function () { loader('hide'); }
         });
