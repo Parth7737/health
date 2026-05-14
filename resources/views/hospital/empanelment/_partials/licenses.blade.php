@@ -7,6 +7,10 @@
          text-wrap: auto;
       }
 </style>
+<div class="eo-panel-title"><i class="fas fa-certificate" style="color:#ffb74d"></i> Statutory licenses</div>
+<p class="eo-panel-sub">Upload PDFs and dates for each license type. Save to open documents &amp; submit.</p>
+
+<div class="eo-table-panel">
 <form  id="licenseForm" enctype="multipart/form-data">
 @foreach($licenses as $key => $value) 
    @if(sizeof($value->licenseType) > 0)
@@ -116,6 +120,14 @@
    </div>
 @endif
 </form>
+</div>
+
+<div class="eo-step-nav">
+    <button type="button" class="eo-tb-btn" onclick="var p=window.eoWizardPrev && window.eoWizardPrev[5]; if(p) loadStep(p);"><i class="fas fa-arrow-left"></i> Back</button>
+    <span class="eo-nav-info">Fill mandatory license rows before saving.</span>
+    <span></span>
+</div>
+
 <script>
 
 	$(document).ready(function() {
@@ -174,8 +186,6 @@
    $('.savelicense').click(function () {
       ldrshow();
       $('.error').remove();
-      var step = 5;
-      // Create a FormData object
       var formData = new FormData($('#licenseForm')[0]);
      
       // Send an AJAX request
@@ -194,19 +204,20 @@
                $('.remove-file-btn').click();
                @if(empty($is_admin_edit))
                   successMessage(response.message);
+                  var ws = response.wizard_step || response.step || 5;
+                  if (typeof window.eoSetUnlockedMax === 'function') {
+                     window.eoSetUnlockedMax(ws);
+                  }
+                  if (typeof window.eoUpdateStepper === 'function') {
+                     window.eoUpdateStepper(ws);
+                  }
                   $('.nav-link').removeClass('active');
                   $('.tab-pane').removeClass('show active');
-                  $(`.step${step}`).addClass('show active');
-                  $(`.navstep${step}`).addClass('active');
+                  $(`.step${ws}`).addClass('show active');
+                  $(`.navstep${ws}`).addClass('active');
                   setTimeout(() => {
-                     $(`.step${step}`).on('click', function(event) {
-                        if (event.target.closest('.nav-item .active')) {
-                              setSlider(event.target.closest('.nav-item'));
-                        }
-                     });
-                     $('.step5Icon').show();
-                     loadStep(6);
-                  }, 1000);
+                     loadStep(ws);
+                  }, 600);
                @else
                   if (response.success) (typeof sendmsg === 'function' ? sendmsg('success', response.message) : alert(response.message));
                   setTimeout(() => {

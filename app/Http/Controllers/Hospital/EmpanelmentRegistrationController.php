@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Hospital;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\UserHfr;
-use App\Models\{ Hospital, HospitalDistrict, HospitalState, User, HospitalSpeciality, HospitalService, HospitalLicense};
+use App\Models\{ Hospital, HospitalDistrict, HospitalState, HospitalType, User, HospitalSpeciality, HospitalService, HospitalLicense};
 use App\CentralLogics\Helpers;
 use App\Rules\UniqueAcrossTables;
 use App\Models\MobileOtp;
@@ -28,7 +28,10 @@ class EmpanelmentRegistrationController extends Controller
             return redirect('/');
         }
         $allStepCompleted = Helpers::checkAllStepIsCompleteOrNot($uuid);
-        return view('hospital.empanelment.form',compact('step','uuid','user','hospital','allStepCompleted'));
+        $unlockedMaxStep = 8;
+        $initialWizardStep = $this->mapLegacyStepToWizardStep((int) ($user->step ?? 2));
+
+        return view('hospital.empanelment.form', compact('step', 'uuid', 'user', 'hospital', 'allStepCompleted', 'unlockedMaxStep', 'initialWizardStep'));
     }
 
     public function hospitalInfo(Request $request, $uuid) {
@@ -43,12 +46,38 @@ class EmpanelmentRegistrationController extends Controller
         $rules = [
             'name' => 'required',
             'code' => 'required',
-            'type_id' => 'required',
+            'type_id' => 'required|integer|exists:hospital_types,id',
             'hospital_phone' => 'required',
             'hospital_email' => 'required|email',
             'pincode' => 'required',
             'city' => 'required',
             'address' => 'required',
+            'onboarding_meta' => 'nullable|array',
+            'onboarding_meta.local_name' => 'nullable|string|max:255',
+            'onboarding_meta.establishment_year' => 'nullable|integer|min:1800|max:' . (int) date('Y'),
+            'onboarding_meta.registration_no' => 'nullable|string|max:255',
+            'onboarding_meta.ownership' => 'nullable|string|max:120',
+            'onboarding_meta.sub_category' => 'nullable|string|max:120',
+            'onboarding_meta.district' => 'nullable|string|max:120',
+            'onboarding_meta.block' => 'nullable|string|max:120',
+            'onboarding_meta.village' => 'nullable|string|max:120',
+            'onboarding_meta.latitude' => 'nullable|string|max:32',
+            'onboarding_meta.longitude' => 'nullable|string|max:32',
+            'onboarding_meta.ms_name' => 'nullable|string|max:255',
+            'onboarding_meta.ms_mobile' => 'nullable|string|max:15',
+            'onboarding_meta.landline' => 'nullable|string|max:32',
+            'onboarding_meta.helpline' => 'nullable|string|max:32',
+            'onboarding_meta.website' => 'nullable|string|max:512',
+            'onboarding_meta.infra_sanctioned_beds' => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_functional_beds' => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_icu_beds' => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_ot' => 'nullable|integer|min:0|max:999',
+            'onboarding_meta.infra_inhouse_lab' => 'nullable|string|max:32',
+            'onboarding_meta.infra_blood_bank' => 'nullable|string|max:64',
+            'onboarding_meta.infra_power_backup' => 'nullable|string|max:64',
+            'onboarding_meta.infra_oxygen_supply' => 'nullable|string|max:64',
+            'onboarding_meta.infra_internet' => 'nullable|string|max:64',
+            'onboarding_meta.infra_ambulance' => 'nullable|string|max:64',
         ];
 
         if(auth()->user()->hospital_type == 'Multi-Branch' && auth()->user()->parent_id == 0){
@@ -73,6 +102,11 @@ class EmpanelmentRegistrationController extends Controller
             }
         }
 
+        $wizardObForType = (array) (auth()->user()->wizard_onboarding ?? []);
+        if (!$request->filled('type_id') && !empty($wizardObForType['type_id'])) {
+            $request->merge(['type_id' => $wizardObForType['type_id']]);
+        }
+
         // Validate request with dynamic rules
         $validatedData = $request->validate($rules);
 
@@ -92,6 +126,22 @@ class EmpanelmentRegistrationController extends Controller
         $hospital->city = $request->city;
         $hospital->landmark = $request->landmark;
         $hospital->pincode = $request->pincode;
+        $existingMeta = is_array($hospital->onboarding_meta) ? $hospital->onboarding_meta : [];
+        $incomingMeta = $request->input('onboarding_meta', []);
+        if (!is_array($incomingMeta)) {
+            $incomingMeta = [];
+        }
+        $authUser = auth()->user();
+        $wizardOb = (array) ($authUser->wizard_onboarding ?? []);
+        if (!empty($wizardOb['type_id'])) {
+            $incomingMeta['wizard_facility_type_id'] = (int) $wizardOb['type_id'];
+        }
+        if (!empty($wizardOb['facility_type'])) {
+            $incomingMeta['wizard_facility_type'] = $wizardOb['facility_type'];
+        }
+        $hospital->onboarding_meta = array_merge($existingMeta, array_filter($incomingMeta, static function ($v) {
+            return $v !== null && $v !== '';
+        }));
         $hospital->save();
 
         if($hospital->hospital_type == 'Multi-Branch' && $hospital->parent_id == 0){
@@ -101,24 +151,33 @@ class EmpanelmentRegistrationController extends Controller
             }
             $user->name = $request->chairman_name;
             $user->email = $request->chairman_email;
-            $user->password = Hash::make($request->password);
+            if ($request->filled('password')) {
+                $user->password = Hash::make($request->password);
+            }
             $user->hospital_id = $hospital->id;
             $user->save();
         }
         $enable_step = Helpers::get_settings('empanelment_step_status');
-        $enable_step_decoded = json_decode($enable_step);
-        if($enable_step_decoded->speciality_status == 1){
+        $enable_step_decoded = json_decode($enable_step ?: '{}');
+        if (!is_object($enable_step_decoded)) {
+            $enable_step_decoded = (object) [
+                'speciality_status' => 0,
+                'service_status' => 0,
+                'licenses_status' => 0,
+            ];
+        }
+        if(($enable_step_decoded->speciality_status ?? 0) == 1){
             $step = 3;
-        }elseif($enable_step_decoded->service_status == 1){
+        }elseif(($enable_step_decoded->service_status ?? 0) == 1){
             $step = 4;
-        }elseif($enable_step_decoded->licenses_status == 1){
+        }elseif(($enable_step_decoded->licenses_status ?? 0) == 1){
             $step = 5;
         }else{
             $step = 6;
         }
         auth()->user()->update(['hospital_id' => $hospital->id,'step' => $step,'enable_step' => $enable_step]);
 
-        return response()->json(['success' => true, 'message' => 'Information Saved Successfully!!','step' => $step]); 
+        return response()->json(['success' => true, 'message' => 'Information Saved Successfully!!', 'step' => $step, 'wizard_step' => 3]); 
     }
 
     public function saveSpecialities(Request $request, $uuid, $hospital_id) {
@@ -171,7 +230,7 @@ class EmpanelmentRegistrationController extends Controller
                     }
                     auth()->user()->update(['hospital_id' => $hospital_id,'step' => $step]);
     
-                    return response()->json(['success' => true, 'message' => 'Specialities Saved Successfully!!','step' => $step]);
+                    return response()->json(['success' => true, 'message' => 'Specialities Saved Successfully!!', 'step' => $step, 'wizard_step' => 4]);
                 } else {
                     return response()->json(['success' => false, 'message' => 'Something Wrong!!']);
                 }
@@ -263,7 +322,7 @@ class EmpanelmentRegistrationController extends Controller
                     $step = 6;
                 }
                 auth()->user()->update(['hospital_id' => $hospital_id,'step' => $step]);
-                return response()->json(['success' => true, 'message' => 'Services Saved Successfully!!','step' => $step]);
+                return response()->json(['success' => true, 'message' => 'Services Saved Successfully!!', 'step' => $step, 'wizard_step' => 5]);
             } else {
                 return response()->json(['success' => false, 'message' => 'Please Select Any One.']);
             }           
@@ -352,8 +411,9 @@ class EmpanelmentRegistrationController extends Controller
                     }
                 }
             }
-            auth()->user()->update(['hospital_id' => $hospital_id,'step' => 6]);
-            return response()->json(['success' => true, 'message' => 'Licenses Saved Successfully!!']);
+            auth()->user()->update(['hospital_id' => $hospital_id, 'step' => 6]);
+
+            return response()->json(['success' => true, 'message' => 'Licenses Saved Successfully!!', 'step' => 6, 'wizard_step' => 5]);
         } else {
             return response()->json(['success' => false, 'message' => 'Something Wrong!!']);
         }
@@ -401,11 +461,128 @@ class EmpanelmentRegistrationController extends Controller
             $allStepComplete = Helpers::checkAllStepIsCompleteOrNot($uuid);
             $user = User::where('uuid',$uuid)->first();
             $multi_branches = '';
-            return response()->json(['success' => true, 'message' => 'Document Saved Successfully!!', 'is_complete' => $allStepComplete,'multi_branches' => $multi_branches]);
+            return response()->json(['success' => true, 'message' => 'Document Saved Successfully!!', 'is_complete' => $allStepComplete, 'multi_branches' => $multi_branches, 'wizard_step' => 6, 'step' => 6]);
         } else {
             return response()->json(['success' => false, 'message' => 'Something Wrong!!']);
         }
     }
+    public function saveFacilityType(Request $request, $uuid)
+    {
+        $request->validate([
+            'type_id' => 'required|integer|exists:hospital_types,id',
+        ]);
+        $user = User::where('uuid', $uuid)->first();
+        if (!$user || (int) $user->id !== (int) auth()->id()) {
+            abort(403);
+        }
+        $type = HospitalType::find($request->type_id);
+        $w = (array) ($user->wizard_onboarding ?? []);
+        $w['type_id'] = (int) $request->type_id;
+        $w['facility_type'] = $type ? $type->name : '';
+        $user->wizard_onboarding = $w;
+        $user->save();
+
+        if ($user->hospital_id) {
+            $h = Hospital::where('id', $user->hospital_id)->first();
+            if ($h) {
+                $h->type_id = (int) $request->type_id;
+                $h->save();
+            }
+        }
+
+        return response()->json(['success' => true, 'message' => 'Facility type saved.', 'wizard_step' => 2, 'step' => 2]);
+    }
+
+    public function saveHospitalInfrastructure(Request $request, $uuid)
+    {
+        $user = User::where('uuid', $uuid)->first();
+        if (!$user || !$user->hospital_id) {
+            return response()->json(['success' => false, 'message' => 'Save basic information first.'], 422);
+        }
+        $hospital = Hospital::where('id', $user->hospital_id)->first();
+        if (!$hospital) {
+            return response()->json(['success' => false, 'message' => 'Hospital not found.'], 422);
+        }
+        $request->validate([
+            'onboarding_meta' => 'nullable|array',
+            'onboarding_meta.infra_sanctioned_beds' => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_functional_beds' => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_icu_beds' => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_ot' => 'nullable|integer|min:0|max:999',
+            'onboarding_meta.infra_inhouse_lab' => 'nullable|string|max:32',
+            'onboarding_meta.infra_blood_bank' => 'nullable|string|max:64',
+            'onboarding_meta.infra_power_backup' => 'nullable|string|max:64',
+            'onboarding_meta.infra_oxygen_supply' => 'nullable|string|max:64',
+            'onboarding_meta.infra_internet' => 'nullable|string|max:64',
+            'onboarding_meta.infra_ambulance' => 'nullable|string|max:64',
+        ]);
+        $existingMeta = is_array($hospital->onboarding_meta) ? $hospital->onboarding_meta : [];
+        $incomingMeta = $request->input('onboarding_meta', []);
+        if (!is_array($incomingMeta)) {
+            $incomingMeta = [];
+        }
+        $onlyInfra = [];
+        foreach ($incomingMeta as $k => $v) {
+            if (is_string($k) && strncmp($k, 'infra_', 6) === 0) {
+                $onlyInfra[$k] = $v;
+            }
+        }
+        $hospital->onboarding_meta = array_merge($existingMeta, array_filter($onlyInfra, static function ($v) {
+            return $v !== null && $v !== '';
+        }));
+        $hospital->save();
+
+        return response()->json(['success' => true, 'message' => 'Infrastructure saved.', 'wizard_step' => 4, 'step' => 4]);
+    }
+
+    public function saveWizardMeta(Request $request, $uuid)
+    {
+        $request->validate([
+            'section' => 'required|in:ab,hmis',
+            'ab_empanelment' => 'nullable|array',
+            'ab_empanelment.sha_code' => 'nullable|string|max:64',
+            'ab_empanelment.rohini_id' => 'nullable|string|max:64',
+            'ab_empanelment.bank_account' => 'nullable|string|max:64',
+            'ab_empanelment.ifsc' => 'nullable|string|max:32',
+            'hmis_setup' => 'nullable|array',
+            'hmis_setup.admin_username' => 'nullable|string|max:120',
+            'hmis_setup.admin_email' => 'nullable|email|max:255',
+            'hmis_setup.role_preset' => 'nullable|string|max:64',
+            'hmis_setup.two_fa' => 'nullable|string|max:64',
+            'hmis_setup.admin_password' => 'nullable|string|max:255',
+        ]);
+        $user = User::where('uuid', $uuid)->first();
+        if (!$user || !$user->hospital_id) {
+            return response()->json(['success' => false, 'message' => 'Hospital record required.'], 422);
+        }
+        $hospital = Hospital::where('id', $user->hospital_id)->first();
+        if (!$hospital) {
+            return response()->json(['success' => false, 'message' => 'Hospital not found.'], 422);
+        }
+        $meta = is_array($hospital->onboarding_meta) ? $hospital->onboarding_meta : [];
+        if ($request->section === 'ab') {
+            $ab = array_merge((array) ($meta['ab_empanelment'] ?? []), (array) $request->input('ab_empanelment', []));
+            $meta['ab_empanelment'] = array_filter($ab, static function ($v) {
+                return $v !== null && $v !== '';
+            });
+            $wizardStep = 7;
+        } else {
+            $hm = array_merge((array) ($meta['hmis_setup'] ?? []), (array) $request->input('hmis_setup', []));
+            if (!empty($hm['admin_password'])) {
+                $hm['admin_password_hash'] = Hash::make($hm['admin_password']);
+            }
+            unset($hm['admin_password']);
+            $meta['hmis_setup'] = array_filter($hm, static function ($v) {
+                return $v !== null && $v !== '';
+            });
+            $wizardStep = 8;
+        }
+        $hospital->onboarding_meta = $meta;
+        $hospital->save();
+
+        return response()->json(['success' => true, 'message' => 'Saved successfully.', 'wizard_step' => $wizardStep, 'step' => $wizardStep]);
+    }
+
     public function getDistrict(Request $request) {
         $stateId = $request->state_id;
         $data = HospitalDistrict::where('state_id', $stateId)->get();
@@ -413,51 +590,63 @@ class EmpanelmentRegistrationController extends Controller
     }
 
     public function stepLoad(Request $request, $uuid) {
-        $validatedData = $request->validate([
-            'step' => 'required',
+        $request->validate([
+            'step' => 'required|integer|min:1|max:8',
         ]);
+        $step = (int) $request->step;
 
         $user = User::where('uuid', $uuid)->first();
 
         $hospital = '';
         $hospital_id = '';
-        if($user->hospital_id){
+        if ($user->hospital_id) {
             $hospital_id = $user->hospital_id;
-            $hospital = Hospital::where('id',$user->hospital_id)->first();
+            $hospital = Hospital::where('id', $user->hospital_id)->first();
         }
         $allStepCompleted = Helpers::checkAllStepIsCompleteOrNot($uuid);
-        $is_multi_branch = $user->hospital_type == 'Multi-Branch'?true:false;
-        if($request->step == 1) {
-            return view('hospital.empanelment._partials.basic-info', compact('user','uuid'));
-        } else if($request->step == 2) {
-            return view('hospital.empanelment._partials.hospital-info', compact('uuid','hospital'));
-        } else if($request->step == 3) {
-            if(!$hospital){
-                return '<h3 class="theme-color">Please Complete a first hospital information tab</h3>';
-            }else{
-                $specialities =  Helpers::getCommanData('Speciality');
-                return view('hospital.empanelment._partials.speciality', compact('uuid', 'hospital','specialities'));
-            }
-        } else if($request->step == 4) {
-            if(!$hospital){
-                return '<h3 class="theme-color">Please Complete a first hospital information tab</h3>';
-            }else{
-                $services =  Helpers::getCommanData('Service');
-                return view('hospital.empanelment._partials.services', compact('uuid', 'hospital','services'));
-            }
-        } else if($request->step == 5) {
-            if(!$hospital){
-                return '<h3 class="theme-color">Please Complete a first hospital information tab</h3>';
-            }else{
-                $licenses =  Helpers::getCommanData('License');
-                return view('hospital.empanelment._partials.licenses', compact('uuid', 'hospital','licenses'));
-            }
-        } else if($request->step == 6) {
-            if(!$hospital){
-                return '<h3 class="theme-color">Please Complete a first hospital information tab</h3>';
-            }else{
-                return view('hospital.empanelment._partials.documents', compact('uuid', 'hospital','allStepCompleted','is_multi_branch'));
-            }
+        $is_multi_branch = $user->hospital_type == 'Multi-Branch' ? true : false;
+
+        switch ($step) {
+            case 1:
+                return view('hospital.empanelment._partials.wizard-facility-type', compact('uuid', 'user', 'hospital'));
+            case 2:
+                return view('hospital.empanelment._partials.wizard-basic-information', compact('uuid', 'user', 'hospital'));
+            case 3:
+                if (!$hospital) {
+                    return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> (step 2) first.</div></div>', 200);
+                }
+
+                return view('hospital.empanelment._partials.hospital-info-infrastructure', compact('uuid', 'hospital'));
+            case 4:
+                if (!$hospital) {
+                    return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);
+                }
+
+                return view('hospital.empanelment._partials.wizard-staff-services', compact('uuid', 'hospital'));
+            case 5:
+                if (!$hospital) {
+                    return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);
+                }
+
+                return view('hospital.empanelment._partials.wizard-documents', compact('uuid', 'hospital', 'allStepCompleted'));
+            case 6:
+                if (!$hospital) {
+                    return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);
+                }
+
+                return view('hospital.empanelment._partials.wizard-ab-empanelment', compact('uuid', 'hospital'));
+            case 7:
+                if (!$hospital) {
+                    return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);
+                }
+
+                return view('hospital.empanelment._partials.wizard-hmis-setup', compact('uuid', 'hospital'));
+            case 8:
+                if (!$hospital) {
+                    return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);
+                }
+
+                return view('hospital.empanelment._partials.wizard-review-submit', compact('uuid', 'hospital', 'user'));
         }
     }
 
@@ -517,6 +706,27 @@ class EmpanelmentRegistrationController extends Controller
 
     public function paymentFail(Request $request) {
 
+    }
+
+    private function mapLegacyStepToWizardStep(int $legacyStep): int
+    {
+        if ($legacyStep <= 2) {
+            return 2;
+        }
+        if ($legacyStep === 3) {
+            return 4;
+        }
+        if ($legacyStep === 4) {
+            return 4;
+        }
+        if ($legacyStep === 5) {
+            return 5;
+        }
+        if ($legacyStep >= 6) {
+            return 8;
+        }
+
+        return 2;
     }
 
 }

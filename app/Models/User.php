@@ -25,6 +25,7 @@ class User extends Authenticatable
         'userid',
         'password',
         'step',
+        'wizard_onboarding',
         'approved_by',
         'approved_date',
         'gender',
@@ -55,6 +56,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'wizard_onboarding' => 'array',
         ];
     }
 

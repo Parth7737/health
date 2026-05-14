@@ -7,6 +7,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
     Route::get('/empanelment-registration', 'EmpanelmentRegistrationController@create')->name('empanelmentRegistration.create');
     Route::get('establisment-details/{uuid}', 'EmpanelmentRegistrationController@establismentDetails')->name('empanelmentRegistration.establismentDetails');
     Route::post('hospital-info/{uuid}', 'EmpanelmentRegistrationController@hospitalInfo')->name('empanelmentRegistration.hospitalinfo');
+    Route::post('wizard/facility-type/{uuid}', 'EmpanelmentRegistrationController@saveFacilityType')->name('empanelmentRegistration.saveFacilityType');
+    Route::post('wizard/infrastructure/{uuid}', 'EmpanelmentRegistrationController@saveHospitalInfrastructure')->name('empanelmentRegistration.saveInfrastructure');
+    Route::post('wizard/meta/{uuid}', 'EmpanelmentRegistrationController@saveWizardMeta')->name('empanelmentRegistration.saveWizardMeta');
     
     //update profile
     Route::get('/profile', 'ProfileController@index')->name('profile');

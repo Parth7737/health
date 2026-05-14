@@ -1,4 +1,8 @@
-<div  class="table-responsive mt-5 text-nowrap">
+<div class="eo-panel-title"><i class="fas fa-stethoscope" style="color:#4db6ac"></i> Specialities</div>
+<p class="eo-panel-sub">Mark which clinical specialities are available at this facility. Save to continue.</p>
+
+<div class="eo-table-panel">
+<div  class="table-responsive mt-0 text-nowrap">
     <form id="specialitiesForm">
         <table class="table table-bordered">
             <thead class="table-dark">
@@ -44,6 +48,13 @@
         @endif
     </form>
 </div>
+</div>
+
+<div class="eo-step-nav">
+    <button type="button" class="eo-tb-btn" onclick="var p=window.eoWizardPrev && window.eoWizardPrev[4]; if(p) loadStep(p);"><i class="fas fa-arrow-left"></i> Back</button>
+    <span class="eo-nav-info">Select at least one speciality where “Available” is checked, then save.</span>
+    <span></span>
+</div>
 
 <script>
      $(document).ready(function () {
@@ -78,10 +89,7 @@
         ldrshow();
       $('.error').remove();
 
-        var step = 3;
-        // Create a FormData object
         var formData = new FormData($('#specialitiesForm')[0]);
-        console.log(formData);
         $('#specialitiesForm input[type="checkbox"]').each(function () {
             if (!this.checked) {
                 formData.append(this.name, 0); // Append 0 for unchecked
@@ -101,22 +109,20 @@
                 ldrhide();
                 if(response.success) {
                     successMessage(response.message);
+                    var ws = response.wizard_step || response.step;
+                    if (typeof window.eoSetUnlockedMax === 'function') {
+                        window.eoSetUnlockedMax(ws);
+                    }
+                    if (typeof window.eoUpdateStepper === 'function') {
+                        window.eoUpdateStepper(ws);
+                    }
                     $('.nav-link').removeClass('active');
                     $('.tab-pane').removeClass('show active');
-                    $(`.step${step}`).addClass('show active');
-                    $(`.navstep${step}`).addClass('active');
+                    $(`.step${ws}`).addClass('show active');
+                    $(`.navstep${ws}`).addClass('active');
                     setTimeout(() => {
-                        $(`.step${step}`).on('click', function(event) {
-                            if (event.target.closest('.nav-item .active')) {
-                                setSlider(event.target.closest('.nav-item'));
-                            }
-                        });
-                        $('.step3Icon').show();
-                        // Populate the content of the step
-                        // $(`.step${step}`).html(data.html || data);
-                        loadStep(response.step);
-                        
-                    }, 1000);
+                        loadStep(ws);
+                    }, 600);
                 } else {
                     errorMessage('Please Select One Speciality!!');
                 }              
