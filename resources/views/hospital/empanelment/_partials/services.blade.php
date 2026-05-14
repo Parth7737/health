@@ -3,6 +3,10 @@
          display: inline-block !important;
       }
 </style>
+<div class="eo-panel-title"><i class="fas fa-hand-holding-medical" style="color:#64b5f6"></i> Services</div>
+<p class="eo-panel-sub">Declare available services and capacity as configured for your hospital.</p>
+
+<div class="eo-table-panel">
 <form  id="servicesForm" enctype="multipart/form-data">
 @foreach($services as $key => $value) 
    @if(sizeof($value->subServices) > 0)
@@ -143,6 +147,14 @@
    </div>
 @endif
 </form>
+</div>
+
+<div class="eo-step-nav">
+    <button type="button" class="eo-tb-btn" onclick="if(typeof loadStep==='function')loadStep(4);"><i class="fas fa-arrow-left"></i> Back</button>
+    <span class="eo-nav-info">Complete required service rows, then save.</span>
+    <span></span>
+</div>
+
 <script>
       $(document).ready(function () {
          $('.itemName').text('Services');
@@ -192,8 +204,6 @@
       ldrshow();
       $('.error').remove();
 
-      var step = 4;
-      // Create a FormData object
       var formData = new FormData($('#servicesForm')[0]);
      
       // Send an AJAX request
@@ -211,19 +221,20 @@
             if(response.success) {
                @if(empty($is_admin_edit))
                successMessage(response.message);
+               var ws = response.wizard_step || response.step;
+               if (typeof window.eoSetUnlockedMax === 'function') {
+                  window.eoSetUnlockedMax(ws);
+               }
+               if (typeof window.eoUpdateStepper === 'function') {
+                  window.eoUpdateStepper(ws);
+               }
                $('.nav-link').removeClass('active');
                $('.tab-pane').removeClass('show active');
-               $(`.step${step}`).addClass('show active');
-               $(`.navstep${step}`).addClass('active');
+               $(`.step${ws}`).addClass('show active');
+               $(`.navstep${ws}`).addClass('active');
                setTimeout(() => {
-                  $(`.step${step}`).on('click', function(event) {
-                     if (event.target.closest('.nav-item .active')) {
-                           setSlider(event.target.closest('.nav-item'));
-                     }
-                  });
-                  $('.step4Icon').show();
-                  loadStep(response.step);             
-               }, 1000);
+                  loadStep(ws);             
+               }, 600);
                @else
                if (response.success) (typeof sendmsg === 'function' ? sendmsg('success', response.message) : alert(response.message));
                   setTimeout(() => {

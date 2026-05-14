@@ -20,7 +20,11 @@
 <body>
 <div class="layout-wrapper layout-navbar-full layout-horizontal layout-without-menu">
         <div class="layout-container">
-            @include('layouts.hospital.empanelment.header')
+            @hasSection('empanelment_nav_replace')
+                @yield('empanelment_nav_replace')
+            @else
+                @include('layouts.hospital.empanelment.header')
+            @endif
             <div class="layout-page">
                 <div class="content-wrapper">
 

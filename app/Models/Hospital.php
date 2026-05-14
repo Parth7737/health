@@ -6,7 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class Hospital extends Model
 {
-    protected $fillable = ['uuid', 'user_id','code','parent_id','name','type_id','email','phone','address','city','pincode','landmark','is_approve','status','reject_reason','hospital_type','image'];
+    protected $fillable = [
+        'uuid', 'user_id', 'code', 'parent_id', 'name', 'type_id', 'email', 'phone', 'address', 'city', 'pincode',
+        'landmark', 'onboarding_meta', 'is_approve', 'status', 'reject_reason', 'hospital_type', 'image',
+    ];
+
+    protected $casts = [
+        'onboarding_meta' => 'array',
+    ];
 
     public function scopeStatus($query, $status)
     {

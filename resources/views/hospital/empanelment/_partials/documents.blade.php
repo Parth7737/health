@@ -1,6 +1,17 @@
-@php $documents = App\CentralLogics\Helpers::getCommanData('EmpanelmentDocument'); @endphp
-@if(sizeof($documents) > 0)
-<div  class="table-responsive mt-5 text-nowrap">
+@php
+    $hide_document_form = $hide_document_form ?? false;
+    $hide_declaration = $hide_declaration ?? false;
+    $documents = App\CentralLogics\Helpers::getCommanData('EmpanelmentDocument');
+    if (!isset($allStepCompleted) && isset($uuid)) {
+        $allStepCompleted = \App\CentralLogics\Helpers::checkAllStepIsCompleteOrNot($uuid);
+    }
+@endphp
+@if (!$hide_document_form && sizeof($documents) > 0)
+<div class="eo-panel-title"><i class="fas fa-folder-open" style="color:#ffca28"></i> Document upload</div>
+<p class="eo-panel-sub">Upload PDFs for each required item. Mandatory rows are marked with <span class="eo-req">*</span>.</p>
+
+<div class="eo-table-panel">
+<div  class="table-responsive mt-0 text-nowrap">
     <form id="documentsForm">
         <table class="table table-bordered">
             <thead class="table-dark">
@@ -25,7 +36,7 @@
                 @endphp
                 <tr>
                     <td> {{$loop->iteration}}</td>
-                    <td style="text-wrap: auto;">{{$value->name}} @if($value->is_required) <span class="text-danger">*<span> @endif</td>
+                    <td style="text-wrap: auto;">{{$value->name}} @if($value->is_required) <span class="text-danger">*</span> @endif</td>
                     <td>
                         <div class="file-upload-section docerror">
                             <div class="file-upload-wrapper">
@@ -79,8 +90,24 @@
         @endif
     </form>
 </div>
+</div>
 
+<div class="eo-step-nav">
+    <button type="button" class="eo-tb-btn" onclick="var p=window.eoWizardPrev && window.eoWizardPrev[5]; if(p) loadStep(p); else loadStep(4);"><i class="fas fa-arrow-left"></i> Back</button>
+    <span class="eo-nav-info">Save uploads here before final declaration and submit.</span>
+    <span></span>
+</div>
+
+@elseif(!$hide_document_form)
+<div class="eo-panel-title"><i class="fas fa-folder-open" style="color:#ffca28"></i> Documents</div>
+<p class="eo-panel-sub">No empanelment documents are configured. Complete other steps; contact support if you need help.</p>
+<div class="eo-step-nav">
+    <button type="button" class="eo-tb-btn" onclick="var p=window.eoWizardPrev && window.eoWizardPrev[5]; if(p) loadStep(p); else loadStep(4);"><i class="fas fa-arrow-left"></i> Back</button>
+    <span class="eo-nav-info">Return to the previous step when needed.</span>
+    <span></span>
+</div>
 @endif
+@if(!$hide_declaration)
 @if($allStepCompleted)
     @php
         $finalsave = true
@@ -92,7 +119,7 @@
 @endif
 
 @if((@$hospital->status == "Draft" || @$hospital->status == "Rejected"))
-    <div class="card mb-6 mt-3 p-0 finalsave @if($finalsave) @else d-none @endif">
+    <div class="card eo-card mb-6 mt-3 p-0 finalsave @if($finalsave) @else d-none @endif">
         @if(empty($is_admin_edit))
             <div class="card-header">
                 <label for="is_accept"><input type="checkbox" name="is_accept" id="is_accept">&nbsp;&nbsp;<strong>I hereby declare that all information provided in this empanelment form is true, accurate, and complete to the best of my knowledge. I understand that any false or missing information may lead to rejection of this application or termination of empanelment, and may be subject to legal consequenses as per applicable laws and regulations.</strong></label>
@@ -112,16 +139,17 @@
         </div>
     </div>
 @elseif(empty($is_admin_edit) && @$hospital->status != "Approved" && @$hospital->status != "Rejected")
-    <div class="card mb-6 mt-3 finalsave p-0 @if($finalsave) @else d-none @endif">
+    <div class="card eo-card mb-6 mt-3 finalsave p-0 @if($finalsave) @else d-none @endif">
         <div class="card-header">
         <label for="is_accept">Application is submitted!!</label>
         </div>
     
     </div>
 @endif
+@endif
 
 <script>
-
+@if(!$hide_declaration)
 	$(document).ready(function() {
 
         $(".prevsubmit").on('click', function() {
@@ -205,15 +233,15 @@
                     title: "Confirm Submission?",
                     text: 'Are you sure you want to Approve this hospital?',
                     icon: "warning",
-                    showCancelButton: true, // Replaces the 'buttons' structure
+                    showCancelButton: true,
                     cancelButtonText: "No, cancel!",
                     confirmButtonText: "Yes!",
                     customClass: {
-                        cancelButton: "btn btn-danger",  // Apply custom class for cancel button
-                        confirmButton: "btn btn-success" // Apply custom class for confirm button
+                        cancelButton: "btn btn-danger",
+                        confirmButton: "btn btn-success"
                     }
                 }).then((result) => {
-                    if (result.isConfirmed) {  // Use result.isConfirmed instead of 'willDelete'
+                    if (result.isConfirmed) {
                         ldrshow();
                         $.ajax({
                             url: '{{ route("admin.hospitals.hospitalSubmit", $hospital->id) }}',
@@ -256,7 +284,8 @@
         });
 
 	});
-
+@endif
+@if(!$hide_document_form)
    $('.documentsFormSave').click(function () {
       ldrshow();
       $('.error').remove();
@@ -281,7 +310,9 @@
                     if(response.is_complete){
                         $('.finalsave').removeClass('d-none');
                     }
-                    loadStep(6);
+                    var ws = response.wizard_step || response.step || 5;
+                    if (typeof window.eoUpdateStepper === 'function') window.eoUpdateStepper(ws);
+                    loadStep(ws);
                 @else
                     if (response.success) (typeof sendmsg === 'function' ? sendmsg('success', response.message) : alert(response.message));
                     
@@ -297,8 +328,6 @@
             ldrhide();
             $('.error').remove();
             
-            // $('#specialitiesform input[type="file"]').val('');
-            // $('.remove-file-btn').click();
             if (xhr.status === 422) { 
                let errors = xhr.responseJSON.errors;
                for (let field in errors) {
@@ -310,4 +339,5 @@
          }
       });
    });
+@endif
 </script>
