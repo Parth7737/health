@@ -48,7 +48,7 @@
                         @elseif($item->label === 'Leave Deduction' && $leaveLegacy !== null)
                             <br><small style="opacity:.75;font-weight:400;display:block;margin-top:2px;">Leave days: {{ number_format($leaveLegacy, 1) }}</small>
                         @elseif($item->label === 'Attendance Deduction' && $attUnits !== null)
-                            <br><small style="opacity:.75;font-weight:400;display:block;margin-top:2px;">Units (month): {{ number_format($attUnits, 2) }}@if($attAbsentFull !== null) · Full absent: {{ number_format($attAbsentFull, 1) }}@endif@if($attAbsentHalf !== null && $attAbsentHalf > 0) · Half absent (units): {{ number_format($attAbsentHalf, 2) }}@endif@if($attPresentHalf !== null && $attPresentHalf > 0) · Half present (units): {{ number_format($attPresentHalf, 2) }}@endif</small>
+                            <br><small style="opacity:.75;font-weight:400;display:block;margin-top:2px;">Units (month): {{ number_format($attUnits, 2) }} @if($attAbsentFull !== null) · Full absent: {{ number_format($attAbsentFull, 1) }}@endif @if($attAbsentHalf !== null && $attAbsentHalf > 0) · Half absent (units): {{ number_format($attAbsentHalf, 2) }}@endif @if($attPresentHalf !== null && $attPresentHalf > 0) · Half present (units): {{ number_format($attPresentHalf, 2) }} @endif </small>
                         @endif
                     </span>
                     <span>INR {{ number_format($item->amount, 2) }}</span>
