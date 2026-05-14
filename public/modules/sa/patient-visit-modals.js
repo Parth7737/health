@@ -1700,6 +1700,8 @@
         /* Do not focus bed after reload — user may be Tabbing through visit-type radios (IPD → Emergency → Daycare). */
         window.PatientRegistrationForm?.initSelect2?.(['#reg_bed'], { force: true });
         window.PatientRegistrationForm?.displayBedDetails?.();
+        window.PatientRegistrationForm?.relocatePaymentControls?.();
+        window.PatientRegistrationForm?.updateGovPaymentAvailability?.();
       }
     }
 

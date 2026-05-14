@@ -39,6 +39,28 @@ const tabDataLoaded = {
   discharged: false,
 };
 
+function pmExtractErrorMessage(data) {
+  if (!data || typeof data !== 'object') {
+    return '';
+  }
+  if (typeof data.msg === 'string' && data.msg.trim()) {
+    return data.msg.trim();
+  }
+  if (typeof data.message === 'string' && data.message.trim()) {
+    return data.message.trim();
+  }
+  if (Array.isArray(data.errors) && data.errors.length > 0) {
+    const item = data.errors[0];
+    if (item && typeof item.message === 'string' && item.message.trim()) {
+      return item.message.trim();
+    }
+  }
+  if (typeof data.error === 'string' && data.error.trim()) {
+    return data.error.trim();
+  }
+  return '';
+}
+
 async function pmFetch(url, options = {}) {
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
     || window.Laravel?.csrfToken
@@ -67,7 +89,7 @@ async function pmFetch(url, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const errorMessage = data?.message || data?.errors?.[0]?.message || 'Request failed';
+    const errorMessage = pmExtractErrorMessage(data) || 'Request failed';
     const error = new Error(errorMessage);
     error.status = response.status;
     error.responseData = data;
@@ -917,6 +939,7 @@ function pmGoToTabPage(tabKey, page) {
 }
 
 window.pmFetch = pmFetch;
+window.pmExtractErrorMessage = pmExtractErrorMessage;
 window.pmNotify = notify;
 window.pmRenderOptions = renderOptions;
 window.pmConvertSlotTo24Hour = convertSlotTo24Hour;

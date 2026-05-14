@@ -40,6 +40,33 @@
         $stayDayText = 'Day ' . max(1, $stayDays);
     }
 
+    $p360HasSchemePayer = (bool) ($patient360HasSchemePayer ?? false);
+
+    $p360PayerBadgeText = null;
+    if ($isIpdActive && ! empty($activeIpdAllocation)) {
+        $lbl = trim((string) data_get($activeIpdAllocation, 'payment_mode_label', ''));
+        if ($lbl !== '' && strcasecmp($lbl, 'Cash') !== 0) {
+            $p360PayerBadgeText = $lbl;
+        } elseif (filled(data_get($activeIpdAllocation, 'tpa_id'))) {
+            $tpaNm = trim((string) data_get($activeIpdAllocation, 'tpa.name', ''));
+            $p360PayerBadgeText = $tpaNm !== '' ? ('Payor: ' . $tpaNm) : 'TPA / Insurance';
+        } elseif ($p360HasSchemePayer) {
+            $sn = trim((string) data_get($activeIpdAllocation, 'schemeType.name', ''));
+            $p360PayerBadgeText = $sn !== '' ? ('Payor: ' . $sn) : 'Government scheme';
+        }
+    }
+
+    $p360OpdPayerBadgeText = null;
+    if (! $isIpdActive && ! empty($latestOpdVisit)) {
+        $om = trim((string) data_get($latestOpdVisit, 'payment_mode', ''));
+        if ($om !== '' && strcasecmp($om, 'Cash') !== 0) {
+            $p360OpdPayerBadgeText = $om;
+        } elseif (filled(data_get($latestOpdVisit, 'tpa_id'))) {
+            $tpaNm = trim((string) data_get($latestOpdVisit, 'tpa.name', ''));
+            $p360OpdPayerBadgeText = $tpaNm !== '' ? ('Payor: ' . $tpaNm) : 'TPA / Insurance';
+        }
+    }
+
     $bpText = (filled(data_get($contextRecord, 'systolic_bp')) && filled(data_get($contextRecord, 'diastolic_bp')))
         ? data_get($contextRecord, 'systolic_bp') . '/' . data_get($contextRecord, 'diastolic_bp')
         : '-';
@@ -113,10 +140,16 @@
                         <span class="badge badge-primary p360-badge-chip" title="{{ e($activeIpdAllocation->admission_no ?: '') }}">Adm: {{ \Illuminate\Support\Str::limit($activeIpdAllocation->admission_no ?: '—', 20, '…') }}</span>
                         <span class="badge {{ $p360VisitStatusBadgeClass }} p360-badge-chip">Status: {{ $p360VisitStatusLabel }}</span>
                         <span class="badge badge-info p360-badge-chip">LOS: {{ $stayDayText }}</span>
+                        @if(filled($p360PayerBadgeText))
+                            <span class="badge badge-secondary p360-badge-chip" title="Payment / payor">{{ $p360PayerBadgeText }}</span>
+                        @endif
                     @else
                         <span class="badge badge-primary p360-badge-chip">OPD — Visit {{ data_get($latestOpdVisit, 'case_no') ?: '—' }}</span>
                         <span class="badge badge-warning p360-badge-chip">Token: {{ filled(data_get($latestOpdVisit, 'token_no')) ? \App\Services\OpdTokenNoService::formatForDisplay(data_get($latestOpdVisit, 'token_no')) : '—' }}</span>
                         <span class="badge {{ $p360VisitStatusBadgeClass }} p360-badge-chip">Status: {{ $p360VisitStatusLabel }}</span>
+                        @if(filled($p360OpdPayerBadgeText))
+                            <span class="badge badge-secondary p360-badge-chip" title="Payment / payor">{{ $p360OpdPayerBadgeText }}</span>
+                        @endif
                     @endif
                 </div>
                 <div class="p360-banner-actions">
@@ -142,6 +175,7 @@
                     >+ New Order</button>
                     @if($isIpdActive && $activeIpdAllocation)
                         @can('edit-patient-management')
+                            @if($p360HasSchemePayer)
                             <button
                                 type="button"
                                 class="btn btn-primary btn-sm p360-treatment-plan-btn"
@@ -149,6 +183,7 @@
                                 data-bs-target="#p360TreatmentPlanModal"
                                 aria-haspopup="dialog"
                             >Treatment Plan</button>
+                            @endif
                             <button
                                 type="button"
                                 class="btn btn-warning btn-sm p360-transfer-ipd-btn"
@@ -193,7 +228,7 @@
                 <button class="tab-btn active" data-tab="tabTimeline" onclick="switchEMRTab('tabTimeline',this)">📅 Timeline</button>
                 <button class="tab-btn" data-tab="tabProfile" onclick="switchEMRTab('tabProfile',this)">🧾 Details</button>
                 <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">📋 Orders</button>
-                @if($isIpdActive && $activeIpdAllocation)
+                @if($isIpdActive && $activeIpdAllocation && $p360HasSchemePayer)
                     <button class="tab-btn" data-tab="tabProcedure" onclick="switchEMRTab('tabProcedure',this)">📋 Treatment Procedures</button>
                 @endif
                 <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">💊 Medications</button>
@@ -550,7 +585,7 @@
                 </div>
             </div>
 
-            @if($isIpdActive && $activeIpdAllocation)
+            @if($isIpdActive && $activeIpdAllocation && $p360HasSchemePayer)
             <div class="tab-pane" id="tabProcedure">
                 <div class="card">
                     <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -910,6 +945,7 @@
     </div>
 </div>
 
+@if($p360HasSchemePayer)
 {{-- Patient 360 — Treatment Plan modal (masters + SHA-style show/hide) --}}
 <div class="modal fade" id="p360TreatmentPlanModal" tabindex="-1" aria-labelledby="p360TreatmentPlanModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
@@ -1019,6 +1055,7 @@
         </div>
     </div>
 </div>
+@endif
 
 {{-- Patient 360 — New Order Modal --}}
 <div class="modal fade" id="p360Modal" tabindex="-1" aria-hidden="true">
@@ -1031,7 +1068,8 @@
             <div class="modal-body" id="p360ModalBody">
                 <div class="p-4 text-center text-muted">Loading...</div>
             </div>
-            <div class="modal-footer p360-modal-footer">
+            <div class="modal-footer p360-modal-footer d-flex flex-wrap align-items-center gap-2 justify-content-end">
+                <button type="button" id="p360SaveAndCompleteBtn" class="btn btn-primary px-5 d-none">Save and Complete</button>
                 <button type="button" id="p360SaveBtn" class="btn btn-primary px-5 d-none" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Alt+S or Ctrl+S to save · Enter when Save is focused" aria-keyshortcuts="Alt+S Ctrl+S">Save</button>
             </div>
         </div>
@@ -1132,6 +1170,10 @@ window.Patient360Config = {
         }
     },
     csrf: @json(csrf_token()),
+    opdVisitComplete: {
+        eligible: @json(!empty($patient360OpdCanCompleteVisit)),
+        url: @json($patient360OpdMarkCompletedUrl ?? ''),
+    },
     ipdAllocationId: @json(($isIpdActive && $activeIpdAllocation) ? $activeIpdAllocation->id : null),
     treatmentPlan: {
         procedures: @json(route('hospital.patient-management.treatment-plan.procedures')),
@@ -1157,6 +1199,8 @@ window.Patient360Config = {
     }
 };
 </script>
+@if($p360HasSchemePayer)
 <script src="{{ asset('public/modules/sa/patient-360-treatment-plan.js') }}"></script>
+@endif
 <script src="{{ asset('public/modules/sa/patient-360.js') }}"></script>
 @endpush

@@ -8,6 +8,10 @@
     5: { paneId: 'regPane5', stepId: 'step5', fields: [] },
   };
 
+  const GOVERNMENT_PAYMENT_LABELS = new Set([
+    'State Health Scheme / AB-PMJAY (Ayushman Bharat)',
+  ]);
+
   const FIELD_TO_STEP = {
     reg_name: 1,
     reg_dob: 1,
@@ -26,6 +30,11 @@
     reg_complaint: 4,
     reg_visit_type: 4,
     reg_chronic_conditions: 3,
+    reg_gov_scheme_id: 4,
+    reg_gov_card_search: 4,
+    reg_gov_otp: 4,
+    reg_gov_kyc_group: 4,
+    reg_scheme_newborn: 1,
   };
 
   const SERVER_FIELD_MAP = {
@@ -74,6 +83,8 @@
     bed_id: 'reg_bed',
     admission_reason: 'reg_admission_reason',
     casualty: 'reg_visit_type',
+    scheme_beneficiary_card_id: 'reg_gov_card_search',
+    scheme_type_id: 'reg_gov_scheme_id',
   };
 
   class PatientRegistrationFormController {
@@ -89,6 +100,9 @@
       this._focusTrapHandler = (event) => this.handleModalFocusTrap(event);
       this._documentFocusContainHandler = (event) => this.handleDocumentFocusContain(event);
       this._documentFocusContainBound = false;
+      this.govBeneficiaryLocked = false;
+      /** After Send OTP succeeds, show the OTP input (hidden until then for Aadhaar OTP flow). */
+      this.govOtpInputRevealed = false;
     }
 
     init({ routes, boot }) {
@@ -168,6 +182,7 @@
       document.getElementById('reg_bed')?.addEventListener('change', () => {
         this.displayBedDetails();
         this.applyVisitDateVisibility(this.getVisitType());
+        this.updateGovPaymentAvailability();
       });
 
       if (window.jQuery) {
@@ -185,6 +200,14 @@
         jQuery(document).on('select2:select select2:clear', '#reg_bed', () => {
           this.displayBedDetails();
           this.applyVisitDateVisibility(this.getVisitType());
+          this.updateGovPaymentAvailability();
+        });
+        jQuery(document).on('select2:select select2:clear', '#reg_payment', () => {
+          this.clearFieldError('reg_payment');
+          if (!this.isGovSchemePaymentLabel(document.getElementById('reg_payment')?.value)) {
+            this.resetGovSchemeState();
+          }
+          this.updateGovPaymentAvailability();
         });
 
         /* Select2 + dropdownParent(modal) often leaves focus on <body> after picking an option; restore for keyboard UX.
@@ -225,6 +248,58 @@
           this.clearFieldError('reg_visit_type');
           this.updateVisitType(radio.value);
         });
+      });
+
+      document.getElementById('reg_payment')?.addEventListener('change', () => {
+        this.clearFieldError('reg_payment');
+        if (!this.isGovSchemePaymentLabel(document.getElementById('reg_payment')?.value)) {
+          this.resetGovSchemeState();
+        }
+        this.updateGovPaymentAvailability();
+      });
+      document.getElementById('reg_gov_scheme_id')?.addEventListener('change', () => {
+        if (this.govBeneficiaryLocked) {
+          return;
+        }
+        this.clearFieldError('reg_gov_scheme_id');
+        const lt = document.getElementById('reg_scheme_lookup_token');
+        const at = document.getElementById('reg_scheme_auth_token');
+        if (lt) lt.value = '';
+        if (at) at.value = '';
+        this.preloadGovBeneficiarySearchFromStep1();
+        this.syncGovOtpSendButton();
+      });
+      document.getElementById('reg_gov_search_btn')?.addEventListener('click', () => void this.runGovBeneficiarySearch());
+      document.getElementById('reg_gov_confirm_auth_btn')?.addEventListener('click', () => void this.runGovConfirmAuth());
+      document.getElementById('reg_gov_send_otp_btn')?.addEventListener('click', () => void this.sendGovSchemeOtp());
+      document.getElementById('reg_gov_clear_btn')?.addEventListener('click', () => {
+        this.resetGovSchemeState();
+        sendmsg('info', 'Beneficiary cleared — you can search again.');
+      });
+      document.getElementById('reg_gov_card_search')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          void this.runGovBeneficiarySearch();
+        }
+      });
+      document.getElementById('reg_gov_otp')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          void this.runGovConfirmAuth();
+        }
+      });
+      document.querySelectorAll('#regGovSchemeBlock input[name="reg_gov_kyc"]').forEach((r) => {
+        r.addEventListener('change', () => this.handleGovKycChange());
+      });
+      document.getElementById('reg_ab')?.addEventListener('input', () => {
+        if (this.isGovSchemePanelVisible()) {
+          this.preloadGovBeneficiarySearchFromStep1();
+        }
+      });
+      document.getElementById('reg_aadhaar')?.addEventListener('input', () => {
+        if (this.isGovSchemePanelVisible()) {
+          this.preloadGovBeneficiarySearchFromStep1();
+        }
       });
 
       this.elements.submitBtn?.addEventListener('click', (event) => {
@@ -287,6 +362,7 @@
       this.resetWizardState();
       this.syncVisibleSelect2();
       this.updateVisitType(this.getVisitType(), { syncSlots: false });
+      this.updateGovPaymentAvailability();
       this.focusRegistrationName();
     }
 
@@ -391,12 +467,14 @@
           this.elements.allergyChips.innerHTML = '';
         }
         this.renderStaticOptions();
+        this.resetGovSchemeState();
       }
       this.ensureAppointmentDate();
       this.resetSummary();
       this.resetWizardState();
       this.updateVisitType(this.getVisitType(), { syncSlots: false });
       this.syncVisibleSelect2();
+      this.updateGovPaymentAvailability();
     }
 
     renderStaticOptions() {
@@ -464,6 +542,9 @@
       this.elements.nextBtn.style.display = stepNumber < STEP_ORDER.length ? '' : 'none';
       this.elements.submitBtn.style.display = stepNumber === STEP_ORDER.length ? '' : 'none';
       this.syncVisibleSelect2();
+      if (stepNumber === 4) {
+        this.updateGovPaymentAvailability();
+      }
       if (stepNumber === STEP_ORDER.length) {
         this.prepareStepFivePreview();
       }
@@ -533,6 +614,38 @@
           document.getElementById('reg_bed')?.focus();
           return false;
         }
+        if (this.isGovSchemePanelVisible()) {
+          if (!document.getElementById('reg_gov_scheme_id')?.value) {
+            this.setFieldError('reg_gov_scheme_id', 'Select a scheme.');
+            document.getElementById('reg_gov_scheme_id')?.focus();
+            return false;
+          }
+          const cardSearch = String(document.getElementById('reg_gov_card_search')?.value || '').trim();
+          if (cardSearch.length < 4) {
+            this.setFieldError('reg_gov_card_search', 'Enter at least 4 characters to search the beneficiary.');
+            document.getElementById('reg_gov_card_search')?.focus();
+            return false;
+          }
+          if (!document.getElementById('reg_scheme_lookup_token')?.value) {
+            this.setFieldError('reg_gov_card_search', 'Search and load the beneficiary before continuing.');
+            document.getElementById('reg_gov_card_search')?.focus();
+            return false;
+          }
+          if (!document.getElementById('reg_scheme_auth_token')?.value) {
+            this.setFieldError('reg_gov_kyc_group', 'Complete beneficiary authentication (Confirm authentication).');
+            document.getElementById('reg_gov_confirm_auth_btn')?.focus();
+            return false;
+          }
+          const kyc = document.querySelector('#regGovSchemeBlock input[name="reg_gov_kyc"]:checked')?.value;
+          if (kyc === 'aadhar_otp') {
+            const otp = String(document.getElementById('reg_gov_otp')?.value || '').trim();
+            if (!/^\d{6}$/.test(otp)) {
+              this.setFieldError('reg_gov_otp', 'Enter the 6-digit OTP used for authentication.');
+              document.getElementById('reg_gov_otp')?.focus();
+              return false;
+            }
+          }
+        }
       }
 
       return true;
@@ -546,6 +659,9 @@
         reg_phone: 'Mobile number required.',
         reg_address: 'Address required.',
         reg_dept: 'Department required.',
+        reg_gov_scheme_id: 'Select a government scheme.',
+        reg_gov_card_search: 'Enter beneficiary ID and search.',
+        reg_gov_otp: 'Enter the 6-digit OTP.',
       };
       return messages[fieldId] || 'Required field missing.';
     }
@@ -587,6 +703,8 @@
     resolveErrorGroup(fieldId, field) {
       if (fieldId === 'reg_visit_type') return document.getElementById('reg_visit_type');
       if (fieldId === 'reg_chronic_conditions') return document.getElementById('reg_chronic_conditions');
+      if (fieldId === 'reg_gov_kyc_group') return document.getElementById('reg_gov_kyc_group');
+      if (fieldId === 'reg_gov_otp') return document.getElementById('reg_gov_otp')?.closest('.form-group') || null;
       return field?.closest('.form-group') || null;
     }
 
@@ -625,6 +743,397 @@
         return null;
       }
       return text;
+    }
+
+    isGovSchemePaymentLabel(paymentLabel) {
+      return GOVERNMENT_PAYMENT_LABELS.has(String(paymentLabel || '').trim());
+    }
+
+    isGovSchemeBedContext() {
+      const visitType = this.getVisitType();
+      const bed = String(document.getElementById('reg_bed')?.value || '').trim();
+      if (visitType === 'IPD') {
+        return !!bed;
+      }
+      if (visitType === 'Emergency') {
+        return !!bed;
+      }
+      return false;
+    }
+
+    isGovSchemePanelVisible() {
+      const pay = document.getElementById('reg_payment')?.value || '';
+      return this.isGovSchemePaymentLabel(pay) && this.isGovSchemeBedContext();
+    }
+
+    resetGovSchemeState() {
+      this.govBeneficiaryLocked = false;
+      const lookup = document.getElementById('reg_scheme_lookup_token');
+      const auth = document.getElementById('reg_scheme_auth_token');
+      if (lookup) lookup.value = '';
+      if (auth) auth.value = '';
+      const res = document.getElementById('reg_gov_result');
+      if (res) {
+        res.style.display = 'none';
+        res.innerHTML = '';
+      }
+      const kycGroup = document.getElementById('reg_gov_kyc_group');
+      if (kycGroup) kycGroup.style.display = 'none';
+      this.govOtpInputRevealed = false;
+      this.syncGovOtpRowVisibility();
+      const otp = document.getElementById('reg_gov_otp');
+      if (otp) otp.value = '';
+      const without = document.querySelector('#regGovSchemeBlock input[name="reg_gov_kyc"][value="without_auth"]');
+      if (without) without.checked = true;
+      this.applyGovBeneficiaryLockedUi();
+      this.syncGovOtpSendButton();
+    }
+
+    setGovBeneficiaryLocked(locked) {
+      this.govBeneficiaryLocked = !!locked;
+      this.applyGovBeneficiaryLockedUi();
+    }
+
+    applyGovBeneficiaryLockedUi() {
+      const locked = this.govBeneficiaryLocked;
+      const search = document.getElementById('reg_gov_card_search');
+      const btnSearch = document.getElementById('reg_gov_search_btn');
+      const scheme = document.getElementById('reg_gov_scheme_id');
+      const radios = document.querySelectorAll('#regGovSchemeBlock input[name="reg_gov_kyc"]');
+      const confirmB = document.getElementById('reg_gov_confirm_auth_btn');
+      const clearB = document.getElementById('reg_gov_clear_btn');
+      if (search) {
+        search.readOnly = locked;
+      }
+      if (btnSearch) btnSearch.disabled = locked;
+      if (scheme) scheme.disabled = locked;
+      radios.forEach((r) => {
+        r.disabled = locked;
+      });
+      if (confirmB) confirmB.disabled = locked;
+      if (clearB) clearB.style.display = locked ? '' : 'none';
+      const otpField = document.getElementById('reg_gov_otp');
+      if (otpField) otpField.readOnly = locked;
+      this.syncGovOtpSendButton();
+    }
+
+    syncGovOtpSendButton() {
+      const sendOtp = document.getElementById('reg_gov_send_otp_btn');
+      if (!sendOtp) {
+        return;
+      }
+      const kyc = document.querySelector('#regGovSchemeBlock input[name="reg_gov_kyc"]:checked')?.value;
+      const hasLookup = !!document.getElementById('reg_scheme_lookup_token')?.value;
+      const show = kyc === 'aadhar_otp' && hasLookup && this.isGovSchemePanelVisible();
+      sendOtp.style.display = show ? '' : 'none';
+      sendOtp.disabled = this.govBeneficiaryLocked || !show;
+      this.syncGovOtpRowVisibility();
+    }
+
+    syncGovOtpRowVisibility() {
+      const row = document.getElementById('reg_gov_otp_row');
+      if (!row) {
+        return;
+      }
+      const kyc = document.querySelector('#regGovSchemeBlock input[name="reg_gov_kyc"]:checked')?.value;
+      row.style.display = kyc === 'aadhar_otp' && this.govOtpInputRevealed ? '' : 'none';
+    }
+
+    relocatePaymentControls() {
+      const opd = document.getElementById('regPaymentMountOpd');
+      const ipd = document.getElementById('regPaymentMountIpd');
+      if (!opd || !ipd) {
+        return;
+      }
+      const type = this.getVisitType();
+      const toIpd = type === 'IPD' || type === 'Emergency';
+      const target = toIpd ? ipd : opd;
+      const source = toIpd ? opd : ipd;
+      while (source.firstChild) {
+        target.appendChild(source.firstChild);
+      }
+    }
+
+    getRegistrationFooterFocusablesInTabOrder() {
+      const out = [];
+      const pushIf = (btn) => {
+        if (!btn || !(btn instanceof HTMLElement)) {
+          return;
+        }
+        if (btn.style.display === 'none') {
+          return;
+        }
+        if (btn.disabled) {
+          return;
+        }
+        if (!this.isFocusableField(btn)) {
+          return;
+        }
+        out.push(btn);
+      };
+      pushIf(this.elements.nextBtn);
+      pushIf(document.getElementById('regModalCancelBtn'));
+      pushIf(this.elements.prevBtn);
+      return out;
+    }
+
+    async sendGovSchemeOtp() {
+      if (this.govBeneficiaryLocked) {
+        return;
+      }
+      const schemeId = document.getElementById('reg_gov_scheme_id')?.value;
+      const search = String(document.getElementById('reg_gov_card_search')?.value || '').trim();
+      const lookupToken = document.getElementById('reg_scheme_lookup_token')?.value;
+      const kyc = document.querySelector('#regGovSchemeBlock input[name="reg_gov_kyc"]:checked')?.value;
+      if (kyc !== 'aadhar_otp') {
+        return;
+      }
+      if (!lookupToken) {
+        sendmsg('error', 'Search the beneficiary before sending OTP.');
+        return;
+      }
+      if (!this.routes.schemeBeneficiarySendOtp) {
+        sendmsg('error', 'Send OTP is not configured.');
+        return;
+      }
+      try {
+        const data = await window.pmFetch(this.routes.schemeBeneficiarySendOtp, {
+          method: 'POST',
+          body: {
+            scheme_type_id: schemeId,
+            beneficiary_search: search,
+            lookup_token: lookupToken,
+            kyc_type: 'aadhar_otp',
+          },
+        });
+        if (!data?.success) {
+          sendmsg('error', data?.msg || 'Could not send OTP.');
+          return;
+        }
+        this.govOtpInputRevealed = true;
+        this.syncGovOtpRowVisibility();
+        const otpEl = document.getElementById('reg_gov_otp');
+        if (otpEl) {
+          otpEl.value = '';
+          window.requestAnimationFrame(() => otpEl.focus());
+        }
+        const stub = data.test_otp != null && data.test_otp !== '' ? String(data.test_otp) : '';
+        const base = data.message || 'OTP sent.';
+        sendmsg('success', stub ? `${base} Test OTP: ${stub}` : base);
+      } catch (error) {
+        const fromBody =
+          error.responseData && typeof window.pmExtractErrorMessage === 'function'
+            ? window.pmExtractErrorMessage(error.responseData)
+            : '';
+        sendmsg('error', fromBody || error.message || 'Send OTP failed.');
+      }
+    }
+
+    preloadGovBeneficiarySearchFromStep1() {
+      if (this.govBeneficiaryLocked) {
+        return;
+      }
+      const searchEl = document.getElementById('reg_gov_card_search');
+      if (!searchEl || !this.isGovSchemePanelVisible()) {
+        return;
+      }
+      const ab = String(document.getElementById('reg_ab')?.value || '').trim();
+      if (ab) {
+        searchEl.value = ab;
+        return;
+      }
+      const raw = String(document.getElementById('reg_aadhaar')?.value || '').replace(/\D/g, '');
+      if (raw.length >= 4) {
+        searchEl.value = raw;
+      }
+    }
+
+    updateGovPaymentAvailability() {
+      const paymentSelect = document.getElementById('reg_payment');
+      if (!paymentSelect) {
+        return;
+      }
+      const allowGov = this.isGovSchemeBedContext();
+      const previous = paymentSelect.value;
+      Array.from(paymentSelect.options).forEach((opt) => {
+        const label = String(opt.text || '').trim();
+        if (!GOVERNMENT_PAYMENT_LABELS.has(label)) {
+          opt.disabled = false;
+          return;
+        }
+        opt.disabled = !allowGov;
+      });
+      if (!allowGov && GOVERNMENT_PAYMENT_LABELS.has(String(previous || '').trim())) {
+        paymentSelect.value = 'Cash';
+        this.resetGovSchemeState();
+      }
+      this.toggleGovSchemePanel();
+    }
+
+    toggleGovSchemePanel() {
+      const block = document.getElementById('regGovSchemeBlock');
+      if (!block) {
+        return;
+      }
+      const show = this.isGovSchemePanelVisible();
+      block.style.display = show ? 'block' : 'none';
+      if (show) {
+        this.preloadGovBeneficiarySearchFromStep1();
+      } else if (!this.isGovSchemePaymentLabel(document.getElementById('reg_payment')?.value || '')) {
+        this.resetGovSchemeState();
+      }
+      this.syncGovOtpSendButton();
+    }
+
+    handleGovKycChange() {
+      if (this.govBeneficiaryLocked) {
+        return;
+      }
+      this.clearFieldError('reg_gov_kyc_group');
+      const auth = document.getElementById('reg_scheme_auth_token');
+      if (auth) auth.value = '';
+      this.govOtpInputRevealed = false;
+      const otpEl = document.getElementById('reg_gov_otp');
+      if (otpEl) {
+        otpEl.value = '';
+      }
+      this.syncGovOtpRowVisibility();
+      this.syncGovOtpSendButton();
+    }
+
+    escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    renderGovBeneficiarySummary(b) {
+      return `<div><b>Name:</b> ${this.escapeHtml(b.name)}</div>
+        <div><b>Card / ID:</b> ${this.escapeHtml(b.card_id)}</div>
+        <div><b>Scheme:</b> ${this.escapeHtml(b.care_plan)}</div>`;
+    }
+
+    async runGovBeneficiarySearch() {
+      if (this.govBeneficiaryLocked) {
+        return;
+      }
+      this.clearFieldError('reg_gov_card_search');
+      this.clearFieldError('reg_gov_scheme_id');
+      const authEl = document.getElementById('reg_scheme_auth_token');
+      if (authEl) authEl.value = '';
+      const schemeId = document.getElementById('reg_gov_scheme_id')?.value;
+      const search = String(document.getElementById('reg_gov_card_search')?.value || '').trim();
+      if (!schemeId) {
+        this.setFieldError('reg_gov_scheme_id', 'Select a scheme first.');
+        return;
+      }
+      if (search.length < 4) {
+        this.setFieldError('reg_gov_card_search', 'Enter at least 4 characters.');
+        return;
+      }
+      if (!this.routes.schemeBeneficiaryLookup) {
+        sendmsg('error', 'Beneficiary search is not configured.');
+        return;
+      }
+      try {
+        const data = await window.pmFetch(this.routes.schemeBeneficiaryLookup, {
+          method: 'POST',
+          body: {
+            scheme_type_id: schemeId,
+            beneficiary_search: search,
+          },
+        });
+        if (!data?.success) {
+          sendmsg('error', data?.msg || 'Beneficiary not found.');
+          return;
+        }
+        const lt = document.getElementById('reg_scheme_lookup_token');
+        if (lt) lt.value = data.lookup_token || '';
+        this.govOtpInputRevealed = false;
+        const res = document.getElementById('reg_gov_result');
+        const kycGroup = document.getElementById('reg_gov_kyc_group');
+        if (res) {
+          res.style.display = 'block';
+          res.innerHTML = this.renderGovBeneficiarySummary(data.beneficiary || {});
+        }
+        if (kycGroup) kycGroup.style.display = 'block';
+        this.handleGovKycChange();
+        this.syncGovOtpSendButton();
+        sendmsg('success', 'Beneficiary loaded. Complete authentication below.');
+      } catch (error) {
+        const fromBody =
+          error.responseData && typeof window.pmExtractErrorMessage === 'function'
+            ? window.pmExtractErrorMessage(error.responseData)
+            : '';
+        sendmsg('error', fromBody || error.message || 'Search failed.');
+      }
+    }
+
+    async runGovConfirmAuth() {
+      if (this.govBeneficiaryLocked) {
+        return;
+      }
+      this.clearFieldError('reg_gov_kyc_group');
+      this.clearFieldError('reg_gov_otp');
+      const schemeId = document.getElementById('reg_gov_scheme_id')?.value;
+      const search = String(document.getElementById('reg_gov_card_search')?.value || '').trim();
+      const lookupToken = document.getElementById('reg_scheme_lookup_token')?.value;
+      const kyc = document.querySelector('#regGovSchemeBlock input[name="reg_gov_kyc"]:checked')?.value || 'without_auth';
+      if (!lookupToken) {
+        this.setFieldError('reg_gov_card_search', 'Search the beneficiary first.');
+        return;
+      }
+      let otp = '';
+      if (kyc === 'aadhar_otp') {
+        if (!this.govOtpInputRevealed) {
+          sendmsg('error', 'Send OTP first, then enter the 6-digit code.');
+          return;
+        }
+        otp = String(document.getElementById('reg_gov_otp')?.value || '').trim();
+        if (!/^\d{6}$/.test(otp)) {
+          this.setFieldError('reg_gov_otp', 'Enter the 6-digit OTP.');
+          return;
+        }
+      }
+      if (!this.routes.schemeBeneficiaryConfirmAuth) {
+        sendmsg('error', 'Authentication endpoint is not configured.');
+        return;
+      }
+      try {
+        const data = await window.pmFetch(this.routes.schemeBeneficiaryConfirmAuth, {
+          method: 'POST',
+          body: {
+            scheme_type_id: schemeId,
+            beneficiary_search: search,
+            lookup_token: lookupToken,
+            kyc_type: kyc,
+            otp: otp || null,
+          },
+        });
+        if (!data?.success) {
+          sendmsg('error', data?.msg || 'Authentication failed.');
+          return;
+        }
+        const authEl = document.getElementById('reg_scheme_auth_token');
+        if (authEl) authEl.value = data.auth_token || '';
+        this.setGovBeneficiaryLocked(true);
+        sendmsg('success', 'Beneficiary authentication recorded. You can continue to the next step.');
+      } catch (error) {
+        const fromBody =
+          error.responseData && typeof window.pmExtractErrorMessage === 'function'
+            ? window.pmExtractErrorMessage(error.responseData)
+            : '';
+        sendmsg('error', fromBody || error.message || 'Authentication failed.');
+      }
+    }
+
+    shouldPersistSchemePayload(payload) {
+      const vt = String(payload.visit_type || '');
+      const bed = String(payload.bed_id || '').trim();
+      const admit = vt === 'IPD' || (vt === 'Emergency' && bed);
+      return admit && this.isGovSchemePaymentLabel(payload.payment_mode);
     }
 
     stripStaleRegistrationTabIndex() {
@@ -734,12 +1243,41 @@
         return;
       }
 
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && this.currentStep < STEP_ORDER.length) {
+        const paneList = this.getRegistrationPaneFocusables();
+        const footerList = this.getRegistrationFooterFocusablesInTabOrder();
+
+        if (!event.shiftKey && paneList.length) {
+          const lastPane = paneList[paneList.length - 1];
+          if (active === lastPane && this.elements.nextBtn && this.elements.nextBtn.style.display !== 'none') {
+            event.preventDefault();
+            event.stopPropagation();
+            /* allow scroll: footer must stay in view; faint global :focus-visible may not apply to programmatic focus */
+            this.elements.nextBtn.focus({ preventScroll: false });
+            return;
+          }
+        }
+
+        if (footerList.length) {
+          const fIdx = footerList.indexOf(active);
+          if (fIdx !== -1) {
+            event.preventDefault();
+            event.stopPropagation();
+            const nextIdx = event.shiftKey
+              ? (fIdx - 1 + footerList.length) % footerList.length
+              : (fIdx + 1) % footerList.length;
+            footerList[nextIdx]?.focus({ preventScroll: false });
+            return;
+          }
+        }
+      }
+
       const focusables = this.getModalFocusables();
       if (!focusables.length) {
         return;
       }
 
-      const active = document.activeElement;
       const idx = active instanceof HTMLElement ? focusables.indexOf(active) : -1;
 
       if (event.shiftKey) {
@@ -939,7 +1477,9 @@
     }
 
     select2Selectors() {
-      return Array.from(this.elements.form?.querySelectorAll('select[id]') || []).map((el) => `#${el.id}`);
+      return Array.from(this.elements.form?.querySelectorAll('select[id]') || [])
+        .filter((el) => el.getAttribute('data-no-select2') !== '1')
+        .map((el) => `#${el.id}`);
     }
 
     focusSelect2Selection(selectId) {
@@ -966,6 +1506,13 @@
         if (!$field.length) {
           return;
         }
+        const el = $field[0];
+        if (el?.getAttribute('data-no-select2') === '1') {
+          if ($field.hasClass('select2-hidden-accessible')) {
+            $field.select2('destroy');
+          }
+          return;
+        }
         if ($field.hasClass('select2-hidden-accessible')) {
           if (!force) {
             return;
@@ -987,7 +1534,9 @@
         this.initSelect2(this.select2Selectors(), { force: false });
         return;
       }
-      const selectors = Array.from(activePane.querySelectorAll('select[id]')).map((select) => `#${select.id}`);
+      const selectors = Array.from(activePane.querySelectorAll('select[id]'))
+        .filter((select) => select.getAttribute('data-no-select2') !== '1')
+        .map((select) => `#${select.id}`);
       if (selectors.length) {
         this.initSelect2(selectors, { force: false });
       }
@@ -1165,6 +1714,7 @@
       const slotGroup = document.getElementById('reg_slot')?.closest('.form-group');
       const feeGroup = this.elements.feeGroup;
       if (ipdFields) ipdFields.style.display = (type === 'IPD' || type === 'Emergency') ? '' : 'none';
+      this.relocatePaymentControls();
       if (slotGroup) slotGroup.style.display = this.shouldHideAppointmentDate(type) ? 'none' : '';
       if (feeGroup) feeGroup.style.display = type === 'IPD' ? 'none' : '';
       this.applyVisitDateVisibility(type);
@@ -1176,6 +1726,7 @@
         this.loadRegistrationSlots();
       }
       this.loadRegistrationCharge();
+      this.updateGovPaymentAvailability();
     }
 
     getSelectedBedMeta() {
@@ -1279,6 +1830,21 @@
         <div class="fs-12 mb-4"><b>Bed Base Charge:</b> ${this.formatCurrency(bedMeta.baseCharge)}</div>
         <div class="fs-12 mb-4"><b>Admission Reason:</b> ${summary.admissionReason}</div>`
         : '';
+      const schemeSummaryLines = [];
+      if (this.isGovSchemePanelVisible()) {
+        schemeSummaryLines.push(
+          `<div class="fs-12 mb-4"><b>Scheme:</b> ${this.escapeHtml(this.selectedText('reg_gov_scheme_id'))}</div>`,
+        );
+        schemeSummaryLines.push(
+          `<div class="fs-12 mb-4"><b>Beneficiary search ID:</b> ${this.escapeHtml(String(document.getElementById('reg_gov_card_search')?.value || '').trim() || '—')}</div>`,
+        );
+        schemeSummaryLines.push(
+          `<div class="fs-12 mb-4"><b>Authentication:</b> ${this.escapeHtml(document.querySelector('#regGovSchemeBlock input[name="reg_gov_kyc"]:checked')?.value || '—')}</div>`,
+        );
+      }
+      if (document.getElementById('reg_scheme_newborn')?.checked) {
+        schemeSummaryLines.push('<div class="fs-12 mb-4"><b>Newborn (scheme flag):</b> Yes</div>');
+      }
       this.elements.summaryRight.innerHTML = `
         <div class="fs-13 fw-700 mb-8">Visit Details</div>
         <div class="fs-12 mb-4"><b>Visit Type:</b> ${summary.visitType}</div>
@@ -1286,6 +1852,7 @@
         <div class="fs-12 mb-4"><b>Doctor:</b> ${summary.doctor}</div>
         <div class="fs-12 mb-4"><b>Slot:</b> ${summary.slot}</div>
         <div class="fs-12 mb-4"><b>Payment Mode:</b> ${summary.paymentMode}</div>
+        ${schemeSummaryLines.join('')}
         ${chargeLines.join('')}
         ${bedLines}
         <div class="fs-12 mb-4"><b>Registration Date:</b> ${new Date().toLocaleDateString('en-IN')}</div>`;
@@ -1332,7 +1899,7 @@
 
     collectPayload() {
       const visitType = this.getVisitType();
-      return {
+      const payload = {
         title: document.getElementById('reg_title')?.value || null,
         name: document.getElementById('reg_name')?.value || null,
         date_of_birth: document.getElementById('reg_dob')?.value || null,
@@ -1378,6 +1945,17 @@
         admission_reason: document.getElementById('reg_admission_reason')?.value || null,
         casualty: visitType === 'Emergency' ? 'Yes' : 'No',
       };
+      if (this.shouldPersistSchemePayload(payload)) {
+        const kyc = document.querySelector('#regGovSchemeBlock input[name="reg_gov_kyc"]:checked')?.value || 'without_auth';
+        payload.scheme_type_id = document.getElementById('reg_gov_scheme_id')?.value || null;
+        payload.scheme_beneficiary_card_id = String(document.getElementById('reg_gov_card_search')?.value || '').trim() || null;
+        payload.scheme_kyc_type = kyc;
+        payload.scheme_lookup_token = document.getElementById('reg_scheme_lookup_token')?.value || null;
+        payload.scheme_auth_token = document.getElementById('reg_scheme_auth_token')?.value || null;
+        payload.scheme_aadhar_otp = kyc === 'aadhar_otp' ? String(document.getElementById('reg_gov_otp')?.value || '').trim() || null : null;
+        payload.scheme_is_newborn = !!document.getElementById('reg_scheme_newborn')?.checked;
+      }
+      return payload;
     }
 
     async submitRegistration() {

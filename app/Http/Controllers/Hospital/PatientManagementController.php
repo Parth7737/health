@@ -28,6 +28,7 @@ use App\Models\PatientCharge;
 use App\Models\PatientPayment;
 use App\Models\PatientPaymentAllocation;
 use App\Models\PatientTimeline;
+use App\Models\SchemeType;
 use App\Models\Staff;
 use App\Models\DoctorOpdCharge;
 use App\Models\Tpa;
@@ -43,6 +44,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -61,7 +63,143 @@ class PatientManagementController extends BaseHospitalController
             ->get(['id', 'name']);
 
         $states = IndianState::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']);
-        return view('hospital.patient-management.index', compact('departments', 'states'));
+        $schemeTypes = SchemeType::query()->orderBy('name')->get(['id', 'name']);
+
+        return view('hospital.patient-management.index', compact('departments', 'states', 'schemeTypes'));
+    }
+
+    /**
+     * Scheme beneficiary search (placeholder until SHA / NHA APIs are linked).
+     * Returns a SHA-shaped payload so the reception UI can stay stable.
+     */
+    public function schemeBeneficiaryLookup(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'scheme_type_id' => 'required|exists:scheme_types,id',
+            'beneficiary_search' => 'required|string|min:4|max:80',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'msg' => $validator->errors()->first()], 422);
+        }
+
+        $scheme = SchemeType::query()->find((int) $request->scheme_type_id);
+        $search = trim((string) $request->beneficiary_search);
+
+        $lookupToken = hash_hmac('sha256', $scheme->id . '|' . $search, (string) config('app.key'));
+
+        return response()->json([
+            'success' => true,
+            'lookup_token' => $lookupToken,
+            'beneficiary' => [
+                'name' => 'Scheme beneficiary (verify locally)',
+                'card_id' => $search,
+                'age' => '—',
+                'gender' => '—',
+                'mobile_no' => '—',
+                'address' => '—',
+                'dist_name' => '—',
+                'state_name' => '—',
+                'care_plan' => $scheme->name,
+                'aabha_id' => '—',
+                'image' => '',
+                'image_url' => null,
+            ],
+        ]);
+    }
+
+    /**
+     * Cache key for scheme beneficiary OTP (bound to lookup session).
+     */
+    private function schemeBeneficiaryOtpCacheKey(string $lookupToken): string
+    {
+        return 'scheme_beneficiary_otp:' . hash('sha256', $lookupToken);
+    }
+
+    /**
+     * Confirms Aadhaar OTP (or other KYC) for scheme flow. Aadhaar OTP must match value from send-otp (cache).
+     */
+    public function schemeBeneficiaryConfirmAuth(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'scheme_type_id' => 'required|exists:scheme_types,id',
+            'beneficiary_search' => 'required|string|min:4|max:80',
+            'lookup_token' => 'required|string|size:64',
+            'kyc_type' => 'required|in:without_auth,aadhar_otp,fingerprint,iris',
+            'otp' => 'nullable|digits:6',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'msg' => $validator->errors()->first()], 422);
+        }
+
+        $schemeId = (int) $request->scheme_type_id;
+        $search = trim((string) $request->beneficiary_search);
+        $expected = hash_hmac('sha256', $schemeId . '|' . $search, (string) config('app.key'));
+
+        if (! hash_equals($expected, (string) $request->lookup_token)) {
+            return response()->json(['success' => false, 'msg' => 'Search session expired. Please search again.'], 422);
+        }
+
+        $otpPart = '';
+        if ($request->kyc_type === 'aadhar_otp') {
+            if (! preg_match('/^\d{6}$/', (string) $request->otp)) {
+                return response()->json(['success' => false, 'msg' => 'Enter the 6-digit OTP.'], 422);
+            }
+            $otpKey = $this->schemeBeneficiaryOtpCacheKey((string) $request->lookup_token);
+            $stored = Cache::get($otpKey);
+            if ($stored === null || $stored === '') {
+                return response()->json(['success' => false, 'msg' => 'OTP expired or not sent. Please send OTP again.'], 422);
+            }
+            if (! hash_equals((string) $stored, (string) $request->otp)) {
+                return response()->json(['success' => false, 'msg' => 'Invalid OTP. Please try again.'], 422);
+            }
+            Cache::forget($otpKey);
+            $otpPart = (string) $request->otp;
+        }
+
+        $authToken = hash_hmac('sha256', $expected . '|' . $request->kyc_type . '|' . $otpPart, (string) config('app.key'));
+
+        return response()->json([
+            'success' => true,
+            'auth_token' => $authToken,
+        ]);
+    }
+
+    /**
+     * Request OTP for scheme beneficiary KYC — generates 6-digit OTP in cache (stub SMS until third-party is wired).
+     */
+    public function schemeBeneficiarySendOtp(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'scheme_type_id' => 'required|exists:scheme_types,id',
+            'beneficiary_search' => 'required|string|min:4|max:80',
+            'lookup_token' => 'required|string|size:64',
+            'kyc_type' => 'required|in:aadhar_otp',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'msg' => $validator->errors()->first()], 422);
+        }
+
+        $schemeId = (int) $request->scheme_type_id;
+        $search = trim((string) $request->beneficiary_search);
+        $expected = hash_hmac('sha256', $schemeId . '|' . $search, (string) config('app.key'));
+
+        if (! hash_equals($expected, (string) $request->lookup_token)) {
+            return response()->json(['success' => false, 'msg' => 'Search session expired. Please search again.'], 422);
+        }
+
+        $otp = sprintf('%06d', random_int(0, 999999));
+        $ttlMinutes = 10;
+        Cache::put($this->schemeBeneficiaryOtpCacheKey((string) $request->lookup_token), $otp, now()->addMinutes($ttlMinutes));
+
+        // TODO: remove `test_otp` from JSON when SMS/UIDAI delivery is wired (do not expose OTP in production API).
+        return response()->json([
+            'success' => true,
+            'message' => 'OTP generated (stub). Use test_otp to verify until SMS is connected.',
+            'test_otp' => $otp,
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -162,6 +300,7 @@ class PatientManagementController extends BaseHospitalController
                 $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
             })
             ->whereDate('appointment_date', $today)
+            ->whereRaw("COALESCE(opd_patients.status, 'waiting') <> 'completed'")
             ->count();
 
         $tabBooking = OpdPatient::query()
@@ -495,6 +634,7 @@ class PatientManagementController extends BaseHospitalController
                 })
                 ->whereDate('opd_patients.appointment_date', $today)
                 ->where('opd_patients.casualty', 'Yes')
+                ->whereRaw("COALESCE(opd_patients.status, 'waiting') <> 'completed'")
                 ->leftJoin('patients', 'patients.id', '=', 'opd_patients.patient_id')
                 ->leftJoin('staff', 'staff.id', '=', 'opd_patients.doctor_id')
                 ->leftJoin('hr_departments', 'hr_departments.id', '=', 'opd_patients.hr_department_id')
@@ -613,6 +753,7 @@ class PatientManagementController extends BaseHospitalController
                 $this->applyDoctorScopeConstraint($query, 'opd_patients.doctor_id', $doctorStaffId);
             })
             ->whereDate('opd_patients.appointment_date', $today)
+            ->whereRaw("COALESCE(opd_patients.status, 'waiting') <> 'completed'")
             ->leftJoin('patients', 'patients.id', '=', 'opd_patients.patient_id')
             ->leftJoin('staff', 'staff.id', '=', 'opd_patients.doctor_id')
             ->leftJoin('hr_departments', 'hr_departments.id', '=', 'opd_patients.hr_department_id')
@@ -1456,7 +1597,10 @@ class PatientManagementController extends BaseHospitalController
         $latestOpdVisit = OpdPatient::query()
             ->where('hospital_id', $this->hospital_id)
             ->where('patient_id', $patient->id)
-            ->with(['consultant:id,first_name,last_name'])
+            ->with([
+                'consultant:id,first_name,last_name',
+                'tpa:id,name',
+            ])
             ->orderByDesc('appointment_date')
             ->orderByDesc('id')
             ->first([
@@ -1476,6 +1620,8 @@ class PatientManagementController extends BaseHospitalController
                 'weight',
                 'bmi',
                 'visit_type',
+                'payment_mode',
+                'tpa_id',
             ]);
 
             $visits = OpdPatient::select(
@@ -1877,26 +2023,41 @@ class PatientManagementController extends BaseHospitalController
             $patient360NewOrderBlockedReason = null;
         }
 
-        $treatmentPlanSpecialities = HospitalSpeciality::query()
-            ->join('specialities', 'specialities.id', '=', 'hospital_specialities.speciality_id')
-            ->where('hospital_specialities.hospital_id', $this->hospital_id)
-            ->where('hospital_specialities.available', 1)
-            ->orderBy('specialities.name')
-            ->select([
-                'hospital_specialities.id as hospital_speciality_id',
-                'hospital_specialities.speciality_id',
-                'specialities.name',
-                'specialities.code',
-            ])
-            ->get();
+        $patient360OpdCanCompleteVisit = false;
+        $patient360OpdMarkCompletedUrl = null;
+        if (! $activeIpdAllocation && $latestOpdVisit && auth()->user()->can('edit-patient-management')) {
+            $stComplete = strtolower((string) ($latestOpdVisit->status ?: 'waiting'));
+            if (in_array($stComplete, ['waiting', 'in_room'], true)) {
+                $patient360OpdCanCompleteVisit = true;
+                $patient360OpdMarkCompletedUrl = route('hospital.opd-patient.mark-visit-completed', $latestOpdVisit);
+            }
+        }
 
+        $patient360HasSchemePayer = (bool) ($activeIpdAllocation && filled($activeIpdAllocation->scheme_type_id));
+
+        $treatmentPlanSpecialities = collect();
         $ipdTreatmentPlanProcedures = collect();
-        if ($activeIpdAllocation) {
-            $ipdTreatmentPlanProcedures = IpdAllocationTreatmentPlanProcedure::query()
-                ->where('bed_allocation_id', $activeIpdAllocation->id)
-                ->orderBy('line_order')
-                ->orderBy('id')
+        if ($patient360HasSchemePayer) {
+            $treatmentPlanSpecialities = HospitalSpeciality::query()
+                ->join('specialities', 'specialities.id', '=', 'hospital_specialities.speciality_id')
+                ->where('hospital_specialities.hospital_id', $this->hospital_id)
+                ->where('hospital_specialities.available', 1)
+                ->orderBy('specialities.name')
+                ->select([
+                    'hospital_specialities.id as hospital_speciality_id',
+                    'hospital_specialities.speciality_id',
+                    'specialities.name',
+                    'specialities.code',
+                ])
                 ->get();
+
+            if ($activeIpdAllocation) {
+                $ipdTreatmentPlanProcedures = IpdAllocationTreatmentPlanProcedure::query()
+                    ->where('bed_allocation_id', $activeIpdAllocation->id)
+                    ->orderBy('line_order')
+                    ->orderBy('id')
+                    ->get();
+            }
         }
 
         return view('hospital.patient-management.patient-360', [
@@ -1906,6 +2067,8 @@ class PatientManagementController extends BaseHospitalController
             'latestOpdVisit' => $latestOpdVisit,
             'canPatient360NewOrder' => $canPatient360NewOrder,
             'patient360NewOrderBlockedReason' => $patient360NewOrderBlockedReason,
+            'patient360OpdCanCompleteVisit' => $patient360OpdCanCompleteVisit,
+            'patient360OpdMarkCompletedUrl' => $patient360OpdMarkCompletedUrl,
             'visits' => $visits,
             'visitContext' => $visitContext,
             'timelineEntries' => $timelineEntries,
@@ -1922,6 +2085,7 @@ class PatientManagementController extends BaseHospitalController
             'totalCharges' => $totalCharges,
             'totalPaid' => $totalPaid,
             'totalDue' => $totalDue,
+            'patient360HasSchemePayer' => $patient360HasSchemePayer,
             'treatmentPlanSpecialities' => $treatmentPlanSpecialities,
             'ipdTreatmentPlanProcedures' => $ipdTreatmentPlanProcedures,
         ]);
@@ -2291,10 +2455,42 @@ class PatientManagementController extends BaseHospitalController
             // IPD-specific
             'bed_id'                    => 'nullable|exists:beds,id',
             'admission_reason'          => 'nullable|string',
+            // Government scheme (IPD / emergency bed admission only — validated below)
+            'scheme_type_id' => 'nullable|exists:scheme_types,id',
+            'scheme_beneficiary_card_id' => 'nullable|string|max:100',
+            'scheme_kyc_type' => 'nullable|in:without_auth,aadhar_otp,fingerprint,iris',
+            'scheme_lookup_token' => 'nullable|string|size:64',
+            'scheme_auth_token' => 'nullable|string|size:64',
+            'scheme_aadhar_otp' => 'nullable|digits:6',
+            'scheme_is_newborn' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        if ($this->shouldPersistSchemeEncounter($request)) {
+            $schemeValidator = Validator::make($request->all(), [
+                'scheme_type_id' => 'required|exists:scheme_types,id',
+                'scheme_beneficiary_card_id' => 'required|string|min:4|max:100',
+                'scheme_kyc_type' => 'required|in:without_auth,aadhar_otp,fingerprint,iris',
+                'scheme_lookup_token' => 'required|string|size:64',
+                'scheme_auth_token' => 'required|string|size:64',
+                'scheme_aadhar_otp' => [
+                    Rule::requiredIf(static fn () => $request->input('scheme_kyc_type') === 'aadhar_otp'),
+                    'nullable',
+                    'digits:6',
+                ],
+            ]);
+            if ($schemeValidator->fails()) {
+                return response()->json(['errors' => Helpers::error_processor($schemeValidator)], 422);
+            }
+            $schemeAuthError = $this->schemeAuthMismatchMessage($request);
+            if ($schemeAuthError !== null) {
+                return response()->json([
+                    'errors' => [['code' => 'scheme_beneficiary_card_id', 'message' => $schemeAuthError]],
+                ], 422);
+            }
         }
 
         // Phone uniqueness: cannot belong to another hospital
@@ -2540,6 +2736,20 @@ class PatientManagementController extends BaseHospitalController
                     $admissionType = $visitType === 'Emergency' ? 'emergency' : 'planned';
                     $admissionSource = $visitType === 'Emergency' ? 'emergency' : 'reception';
 
+                    $bedSchemeAttributes = [
+                        'payment_mode_label' => Str::limit(trim((string) $request->payment_mode), 120) ?: null,
+                    ];
+                    if ($this->shouldPersistSchemeEncounter($request)) {
+                        $bedSchemeAttributes['scheme_type_id'] = (int) $request->scheme_type_id;
+                        $bedSchemeAttributes['scheme_beneficiary_card_id'] = Str::limit(
+                            trim((string) $request->scheme_beneficiary_card_id),
+                            191
+                        );
+                        $bedSchemeAttributes['scheme_kyc_type'] = (string) $request->scheme_kyc_type;
+                        $bedSchemeAttributes['scheme_beneficiary_verified_at'] = now();
+                        $bedSchemeAttributes['scheme_is_newborn'] = $request->boolean('scheme_is_newborn');
+                    }
+
                     $allocation = $bedAllocationService->allocateBed(
                         $this->hospital_id,
                         $patient->id,
@@ -2547,7 +2757,7 @@ class PatientManagementController extends BaseHospitalController
                         null,
                         $admissionType,
                         $request->admission_reason ?: $request->chief_complaint,
-                        [
+                        array_merge([
                             'admission_no'         => $admissionNo,
                             'admission_date'       => now()->format('Y-m-d H:i:s'),
                             'consultant_doctor_id' => $request->doctor_id,
@@ -2556,7 +2766,7 @@ class PatientManagementController extends BaseHospitalController
                             'tpa_reference_no'     => $request->tpa_reference_no,
                             'admission_reason'     => $request->admission_reason ?: $request->chief_complaint,
                             'admission_source'     => $admissionSource,
-                        ]
+                        ], $bedSchemeAttributes)
                     );
 
                     // Initial deposit / charge
@@ -3270,6 +3480,61 @@ class PatientManagementController extends BaseHospitalController
         return $no;
     }
 
+    private function isGovernmentPaymentModeLabel(?string $label): bool
+    {
+        if (! $label) {
+            return false;
+        }
+        $label = trim($label);
+
+        return in_array($label, [
+            'AB-PMJAY (Ayushman Bharat)',
+            'CGHS',
+            'ECHS',
+            'State Health Scheme',
+            'ESI',
+        ], true);
+    }
+
+    /**
+     * True when registration is an IPD or emergency bed admission using a government payer mode.
+     */
+    private function shouldPersistSchemeEncounter(Request $request): bool
+    {
+        $visitType = (string) $request->input('visit_type');
+        $isEmergencyBedAdmission = $visitType === 'Emergency' && $request->filled('bed_id');
+        $shouldAdmit = $visitType === 'IPD' || $isEmergencyBedAdmission;
+
+        return $shouldAdmit && $this->isGovernmentPaymentModeLabel($request->input('payment_mode'));
+    }
+
+    /**
+     * Verifies lookup + auth HMAC tokens produced by {@see self::schemeBeneficiaryLookup()}
+     * and {@see self::schemeBeneficiaryConfirmAuth()}.
+     */
+    private function schemeAuthMismatchMessage(Request $request): ?string
+    {
+        $schemeId = (int) $request->scheme_type_id;
+        $card = trim((string) $request->scheme_beneficiary_card_id);
+        $lookupExpected = hash_hmac('sha256', $schemeId . '|' . $card, (string) config('app.key'));
+        if (! hash_equals($lookupExpected, (string) $request->scheme_lookup_token)) {
+            return 'Beneficiary search is invalid or expired. Search again before registering.';
+        }
+
+        $kyc = (string) $request->scheme_kyc_type;
+        $otpPart = $kyc === 'aadhar_otp' ? (string) $request->scheme_aadhar_otp : '';
+        if ($kyc === 'aadhar_otp' && ! preg_match('/^\d{6}$/', $otpPart)) {
+            return 'Aadhaar OTP is required (6 digits).';
+        }
+
+        $authExpected = hash_hmac('sha256', $lookupExpected . '|' . $kyc . '|' . $otpPart, (string) config('app.key'));
+        if (! hash_equals($authExpected, (string) $request->scheme_auth_token)) {
+            return 'Beneficiary authentication is incomplete. Complete KYC / OTP verification.';
+        }
+
+        return null;
+    }
+
     /**
      * Normalizes payment mode to the old enum values (Cash / Card / Online).
      * The new UI uses more descriptive payment mode labels.
@@ -3306,6 +3571,7 @@ class PatientManagementController extends BaseHospitalController
                 'consultantDoctor',
                 'department',
                 'tpa',
+                'schemeType',
                 'sourceOpdPatient',
                 'admittedBy',
                 'dischargedBy',
@@ -3369,6 +3635,7 @@ class PatientManagementController extends BaseHospitalController
             'consultantDoctor',
             'department',
             'tpa',
+            'schemeType',
             'sourceOpdPatient',
             'admittedBy',
             'dischargedBy',

@@ -38,9 +38,41 @@
     padding-bottom: 20px;
   }
 
+  /*
+   * style.css has: *.btn:focus { box-shadow: none !important; } — it killed our footer rings.
+   * Use same or higher specificity + !important. Inset rings stay visible even if footer clips outer glow
+   * (hims: .modal-overlay .modal > .modal-footer { overflow: hidden }).
+   */
+  #newPatientModal.modal-overlay .modal > .modal-footer,
   #newPatientModal .modal-footer {
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.96);
+    overflow: visible !important;
+  }
+
+  #newPatientModal .modal-footer .btn-primary:focus,
+  #newPatientModal .modal-footer .btn-primary:focus-visible {
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 255, 255, 0.95),
+      inset 0 0 0 4px rgba(13, 71, 161, 0.95),
+      0 0 0 2px #fff,
+      0 0 0 5px #0d47a1 !important;
+  }
+  #newPatientModal .modal-footer .btn-secondary:focus,
+  #newPatientModal .modal-footer .btn-secondary:focus-visible {
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 255, 255, 0.98),
+      inset 0 0 0 4px rgba(21, 101, 192, 0.85),
+      0 0 0 2px #1565c0,
+      0 0 0 4px #e3f2fd !important;
+  }
+  #newPatientModal .modal-footer .btn-success:focus,
+  #newPatientModal .modal-footer .btn-success:focus-visible {
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 255, 255, 0.95),
+      inset 0 0 0 4px rgba(27, 94, 32, 0.95),
+      0 0 0 2px #fff,
+      0 0 0 5px #1b5e20 !important;
   }
 
   #newPatientModal #reg-bed-summary {
@@ -99,6 +131,28 @@
   }
   #newPatientModal #reg_chronic_conditions label.reg-chronic-option input[type="checkbox"]:focus-visible {
     outline: none;
+  }
+  #newPatientModal #regGovSchemeBlock .reg-gov-kyc label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  #newPatientModal #regGovSchemeBlock .reg-gov-kyc label:focus-within {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  #newPatientModal #regGovSchemeBlock .reg-gov-result {
+    font-size: 12px;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    margin-top: 8px;
   }
 
   /*
@@ -606,6 +660,14 @@
             <select class="form-control" id="reg_marital_status"><option>Single</option><option>Married</option><option>Widowed</option><option>Divorced</option></select>
           </div>
         </div>
+        <div class="form-row cols-1">
+          <div class="form-group">
+            <div class="form-check" style="padding:6px 0">
+              <input type="checkbox" class="form-check-input" id="reg_scheme_newborn" autocomplete="off" tabindex="0"/>
+              <label class="form-check-label fs-12" for="reg_scheme_newborn" style="cursor:pointer;user-select:none">Newborn baby (scheme / government payer)</label>
+            </div>
+          </div>
+        </div>
         <div class="form-row cols-3">
           @php $religions = App\Models\Religion::get(); @endphp
           <div class="form-group">
@@ -811,31 +873,24 @@
               <label class="form-label">Chief Complaint</label>
               <textarea class="form-control" rows="3" id="reg_complaint" placeholder="Patient's main complaint..."></textarea>
             </div>
-            <div class="form-group">
-              <label class="form-label">Payment Mode</label>
-              <select class="form-control" id="reg_payment">
-                <option>Cash</option>
-                <option>AB-PMJAY (Ayushman Bharat)</option>
-                <option>CGHS</option><option>ECHS</option>
-                <option>State Health Scheme</option>
-                <option>ESI</option><option>Private Insurance</option>
-              </select>
-            </div>
-            <div class="form-group" id="regFeeGroup">
-              <label class="form-label">Registration Fee (₹)</label>
-              <div class="input-group">
-                <span class="input-addon">₹</span>
-                <input type="number" class="form-control" value="0" id="reg_fee"/>
+            <div id="regPaymentMountOpd">
+              <div class="form-group">
+                <label class="form-label">Payment Mode</label>
+                <select class="form-control" id="reg_payment" data-no-select2="1" title="Payment mode uses native dropdown for scheme flow compatibility">
+                  <option>Cash</option>
+                  <option>State Health Scheme / AB-PMJAY (Ayushman Bharat)</option>
+                  <option>Private Insurance</option>
+                </select>
+              </div>
+              <div class="form-group" id="regFeeGroup">
+                <label class="form-label">Registration Fee (₹)</label>
+                <div class="input-group">
+                  <span class="input-addon">₹</span>
+                  <input type="number" class="form-control" value="0" id="reg_fee"/>
+                </div>
               </div>
             </div>
             <div id="regIpdFields" style="display:none">
-              <div class="form-group">
-                <label class="form-label">Advance Deposit (₹)</label>
-                <div class="input-group">
-                  <span class="input-addon">₹</span>
-                  <input type="number" class="form-control" value="0" id="reg_advance_deposit" placeholder="5000"/>
-                </div>
-              </div>
               <div class="form-group">
                 <label class="form-label">Available Bed</label>
                 <select class="form-control select2" id="reg_bed"><option value="">Select Bed</option></select>
@@ -843,6 +898,59 @@
               <div class="ipd-bed-hint" id="reg-bed-summary">
                 Select a bed to see its location, type and standard base charge.
               </div>
+              <div id="regPaymentMountIpd"></div>
+              <div class="form-group">
+                <label class="form-label">Advance Deposit (₹)</label>
+                <div class="input-group">
+                  <span class="input-addon">₹</span>
+                  <input type="number" class="form-control" value="0" id="reg_advance_deposit" placeholder="5000"/>
+                </div>
+              </div>
+            <div id="regGovSchemeBlock" class="reg-gov-scheme-panel" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border-light);border-radius:10px;background:var(--surface-2)">
+              <div class="fw-700 fs-12 mb-8">Government scheme beneficiary</div>
+              <p class="fs-11 text-muted" style="margin:0 0 10px">Select scheme, enter Ayushman / ABHA / mobile or other scheme ID, search, then complete authentication. Ayushman / Aadhaar from step 1 pre-fills the search when you pick a scheme.</p>
+              <div class="form-row cols-3">
+                <div class="form-group">
+                  <label class="form-label" id="reg_gov_scheme_label">Scheme <span class="req">*</span></label>
+                  <select class="form-control" id="reg_gov_scheme_id" data-no-select2="1" aria-labelledby="reg_gov_scheme_label">
+                    <option value="">Select scheme</option>
+                    @foreach(($schemeTypes ?? []) as $schemeType)
+                    <option value="{{ $schemeType->id }}">{{ $schemeType->name }}</option>
+                    @endforeach
+                  </select>
+                </div>
+                <div class="form-group" style="grid-column:span 2">
+                  <label class="form-label" id="reg_gov_search_label">Beneficiary ID / search <span class="req">*</span></label>
+                  <div class="input-group">
+                    <input type="text" class="form-control" id="reg_gov_card_search" placeholder="Ayushman ID / mobile / ABHA…" aria-labelledby="reg_gov_search_label" autocomplete="off"/>
+                    <button class="btn btn-primary" type="button" id="reg_gov_search_btn">Search</button>
+                  </div>
+                </div>
+              </div>
+              <div id="reg_gov_result" class="reg-gov-result" style="display:none" role="status" aria-live="polite"></div>
+              <div class="form-group reg-gov-kyc" id="reg_gov_kyc_group" style="display:none;margin-top:10px">
+                <label class="form-label" id="reg_gov_kyc_label">Authentication <span class="req">*</span></label>
+                <div role="radiogroup" aria-labelledby="reg_gov_kyc_label" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+                  <label><input type="radio" name="reg_gov_kyc" value="without_auth" checked autocomplete="off"/> Proceed without Aadhaar OTP</label>
+                  <label><input type="radio" name="reg_gov_kyc" value="aadhar_otp" autocomplete="off"/> Aadhaar OTP</label>
+                  <label><input type="radio" name="reg_gov_kyc" value="fingerprint" autocomplete="off"/> Fingerprint</label>
+                  <label><input type="radio" name="reg_gov_kyc" value="iris" autocomplete="off"/> IRIS</label>
+                </div>
+              </div>
+              <div id="reg_gov_otp_row" class="form-row cols-2" style="display:none;margin-top:8px">
+                <div class="form-group">
+                  <label class="form-label" for="reg_gov_otp">OTP</label>
+                  <input type="text" class="form-control" id="reg_gov_otp" inputmode="numeric" maxlength="6" placeholder="6-digit OTP" autocomplete="one-time-code"/>
+                </div>
+              </div>
+              <div class="reg-gov-actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                <button class="btn btn-outline-primary btn-sm" type="button" id="reg_gov_send_otp_btn" style="display:none">Send OTP</button>
+                <button class="btn btn-success btn-sm" type="button" id="reg_gov_confirm_auth_btn">Confirm authentication</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="reg_gov_clear_btn" style="display:none">Clear beneficiary</button>
+              </div>
+              <input type="hidden" id="reg_scheme_lookup_token" value=""/>
+              <input type="hidden" id="reg_scheme_auth_token" value=""/>
+            </div>
               <div class="form-group" style="margin-top:12px">
                 <label class="form-label">Admission Reason</label>
                 <textarea class="form-control" rows="2" id="reg_admission_reason" placeholder="Admission reason / provisional diagnosis..."></textarea>
@@ -883,7 +991,7 @@
     <div class="modal-footer">
         <button class="btn btn-secondary" id="regPrevBtn" type="button" style="display:none">‹ Back</button>
       <div style="flex:1"></div>
-      <button class="btn btn-secondary" type="button" onclick="closeModal('newPatientModal')">Cancel</button>
+      <button class="btn btn-secondary" id="regModalCancelBtn" type="button" onclick="closeModal('newPatientModal')">Cancel</button>
         <button class="btn btn-primary" id="regNextBtn" type="button">Next ›</button>
         <button class="btn btn-success" id="regSubmitBtn" type="button" style="display:none">✅ Register & Print Slip</button>
     </div>
@@ -1064,6 +1172,9 @@ window.PM_ROUTES = {
   mrnPreview: @json(route('hospital.patient-management.mrn-preview')),
   getOpdCharge: @json(route('hospital.patient-management.get-opd-charge')),
   register: @json(route('hospital.patient-management.register')),
+  schemeBeneficiaryLookup: @json(route('hospital.patient-management.scheme-beneficiary-lookup')),
+  schemeBeneficiaryConfirmAuth: @json(route('hospital.patient-management.scheme-beneficiary-confirm-auth')),
+  schemeBeneficiarySendOtp: @json(route('hospital.patient-management.scheme-beneficiary-send-otp')),
   issueToken: @json(route('hospital.patient-management.issue-token')),
   issueNextToken: @json(route('hospital.patient-management.issue-next-token')),
   cancelBookingAppointment: @json(route('hospital.patient-management.cancel-booking-appointment')),
@@ -1078,7 +1189,7 @@ window.PM_BOOT = {
 };
 </script>
 <script src="{{ asset('public/modules/sa/patient-management.js') }}?v={{ time() }}"></script>
-<script src="{{ asset('public/modules/sa/patient-registration-form.js') }}"></script>
+<script src="{{ asset('public/modules/sa/patient-registration-form.js') }}?v={{ filemtime(public_path('modules/sa/patient-registration-form.js')) }}"></script>
 <script src="{{ asset('public/modules/sa/patient-visit-modals.js') }}"></script>
 @include('layouts.partials.flatpickr-js')
 @endpush

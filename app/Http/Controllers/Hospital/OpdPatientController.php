@@ -614,6 +614,55 @@ class OpdPatientController extends BaseHospitalController
             'current_status' => $nextStatus,
         ]);
     }
+
+    /**
+     * Patient 360 / reception: set OPD visit directly to completed from waiting or in-room.
+     */
+    public function markVisitCompleted(Request $request, OpdPatient $opdPatient, PatientTimelineService $timelineService)
+    {
+        if ($opdPatient->hospital_id !== $this->hospital_id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized OPD patient record.',
+            ], 403);
+        }
+
+        $current = strtolower((string) ($opdPatient->status ?: 'waiting'));
+        if (! in_array($current, ['waiting', 'in_room'], true)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Only a waiting or in-room OPD visit can be marked completed here.',
+            ], 422);
+        }
+
+        $opdPatient->update([
+            'status' => 'completed',
+        ]);
+
+        $statusLabels = [
+            'waiting' => 'Waiting',
+            'in_room' => 'In-Room',
+            'completed' => 'Completed',
+        ];
+
+        $timelineService->logForOpdVisit($opdPatient->fresh(), [
+            'event_key' => 'opd.visit.status_changed',
+            'title' => 'OPD Visit Completed',
+            'description' => 'Visit marked completed from Patient 360 (was ' . ($statusLabels[$current] ?? $current) . ').',
+            'meta' => [
+                'from_status' => $current,
+                'to_status' => 'completed',
+                'source' => 'patient_360',
+            ],
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'OPD visit marked as completed.',
+            'current_status' => 'completed',
+        ]);
+    }
+
     public function visits(Patient $patient, ChargeLedgerService $chargeLedger)
     {
         if ($patient->hospital_id !== $this->hospital_id) {

@@ -75,6 +75,11 @@ class BedAllocation extends Model
         return $this->belongsTo(Tpa::class);
     }
 
+    public function schemeType(): BelongsTo
+    {
+        return $this->belongsTo(SchemeType::class, 'scheme_type_id');
+    }
+
     public function sourceOpdPatient(): BelongsTo
     {
         return $this->belongsTo(OpdPatient::class, 'source_opd_patient_id');

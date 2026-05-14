@@ -18,6 +18,7 @@
     var state = {
         mode:                    'opd',
         openContext:             'order',
+        openButtonId:            '',
         opdPatientId:            '',
         allocationId:            '',
         prescriptionStoreUrl:    '',
@@ -172,7 +173,8 @@
             modal:   modalEl,
             body:    doc.getElementById('p360ModalBody'),
             title:   doc.getElementById('p360ModalTitle'),
-            saveBtn: doc.getElementById('p360SaveBtn')
+            saveBtn: doc.getElementById('p360SaveBtn'),
+            saveAndCompleteBtn: doc.getElementById('p360SaveAndCompleteBtn')
         };
 
         bsModal = (win.bootstrap && win.bootstrap.Modal)
@@ -193,6 +195,7 @@
                 }
                 state.mode         = this.dataset.mode || 'opd';
                 state.openContext  = this.dataset.openContext || 'order';
+                state.openButtonId = this.id || '';
                 state.opdPatientId = this.dataset.opdId || '';
                 state.allocationId = this.dataset.allocationId || '';
                 openModal();
@@ -200,7 +203,13 @@
         });
 
         if (els.saveBtn) {
-            els.saveBtn.addEventListener('click', saveAll);
+            els.saveBtn.addEventListener('click', function () { saveAll({}); });
+        }
+
+        if (els.saveAndCompleteBtn) {
+            els.saveAndCompleteBtn.addEventListener('click', function () {
+                saveAll({ thenComplete: true });
+            });
         }
 
         bindModalKeyboardA11y();
@@ -235,6 +244,19 @@
             refreshP360SaveTooltip(false);
             els.saveBtn.classList.add('d-none');
             els.saveBtn.disabled      = true;
+        }
+        if (els.saveAndCompleteBtn) {
+            var showComplete = state.mode === 'opd'
+                && state.openButtonId === 'patient360NewOrderBtn'
+                && cfg.opdVisitComplete
+                && cfg.opdVisitComplete.eligible
+                && cfg.opdVisitComplete.url;
+            if (showComplete) {
+                els.saveAndCompleteBtn.classList.remove('d-none');
+                els.saveAndCompleteBtn.disabled = false;
+            } else {
+                els.saveAndCompleteBtn.classList.add('d-none');
+            }
         }
 
         if (bsModal) { bsModal.show(); }
@@ -630,7 +652,7 @@
         if (!isModalOpen() || !canTriggerSaveShortcut()) { return false; }
         event.preventDefault();
         event.stopPropagation();
-        saveAll();
+        saveAll({});
         return true;
     }
 
@@ -742,7 +764,7 @@
             if (active === els.saveBtn && els.saveBtn && !els.saveBtn.disabled && !els.saveBtn.classList.contains('d-none')) {
                 event.preventDefault();
                 event.stopPropagation();
-                saveAll();
+                saveAll({});
                 return;
             }
         }
@@ -1175,9 +1197,20 @@
     }
 
     // --- Save all ---
-    async function saveAll() {
+    async function saveAll(opts) {
+        opts = opts || {};
+        var thenComplete = !!opts.thenComplete;
+        if (thenComplete && (!cfg.opdVisitComplete || !cfg.opdVisitComplete.url)) {
+            notify('error', 'Visit cannot be completed from this screen right now.');
+            return;
+        }
         var btn = els.saveBtn;
+        var btnComplete = els.saveAndCompleteBtn;
         if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+        if (btnComplete) {
+            btnComplete.disabled = true;
+            if (thenComplete) { btnComplete.textContent = 'Saving...'; }
+        }
         showLoader();
 
         try {
@@ -1368,7 +1401,29 @@
             }
 
             hideLoader();
-            notify('success', 'Saved successfully.');
+
+            if (thenComplete && cfg.opdVisitComplete && cfg.opdVisitComplete.url) {
+                var cRes = await fetch(cfg.opdVisitComplete.url, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': cfg.csrf,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: '{}',
+                });
+                var cData = await cRes.json().catch(function () { return {}; });
+                if (!cRes.ok || !cData || cData.status !== true) {
+                    var cMsg = (cData && cData.message) ? cData.message : 'Could not mark visit completed.';
+                    notify('warning', cMsg + ' Your other changes were saved.');
+                } else {
+                    notify('success', (cData.message || 'Visit completed.') + ' All changes saved.');
+                }
+            } else {
+                notify('success', 'Saved successfully.');
+            }
             if (bsModal) { bsModal.hide(); }
             win.location.reload();
 
@@ -1376,6 +1431,10 @@
             hideLoader();
             notify('error', err && err.message ? err.message : 'Unable to save. Please try again.');
             if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+            if (btnComplete) {
+                btnComplete.disabled = false;
+                btnComplete.textContent = 'Save and Complete';
+            }
         }
     }
 
@@ -1435,6 +1494,7 @@
     function onModalClose() {
         prescComposer = null;
         state.openContext = 'order';
+        state.openButtonId = '';
         if (win.jQuery) {
             win.jQuery('#p360ModalBody .select2-modal').each(function () {
                 var $el = win.jQuery(this);
@@ -1446,6 +1506,11 @@
         if (els.saveBtn) {
             refreshP360SaveTooltip(false);
             els.saveBtn.classList.add('d-none');
+        }
+        if (els.saveAndCompleteBtn) {
+            els.saveAndCompleteBtn.classList.add('d-none');
+            els.saveAndCompleteBtn.disabled = false;
+            els.saveAndCompleteBtn.textContent = 'Save and Complete';
         }
     }
 

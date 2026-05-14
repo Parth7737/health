@@ -82,6 +82,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('mrn-preview', 'PatientManagementController@mrnPreview')->name('mrn-preview');
         Route::post('get-opd-charge', 'PatientManagementController@getOpdCharge')->name('get-opd-charge');
         Route::post('register', 'PatientManagementController@register')->name('register');
+        Route::post('scheme-beneficiary-lookup', 'PatientManagementController@schemeBeneficiaryLookup')->name('scheme-beneficiary-lookup');
+        Route::post('scheme-beneficiary-confirm-auth', 'PatientManagementController@schemeBeneficiaryConfirmAuth')->name('scheme-beneficiary-confirm-auth');
+        Route::post('scheme-beneficiary-send-otp', 'PatientManagementController@schemeBeneficiarySendOtp')->name('scheme-beneficiary-send-otp');
         Route::post('issue-token', 'PatientManagementController@issueToken')->name('issue-token');
         Route::post('issue-next-token', 'PatientManagementController@issueNextToken')->name('issue-next-token');
         Route::post('cancel-booking-appointment', 'PatientManagementController@cancelBookingAppointment')->name('cancel-booking-appointment');
@@ -108,6 +111,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::post('load-opd-patients', 'OpdPatientController@loaddata')->name('opd-patient-load');  
         Route::post('show-opd-patient-form', 'OpdPatientController@showform')->name('showform');
         Route::post('{opdPatient}/update-status', 'OpdPatientController@updateStatus')->name('update-status');
+        Route::post('{opdPatient}/mark-visit-completed', 'OpdPatientController@markVisitCompleted')
+            ->middleware('permission:edit-patient-management')
+            ->name('mark-visit-completed');
         Route::post('{opdPatient}/vitals-social', 'OpdPatientController@updateVitalsSocial')
             ->middleware('permission:edit-patient-management')
             ->name('vitals-social.update');
