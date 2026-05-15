@@ -69,14 +69,67 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('ipd-admissions', 'PatientManagementController@ipdAdmissions')->name('ipd-admissions');
         Route::get('search-patients', 'PatientManagementController@searchPatients')->name('search-patients');
         Route::get('patient-360', 'PatientManagementController@patient360')->name('patient-360');
-        Route::post('treatment-plan/procedures', 'PatientManagementController@treatmentPlanProcedures')->name('treatment-plan.procedures');
-        Route::post('treatment-plan/procedure-detail', 'PatientManagementController@treatmentPlanProcedureDetail')->name('treatment-plan.procedure-detail');
-        Route::post('treatment-plan/implant-detail', 'PatientManagementController@treatmentPlanImplantDetail')->name('treatment-plan.implant-detail');
-        Route::post('treatment-plan/stratification-detail', 'PatientManagementController@treatmentPlanStratificationDetail')->name('treatment-plan.stratification-detail');
-        Route::get('treatment-plan/lines', 'PatientManagementController@treatmentPlanLines')->name('treatment-plan.lines');
-        Route::post('treatment-plan/save', 'PatientManagementController@treatmentPlanSave')
+        Route::get('scheme-preauth/start', 'SchemePreauthController@start')
             ->middleware('permission:edit-patient-management')
-            ->name('treatment-plan.save');
+            ->name('scheme-preauth.start');
+        Route::get('scheme-preauth/{preauthRegister}', 'SchemePreauthController@show')->name('scheme-preauth.show');
+        Route::post('scheme-preauth/general-information', 'SchemePreauthController@generalInformation')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.general-information.store');
+        Route::post('scheme-preauth/family-history', 'SchemePreauthController@familyHistory')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.family-history.store');
+        Route::post('scheme-preauth/personal-history', 'SchemePreauthController@personalHistory')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.personal-history.store');
+        Route::post('scheme-preauth/authentication-consent', 'SchemePreauthController@authenticationConsent')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.authentication-consent.store');
+        Route::post('scheme-preauth/admission-details', 'SchemePreauthController@admissionDetails')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.admission-details.store');
+        Route::post('scheme-preauth/diagnosis', 'SchemePreauthController@diagnosis')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.diagnosis.store');
+        Route::post('scheme-preauth/delete-diagnosis', 'SchemePreauthController@deleteDiagnosis')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.diagnosis.destroy');
+        Route::post('scheme-preauth/get-procedures', 'SchemePreauthController@getProcedures')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.get-procedures');
+        Route::post('scheme-preauth/get-procedure-details', 'SchemePreauthController@getProcedureDetail')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.get-procedure-details');
+        Route::post('scheme-preauth/get-implant-details', 'SchemePreauthController@getImplantDetail')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.get-implant-details');
+        Route::post('scheme-preauth/get-stratification-details', 'SchemePreauthController@getStratificationDetail')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.get-stratification-details');
+        Route::post('scheme-preauth/procedure', 'SchemePreauthController@procedure')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.procedure.store');
+        Route::post('scheme-preauth/delete-procedure', 'SchemePreauthController@deleteProcedure')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.procedure.destroy');
+        Route::post('scheme-preauth/delete-implant', 'SchemePreauthController@deleteImplant')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.procedure.delete-implant');
+        Route::post('scheme-preauth/care-team', 'SchemePreauthController@careTeam')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.care-team.store');
+        Route::post('scheme-preauth/delete-team', 'SchemePreauthController@deleteTeam')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.care-team.destroy');
+        Route::post('scheme-preauth/investigation', 'SchemePreauthController@investigation')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.investigation.store');
+        Route::post('scheme-preauth/validate-form', 'SchemePreauthController@validateForm')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.validate-form');
+        Route::post('scheme-preauth/request-form-sumbit', 'SchemePreauthController@requestFormSumbit')
+            ->middleware('permission:edit-patient-management')
+            ->name('scheme-preauth.request-form-sumbit');
         Route::get('patient-details/{patient}', 'PatientManagementController@patientDetails')->name('patient-details');
         Route::get('load-doctors', 'PatientManagementController@loadDoctors')->name('load-doctors');
         Route::get('load-doctor-slots', 'PatientManagementController@loadDoctorSlots')->name('load-doctor-slots');

@@ -1682,15 +1682,12 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .patient-360-body .p360-patient-banner .p360-banner-badges {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 6px 4px;
   align-items: center;
-  flex: 1 1 200px;
+  flex: 1 1 280px;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 .patient-360-body .p360-patient-banner .p360-badge-chip {
   font-size: 10px;
@@ -1709,6 +1706,22 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   align-items: center;
   justify-content: flex-end;
   flex: 0 1 auto;
+  margin-left: auto;
+}
+
+@media (max-width: 900px) {
+  .patient-360-body .p360-patient-banner .p360-banner-row2 {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .patient-360-body .p360-patient-banner .p360-banner-badges {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .patient-360-body .p360-patient-banner .p360-banner-actions {
+    margin-left: 0;
+    justify-content: flex-start;
+  }
 }
 
 .patient-360-body .p360-vitals-strip {

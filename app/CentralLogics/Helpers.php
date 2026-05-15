@@ -6,6 +6,7 @@ use App\Models\{
     Hospital,
     HospitalSpeciality,
     HospitalTeam,
+    PreauthRegister,
     User,
 };
 use Illuminate\Support\Facades\App;
@@ -62,13 +63,17 @@ class Helpers
     public static function generateUUID(){
        return Str::uuid()->toString();
     }
-    public static function getRegisterID(){
-       $last = PreauthRegister::latest()->first();
-       if(!$last){
-        return 1000000001;
-       }else{
-        return $last->register_id+1;
-       }
+    public static function getRegisterID()
+    {
+        $last = PreauthRegister::query()->orderByDesc('id')->value('register_id');
+        if ($last === null || $last === '') {
+            return '1000000001';
+        }
+        if (is_numeric($last)) {
+            return (string) (((int) $last) + 1);
+        }
+
+        return (string) (time());
     }
 
     public static function getSingleSpecialities($hospital_id, $speciality_id) {

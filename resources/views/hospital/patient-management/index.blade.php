@@ -663,9 +663,16 @@
         <div class="form-row cols-1">
           <div class="form-group">
             <div class="form-check" style="padding:6px 0">
-              <input type="checkbox" class="form-check-input" id="reg_scheme_newborn" autocomplete="off" tabindex="0"/>
+              <input type="checkbox" class="form-check-input m-5" id="reg_scheme_newborn" autocomplete="off" tabindex="0"/>
               <label class="form-check-label fs-12" for="reg_scheme_newborn" style="cursor:pointer;user-select:none">Newborn baby (scheme / government payer)</label>
             </div>
+          </div>
+        </div>
+        <div id="reg_scheme_newborn_details" class="form-row cols-1" style="display:none">
+          <div class="form-group">
+            <p class="form-hint" style="margin:0 0 8px">Baby name, date of birth and gender are taken from the patient details entered above.</p>
+            <label class="form-label">Birth certificate (optional)</label>
+            <input type="file" class="form-control" id="reg_scheme_born_certificate" accept=".pdf,.jpg,.jpeg,.png"/>
           </div>
         </div>
         <div class="form-row cols-3">
