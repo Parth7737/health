@@ -68,7 +68,6 @@ class SchemePreauthController extends Controller
         $register = PreauthRegister::query()
             ->where('hospital_id', $this->hospital_id)
             ->where('bed_allocation_id', $allocation->id)
-            ->where('status', PreauthRegister::STATUS_REGISTER)
             ->first();
 
         if (! $register) {
@@ -142,7 +141,7 @@ class SchemePreauthController extends Controller
             'address' => $patient->address ?? '—',
         ];
 
-        $schemePreauthAfterSubmitUrl = route('hospital.patient-management.patient-360', ['patient' => $patient->id]);
+        $schemePreauthAfterSubmitUrl = route('hospital.patient-management.patient-details', ['patient' => $patient->id]);
 
         $case_profile = $preauthRegister->id;
 
@@ -803,7 +802,10 @@ class SchemePreauthController extends Controller
 
         $is_resubmission = (int) ($request->is_resubmission ?? 0);
         $procedures = PreauthProcedure::query()->where('preauth_register_id', $preauth_register_id)->get();
-        $investigations = PreauthInvestigation::query()->where('preauth_register_id', $preauth_register_id)->get();
+        $investigations = PreauthInvestigation::query()
+            ->with('investigation')
+            ->where('preauth_register_id', $preauth_register_id)
+            ->get();
         $preauth_investigation_status = SchemePreauthHelper::getPreauthInvestigationsStatus($preauth_register_id, $is_resubmission === 1 ? 1 : 0);
         $preauth_package_check_status = SchemePreauthHelper::getPreauthPackageStatus($preauth_register_id, $is_resubmission === 1 ? 1 : 0);
         $u100_package_check_status = SchemePreauthHelper::getU100PackageStatus($preauth_register_id, $is_resubmission === 1 ? 1 : 0);

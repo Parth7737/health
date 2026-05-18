@@ -179,7 +179,7 @@
                             <a
                                 href="{{ route('hospital.patient-management.scheme-preauth.start', ['patient_id' => $patient->id, 'bed_allocation_id' => $activeIpdAllocation->id]) }}"
                                 class="btn btn-primary btn-sm"
-                            >Scheme preauth</a>
+                            >Preauth Details</a>
                             @endif
                             <button
                                 type="button"

@@ -24,9 +24,11 @@
     reg_category: 1,
     reg_phone: 2,
     reg_address: 2,
+    reg_pin: 2,
     reg_state: 2,
     reg_district: 2,
     reg_nationality: 2,
+    reg_ab: 1,
     reg_dept: 4,
     reg_doctor: 4,
     reg_slot: 4,
@@ -99,6 +101,7 @@
   class PatientRegistrationFormController {
     constructor() {
       this.currentStep = 1;
+      this.lastErrorFieldId = null;
       this.routes = {};
       this.boot = {};
       this.bound = false;
@@ -577,6 +580,9 @@
     }
 
     async validateStep(stepNumber) {
+      if (stepNumber === this.currentStep) {
+        this.lastErrorFieldId = null;
+      }
       this.clearStepErrors(stepNumber);
       const config = STEP_CONFIG[stepNumber];
       for (const fieldId of config.fields) {
@@ -807,21 +813,15 @@
       }
       const name = String(document.getElementById('reg_name')?.value || '').trim();
       if (!name) {
-        this.setFieldError('reg_name', 'Enter the baby name in patient details above.');
-        document.getElementById('reg_name')?.focus();
-        return false;
+        return this.failField('reg_name', 'Enter the baby name in patient details (step 1).');
       }
       const dob = String(document.getElementById('reg_dob')?.value || '').trim();
       if (!dob) {
-        this.setFieldError('reg_dob', 'Enter date of birth in patient details above.');
-        document.getElementById('reg_dob')?.focus();
-        return false;
+        return this.failField('reg_dob', 'Enter date of birth in patient details (step 1).');
       }
       const gender = String(document.getElementById('reg_gender')?.value || '').trim();
       if (!gender) {
-        this.setFieldError('reg_gender', 'Select gender in patient details above.');
-        document.getElementById('reg_gender')?.focus();
-        return false;
+        return this.failField('reg_gender', 'Select gender in patient details (step 1).');
       }
       return true;
     }
@@ -829,31 +829,21 @@
     validateSchemeAddressFields() {
       const address = String(document.getElementById('reg_address')?.value || '').trim();
       if (address.length < 3) {
-        this.setFieldError('reg_address', 'Address is required for scheme registration.');
-        document.getElementById('reg_address')?.focus();
-        return false;
+        return this.failField('reg_address', 'Address is required for scheme registration.');
       }
       const pin = String(document.getElementById('reg_pin')?.value || '').trim();
       if (pin.length < 4) {
-        this.setFieldError('reg_pin', 'PIN code is required for scheme registration.');
-        document.getElementById('reg_pin')?.focus();
-        return false;
+        return this.failField('reg_pin', 'PIN code is required for scheme registration.');
       }
       if (!this.selectedMeaningfulText('reg_state')) {
-        this.setFieldError('reg_state', 'State is required for scheme registration.');
-        document.getElementById('reg_state')?.focus();
-        return false;
+        return this.failField('reg_state', 'State is required for scheme registration.');
       }
       if (!this.selectedMeaningfulText('reg_district')) {
-        this.setFieldError('reg_district', 'District is required for scheme registration.');
-        document.getElementById('reg_district')?.focus();
-        return false;
+        return this.failField('reg_district', 'District is required for scheme registration.');
       }
       const abId = String(document.getElementById('reg_ab')?.value || '').trim();
       if (abId.length < 4) {
-        this.setFieldError('reg_ab', 'Ayushman Bharat ID is required for scheme registration.');
-        document.getElementById('reg_ab')?.focus();
-        return false;
+        return this.failField('reg_ab', 'Ayushman Bharat ID is required for scheme registration.');
       }
       return true;
     }
@@ -1954,6 +1944,31 @@
       return FIELD_TO_STEP[fieldId] || 1;
     }
 
+    goToField(fieldId) {
+      if (!fieldId) {
+        return;
+      }
+      const step = this.stepForField(fieldId);
+      if (step !== this.currentStep) {
+        this.setStep(step, { focusFirst: false });
+      }
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(fieldId);
+        if (target?.classList?.contains('select2-hidden-accessible')) {
+          target.nextElementSibling?.querySelector?.('.select2-selection')?.focus?.();
+        } else {
+          target?.focus?.();
+        }
+      });
+    }
+
+    failField(fieldId, message) {
+      this.lastErrorFieldId = fieldId;
+      this.setFieldError(fieldId, message);
+      this.goToField(fieldId);
+      return false;
+    }
+
     fieldIdForServerCode(code) {
       if (SERVER_FIELD_MAP[code]) return SERVER_FIELD_MAP[code];
       const normalized = String(code || '').replace(/\.\d+$/, '');
@@ -1977,13 +1992,7 @@
         this.setFieldError(fieldId, error.message || 'Invalid value');
       });
       if (firstFieldId) {
-        this.setStep(this.stepForField(firstFieldId), { focusFirst: false });
-        const target = document.getElementById(firstFieldId);
-        if (target?.classList?.contains('select2-hidden-accessible')) {
-          target.nextElementSibling?.querySelector?.('.select2-selection')?.focus?.();
-        } else {
-          target?.focus?.();
-        }
+        this.goToField(firstFieldId);
         return true;
       }
       return false;
@@ -2076,20 +2085,28 @@
     }
 
     async submitRegistration() {
-      const validations = await Promise.all(STEP_ORDER.slice(0, 4).map((stepNumber) => this.validateStep(stepNumber)));
+      this.lastErrorFieldId = null;
+      const validations = [];
+      for (const stepNumber of STEP_ORDER.slice(0, 4)) {
+        validations.push(await this.validateStep(stepNumber));
+      }
       if (validations.includes(false)) {
-        this.setStep(STEP_ORDER[validations.findIndex((value) => value === false)], { focusFirst: false });
+        const step = this.lastErrorFieldId
+          ? this.stepForField(this.lastErrorFieldId)
+          : STEP_ORDER[validations.findIndex((value) => value === false)];
+        this.setStep(step, { focusFirst: false });
+        if (this.lastErrorFieldId) {
+          this.goToField(this.lastErrorFieldId);
+        }
         return;
       }
 
       const payload = this.collectPayload();
       if (this.shouldPersistSchemePayload(payload)) {
         if (!this.validateSchemeAddressFields()) {
-          this.setStep(2, { focusFirst: false });
           return;
         }
         if (!this.validateSchemeNewbornFields()) {
-          this.setStep(1, { focusFirst: false });
           return;
         }
       }

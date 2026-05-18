@@ -10,10 +10,10 @@
             $truncatedText = \Illuminate\Support\Str::words($fullText, 5, '...');
         @endphp
 
-        <div class="short-text" style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        <div class="short-text spa-procedure-name-text">
             {{ $truncatedText }}
         </div>
-        <div class="full-text" style="max-width: 250px; word-wrap: break-word; display: none;">
+        <div class="full-text spa-procedure-name-text spa-procedure-name-full" style="display: none;">
             {{ $fullText }}
         </div>
 
@@ -33,36 +33,36 @@
         <td>
             @if($is_hide == 0)
                 @if(isset($is_resubmission))
-                    <button type="button" class=" bg-transparent border-0 p-0"
+                    <button type="button" class="spa-procedure-delete-btn bg-transparent border-0 p-0"
                         onClick="deleteTempProcedure('{{ $procedure->id }}')" title="Delete procedure">
                         <svg xmlns="http://www.w3.org/2000/svg"
-                            height="24px"
+                            height="18px"
                             viewBox="0 -960 960 960"
-                            width="24px"
+                            width="18px"
                             fill="undefined">
                             <path
                                 d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z" />
                         </svg>
                     </button>
                 @elseif(isset($is_enhancement) && $procedure->is_enhancement)
-                    <button type="button" class=" bg-transparent border-0 p-0"
+                    <button type="button" class="spa-procedure-delete-btn bg-transparent border-0 p-0"
                         onClick="deleteEnhancementProcedure('{{ $procedure->id }}')" title="Delete procedure">
                         <svg xmlns="http://www.w3.org/2000/svg"
-                            height="24px"
+                            height="18px"
                             viewBox="0 -960 960 960"
-                            width="24px"
+                            width="18px"
                             fill="undefined">
                             <path
                                 d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z" />
                         </svg>
                     </button>
                 @elseif(!isset($is_enhancement))
-                    <button type="button" class=" bg-transparent border-0 p-0"
+                    <button type="button" class="spa-procedure-delete-btn bg-transparent border-0 p-0"
                         onClick="deleteProcedure('{{ $procedure->id }}')" title="Delete procedure">
                         <svg xmlns="http://www.w3.org/2000/svg"
-                            height="24px"
+                            height="18px"
                             viewBox="0 -960 960 960"
-                            width="24px"
+                            width="18px"
                             fill="undefined">
                             <path
                                 d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z" />
@@ -83,10 +83,10 @@
             $truncatedText = \Illuminate\Support\Str::words($fullText, 5, '...');
         @endphp
 
-        <div class="short-text" style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        <div class="short-text spa-procedure-name-text">
             {{ $truncatedText }}
         </div>
-        <div class="full-text" style="max-width: 250px; word-wrap: break-word; display: none;">
+        <div class="full-text spa-procedure-name-text spa-procedure-name-full" style="display: none;">
             {{ $fullText }}
         </div>
 
@@ -102,36 +102,36 @@
         <td>
             @if($is_hide == 0)
                 @if(isset($is_resubmission))
-                    <button type="button" class=" bg-transparent border-0 p-0"
+                    <button type="button" class="spa-procedure-delete-btn bg-transparent border-0 p-0"
                         onClick="deleteTempImplant('{{ $procedure->id }}','resubmission')" title="Delete implant">
                         <svg xmlns="http://www.w3.org/2000/svg"
-                            height="24px"
+                            height="18px"
                             viewBox="0 -960 960 960"
-                            width="24px"
+                            width="18px"
                             fill="undefined">
                             <path
                                 d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z" />
                         </svg>
                     </button>
                 @elseif(isset($is_enhancement) && $procedure->is_enhancement)
-                    <button type="button" class=" bg-transparent border-0 p-0"
+                    <button type="button" class="spa-procedure-delete-btn bg-transparent border-0 p-0"
                         onClick="deleteTempImplant('{{ $procedure->id }}','enhancement')" title="Delete implant">
                         <svg xmlns="http://www.w3.org/2000/svg"
-                            height="24px"
+                            height="18px"
                             viewBox="0 -960 960 960"
-                            width="24px"
+                            width="18px"
                             fill="undefined">
                             <path
                                 d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z" />
                         </svg>
                     </button>
                 @elseif(!isset($is_enhancement))
-                    <button type="button" class=" bg-transparent border-0 p-0"
+                    <button type="button" class="spa-procedure-delete-btn bg-transparent border-0 p-0"
                         onClick="deleteImplant('{{ $procedure->id }}')" title="Delete implant">
                         <svg xmlns="http://www.w3.org/2000/svg"
-                            height="24px"
+                            height="18px"
                             viewBox="0 -960 960 960"
-                            width="24px"
+                            width="18px"
                             fill="undefined">
                             <path
                                 d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z" />

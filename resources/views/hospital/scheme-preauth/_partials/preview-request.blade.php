@@ -1,410 +1,167 @@
+<div class="spa-preview-content">
+    <div class="row g-2 spa-preview-columns">
+        <div class="col-lg-6">
+            <section class="spa-preview-section">
+                <h6 class="spa-preview-section-title">General Information</h6>
+                <div class="spa-preview-kv-grid spa-preview-kv-grid--2">
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Temp (°F)</span><span class="spa-preview-kv-value">{{ @$general_info->temprature ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Pulse</span><span class="spa-preview-kv-value">{{ @$general_info->pulserate ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Height</span><span class="spa-preview-kv-value">{{ @$general_info->height ?? '—' }} cm</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Weight</span><span class="spa-preview-kv-value">{{ @$general_info->weight ?? '—' }} kg</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">BMI</span><span class="spa-preview-kv-value">{{ @$general_info->bmi ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Cyanosis</span><span class="spa-preview-kv-value">{{ @$general_info->cyanosis ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Pallor</span><span class="spa-preview-kv-value">{{ @$general_info->pallor ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Malnutrition</span><span class="spa-preview-kv-value">{{ @$general_info->malnutration ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Oedema</span><span class="spa-preview-kv-value">{{ @$general_info->oedema ?? '—' }}</span></div>
+                </div>
+            </section>
 
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">General Information</h5>
-    <div class="row">
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Temperature(°F)</strong></label>
-                <p>{{ @$general_info->temprature??'' }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Pulse Rate Per Minute(BPM)</strong></label>
-                <p>{{ @$general_info->pulserate??'' }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Height (In CM)</strong></label>
-                <p>{{ @$general_info->height??'' }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Weight (In KG)</strong></label>
-                <p>{{ @$general_info->weight??'' }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>BMI</strong></label>
-                <p>{{ @$general_info->bmi??'' }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Cyanosis</strong></label>
-                <p>{{ @$general_info->cyanosis }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Pallor</strong></label>
-                <p>{{ @$general_info->pallor }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Malnutration</strong></label>
-                <p>{{ @$general_info->malnutration }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Oedema in
-                Feet</strong></label>
-                <p>{{ @$general_info->oedema }}</p>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Family History</h5>
-    <div class="row">
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Diabetes</strong></label>
-                <p>{{ @$family_history->diabetes->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Hypertension</strong></label>
-                <p>{{ @$family_history->hypertension->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Heart Disease</strong></label>
-                <p>{{ @$family_history->heartdisease->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Stroke</strong></label>
-                <p>{{ @$family_history->stroke->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Cancer</strong></label>
-                <p>{{ @$family_history->cancer->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Tuberculosis</strong></label>
-                <p>{{ @$family_history->tuberculosis->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Asthma</strong></label>
-                <p>{{ @$family_history->asthma->name }}</p>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Personal History</h5>
-    <div class="row">
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Appetite</strong></label>
-                <p>{{ @$personal_history->appetite->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Bowels</strong></label>
-                <p>{{ @$personal_history->bowel->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Nutrition</strong></label>
-                <p>{{ @$personal_history->nutrition->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Diet</strong></label>
-                <p>{{ @$personal_history->diet->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Known Allergies</strong></label>
-                <p>{{ @$personal_history->known_allergies }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Allergy Details</strong></label>
-                <p>{{ @$personal_history->allergy_detail }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Habits/Addictions</strong></label>
-                <p>{{ @$personal_history->habits }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Habits/Addiction Details</strong></label>
-                <p>{{ @$personal_history->habits_detail }}</p>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Authentication Consent</h5>
-    <div class="row">
-        @if(@$authentication_consent->hospital_declaration_form)
-            <div class="col-md-2 mb-2">
-                <div class="infodata">
-                    <label><strong>Hospital Declaration Form (During Admission)</strong>&nbsp; <a href="{{ asset('public/storage/'.@$authentication_consent->hospital_declaration_form) }}" target="_blank" class="btn btn-outline-primary btn-sm">View Document</a></label>
+            <section class="spa-preview-section">
+                <h6 class="spa-preview-section-title">Family History</h6>
+                <div class="spa-preview-kv-grid spa-preview-kv-grid--2">
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Diabetes</span><span class="spa-preview-kv-value">{{ @$family_history->diabetes->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Hypertension</span><span class="spa-preview-kv-value">{{ @$family_history->hypertension->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Heart</span><span class="spa-preview-kv-value">{{ @$family_history->heartdisease->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Stroke</span><span class="spa-preview-kv-value">{{ @$family_history->stroke->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Cancer</span><span class="spa-preview-kv-value">{{ @$family_history->cancer->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">TB</span><span class="spa-preview-kv-value">{{ @$family_history->tuberculosis->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Asthma</span><span class="spa-preview-kv-value">{{ @$family_history->asthma->name ?? '—' }}</span></div>
                 </div>
-            </div>
-        @endif
-        <div class="col-md-6">
-            <div class="infodata">
-                <label><strong>Remarks</strong></label>
-                <p>{{ @$authentication_consent->remarks }}</p>
-            </div>
+            </section>
         </div>
-    </div>
-</div>
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Admission Details</h5>
-    <div class="row">
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Admission Date</strong></label>
-                <p>{{ @$admission_details->admission_date }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Proposed Surgery Date</strong></label>
-                <p>{{ @$admission_details->surgery_date }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>AdmissionType</strong></label>
-                <p>{{ @$admission_details->admission_type->name }}</p>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="infodata">
-                <label><strong>Medico Legal Case</strong></label>
-                <p>{{ @$admission_details->legal_case }}</p>
-            </div>
-        </div>
-        @if(@$admission_details->fir_doc)
-            <div class="col-md-2 mb-2">
-                <div class="infodata">
-                    <label><strong>FIR </strong>&nbsp; <a href="{{ asset('public/storage/'.@$admission_details->fir_doc) }}" target="_blank" class="btn btn-outline-primary btn-sm">View Document</a></label>
+
+        <div class="col-lg-6">
+            <section class="spa-preview-section">
+                <h6 class="spa-preview-section-title">Personal History</h6>
+                <div class="spa-preview-kv-grid spa-preview-kv-grid--2">
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Appetite</span><span class="spa-preview-kv-value">{{ @$personal_history->appetite->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Bowels</span><span class="spa-preview-kv-value">{{ @$personal_history->bowels->name ?? @$personal_history->bowel->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Nutrition</span><span class="spa-preview-kv-value">{{ @$personal_history->nutrition->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Diet</span><span class="spa-preview-kv-value">{{ @$personal_history->diet->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv spa-preview-kv--wide"><span class="spa-preview-kv-label">Allergies</span><span class="spa-preview-kv-value">{{ @$personal_history->known_allergies ?? '—' }}</span></div>
+                    <div class="spa-preview-kv spa-preview-kv--wide"><span class="spa-preview-kv-label">Allergy detail</span><span class="spa-preview-kv-value">{{ @$personal_history->allergy_detail ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Habits</span><span class="spa-preview-kv-value">{{ @$personal_history->habits ?? '—' }}</span></div>
+                    <div class="spa-preview-kv spa-preview-kv--wide"><span class="spa-preview-kv-label">Habit detail</span><span class="spa-preview-kv-value">{{ @$personal_history->habits_detail ?? '—' }}</span></div>
                 </div>
-            </div>
-        @endif
-        @if(@$preauth_register->discharge_type)
-            <div class="col-md-2">
-                <div class="infodata">
-                    <label><strong>Discharge Type</strong></label>
-                    <p>{{ @$preauth_register->discharge_type }}</p>
-                </div>
-            </div>
-        @endif
-        @if(@$preauth_register->discharge_stage)
-            <div class="col-md-2">
-                <div class="infodata">
-                    <label><strong>Discharge Stage</strong></label>
-                    <p>{{ @$preauth_register->discharge_stage }}</p>
-                </div>
-            </div>
-        @endif
-        @if(@$preauth_register->lama_date)
-            <div class="col-md-2">
-                <div class="infodata">
-                    <label><strong>LAMA/DAMA/DOPR Date</strong></label>
-                    <p>{{ @$preauth_register->lama_date }}</p>
-                </div>
-            </div>
-        @endif
-        @if(@$preauth_register->surgery_date)
-            <div class="col-md-2">
-                <div class="infodata">
-                    <label><strong>Surgery Date</strong></label>
-                    <p>{{ @$preauth_register->surgery_date }}</p>
-                </div>
-            </div>
-        @endif
-        @if(@$preauth_register->discharge_date)
-            <div class="col-md-2">
-                <div class="infodata">
-                    <label><strong>Discharge Date</strong></label>
-                    <p>{{ @$preauth_register->discharge_date }}</p>
-                </div>
-            </div>
-        @endif
-        @if(@$preauth_register->provide_medicine)
-            <div class="col-md-2">
-                <div class="infodata">
-                    <label><strong>Hospital Provided Medicine During Treatment</strong></label>
-                    <p>{{ @$preauth_register->provide_medicine }}</p>
-                </div>
-            </div>
-        @endif
-    </div>
-</div>
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Diagnosis</h5>
-    <div class="row">
-        <div class="col-12">
-            <div
-                class="table-responsive mt-5 text-nowrap">
-                <table class="table">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>No.</th>
-                            <th>Diagnosis Code</th>
-                            <th>Diagnosis Description</th>
-                            <th>Diagnosis Type</th>
-                        </tr>
-                    </thead>
-                    <tbody
-                        class="table-border-bottom-0 diagnosis-body">
-                        @include('hospital.scheme-preauth._partials.diagnosis', ['preauth_diagnosis' => @$preauth_diagnosis,'is_action_hide'=>1])
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Treatment Plan</h5>
-    <div class="row">
-        <div class="col-12">
-            <div
-                class="table-responsive mt-5 text-nowrap">
-                <table class="table">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>No.</th>
-                            <th>Speciality</th>
-                            <th>Procedure</th>
-                            <th>Stratification</th><th>Day/Units</th>
-                            <th>Amount</th>
-                            <th>ICHI Code</th>
-                        </tr>
-                    </thead>
-                    <tbody
-                        class="table-border-bottom-0 procedure-body">
-                        @include('hospital.scheme-preauth._partials.procedures', ['procedures' => @$procedures,'is_action_hide'=>1])
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Investigations</h5>
-    <div class="row">
-        @if(@$investigations->count() > 0 )
-            @foreach(@$investigations as $investigation)
-                <div class="col-md-2 mb-2">
-                    <div class="infodata">
-                        <label><strong>{{ @$investigation->investigation->name }}</strong>&nbsp; <a href="{{ asset('public/storage/'.@$investigation->file) }}" target="_blank" class="btn btn-outline-primary btn-sm">View Document</a></label>
+            </section>
+
+            <section class="spa-preview-section">
+                <h6 class="spa-preview-section-title">Authentication &amp; Admission</h6>
+                <div class="spa-preview-kv-grid spa-preview-kv-grid--2">
+                    @if(@$authentication_consent->hospital_declaration_form)
+                    <div class="spa-preview-kv spa-preview-kv--wide">
+                        <span class="spa-preview-kv-label">Declaration</span>
+                        <span class="spa-preview-kv-value"><a href="{{ asset('public/storage/'.@$authentication_consent->hospital_declaration_form) }}" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2">View</a></span>
                     </div>
+                    @endif
+                    <div class="spa-preview-kv spa-preview-kv--wide"><span class="spa-preview-kv-label">Remarks</span><span class="spa-preview-kv-value">{{ @$authentication_consent->remarks ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Admit date</span><span class="spa-preview-kv-value">{{ @$admission_details->admission_date ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Surgery date</span><span class="spa-preview-kv-value">{{ @$admission_details->surgery_date ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">Admit type</span><span class="spa-preview-kv-value">{{ @$admission_details->admission_type->name ?? '—' }}</span></div>
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">MLC</span><span class="spa-preview-kv-value">{{ @$admission_details->legal_case ?? '—' }}</span></div>
+                    @if(@$admission_details->fir_doc)
+                    <div class="spa-preview-kv"><span class="spa-preview-kv-label">FIR</span><span class="spa-preview-kv-value"><a href="{{ asset('public/storage/'.@$admission_details->fir_doc) }}" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2">View</a></span></div>
+                    @endif
                 </div>
-            @endforeach
-        @endif
+            </section>
+        </div>
     </div>
-</div>
-@if($bed_side_photo || $clinical_notes || $any_other_doc)
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Enhancement Investigations</h5>
-    <div class="row">
-        @if($bed_side_photo)
-            <div class="col-md-2 mb-2">
-                <div class="infodata">
-                    <label><strong>{{ @$bed_side_photo->name }}</strong>&nbsp; <a href="{{ asset('public/storage/'.@$bed_side_photo->file) }}" target="_blank" class="btn btn-outline-primary btn-sm">View Document</a></label>
-                </div>
-            </div>
-        @endif
-        @if($clinical_notes)
-            <div class="col-md-2 mb-2">
-                <div class="infodata">
-                    <label><strong>{{ @$clinical_notes->name }}</strong>&nbsp; <a href="{{ asset('public/storage/'.@$clinical_notes->file) }}" target="_blank" class="btn btn-outline-primary btn-sm">View Document</a></label>
-                </div>
-            </div>
-        @endif
-        @if($any_other_doc)
-            <div class="col-md-2 mb-2">
-                <div class="infodata">
-                    <label><strong>{{ @$any_other_doc->name }}</strong>&nbsp; <a href="{{ asset('public/storage/'.@$any_other_doc->file) }}" target="_blank" class="btn btn-outline-primary btn-sm">View Document</a></label>
-                </div>
-            </div>
-        @endif
-    </div>
-</div>
-@endif
 
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Care Team Details</h5>
-    <div class="row">
-        <div class="col-12">
-            <div class="table-responsive mt-5 text-nowrap">
-                <table class="table">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>No.</th>
-                            <th>Doctor Name</th>
-                            <th>Registration ID / HPR ID
-                            </th>
-                            <th>Speciality</th>
-                            <th>Contact Number</th>
-                        </tr>
-                    </thead>
-                    <tbody class="table-border-bottom-0 care-team-body">
-                        @include('hospital.scheme-preauth._partials.teams', ['preauth_teams' => @$preauth_teams,'is_action_hide'=>1])
-                    </tbody>
-                </table>
-            </div>
+    <section class="spa-preview-section">
+        <h6 class="spa-preview-section-title">Diagnosis</h6>
+        <div class="table-responsive spa-preauth-compact-table-wrap">
+            <table class="table table-sm spa-preauth-compact-table mb-0">
+                <thead class="table-dark">
+                    <tr><th>No.</th><th>Code</th><th>Description</th><th>Type</th></tr>
+                </thead>
+                <tbody>
+                    @include('hospital.scheme-preauth._partials.diagnosis', ['preauth_diagnosis' => @$preauth_diagnosis, 'is_action_hide' => 1])
+                </tbody>
+            </table>
         </div>
-    </div>
-</div>
-<div class="card p-0 shadow-none rounded-0  border-bottom">
-    <h5 class="theme-color mt-3">Amount and incentive Details</h5>
-    <div class="row">
-        <div class="col-12">
-            <div class="table-responsive mt-5 text-nowrap">
-                <table class="table">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>No.</th>
-                            <th>Package Code</th>
-                            <th>Package Type</th>
-                            <th>Stratification Cost</th>
-                            <th>Quality</th>
-                            <th>Package Cost</th>
-                            <th>Adj Factor</th>
-                            <th>Incentive</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody class="table-border-bottom-0 finance-body">
-                        @include('hospital.scheme-preauth._partials.finance', ['procedures' => @$procedures])
-                    </tbody>
-                </table>
-            </div>
-            <ul class="d-flex listing-right finance-total-body">
-                @include('hospital.scheme-preauth._partials.finance-total', ['procedures' => @$procedures])
-            </ul>
+    </section>
+
+    <section class="spa-preview-section">
+        <h6 class="spa-preview-section-title">Treatment Plan</h6>
+        <div class="table-responsive spa-procedures-table-wrap">
+            <table class="table table-sm spa-procedures-table mb-0">
+                <thead class="table-dark">
+                    <tr><th>No.</th><th>Spec.</th><th>Procedure</th><th>Strat.</th><th>Days</th><th>Amt</th><th>ICHI</th></tr>
+                </thead>
+                <tbody>
+                    @include('hospital.scheme-preauth._partials.procedures', ['procedures' => @$procedures, 'is_action_hide' => 1])
+                </tbody>
+            </table>
         </div>
-    </div>
+    </section>
+
+    <section class="spa-preview-section">
+        <h6 class="spa-preview-section-title">Investigations</h6>
+        @if(@$investigations && $investigations->count() > 0)
+        <div class="spa-preview-kv-grid spa-preview-kv-grid--3">
+            @foreach(@$investigations as $investigation)
+            <div class="spa-preview-kv">
+                <span class="spa-preview-kv-label">{{ \Illuminate\Support\Str::limit(@$investigation->investigation->name ?? 'Doc', 36) }}</span>
+                <span class="spa-preview-kv-value">
+                    @if(@$investigation->file)
+                    <a href="{{ asset('public/storage/'.@$investigation->file) }}" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2">View</a>
+                    @else
+                    <span class="text-muted">—</span>
+                    @endif
+                </span>
+            </div>
+            @endforeach
+        </div>
+        @else
+        <p class="spa-preview-empty mb-0">No investigations.</p>
+        @endif
+    </section>
+
+    @if($bed_side_photo || $clinical_notes || $any_other_doc)
+    <section class="spa-preview-section">
+        <h6 class="spa-preview-section-title">Enhancement docs</h6>
+        <div class="spa-preview-kv-grid spa-preview-kv-grid--3">
+            @if($bed_side_photo)
+            <div class="spa-preview-kv"><span class="spa-preview-kv-label">{{ $bed_side_photo->name }}</span><span class="spa-preview-kv-value"><a href="{{ asset('public/storage/'.$bed_side_photo->file) }}" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2">View</a></span></div>
+            @endif
+            @if($clinical_notes)
+            <div class="spa-preview-kv"><span class="spa-preview-kv-label">{{ $clinical_notes->name }}</span><span class="spa-preview-kv-value"><a href="{{ asset('public/storage/'.$clinical_notes->file) }}" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2">View</a></span></div>
+            @endif
+            @if($any_other_doc)
+            <div class="spa-preview-kv"><span class="spa-preview-kv-label">{{ $any_other_doc->name }}</span><span class="spa-preview-kv-value"><a href="{{ asset('public/storage/'.$any_other_doc->file) }}" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2">View</a></span></div>
+            @endif
+        </div>
+    </section>
+    @endif
+
+    <section class="spa-preview-section">
+        <h6 class="spa-preview-section-title">Care Team</h6>
+        <div class="table-responsive spa-preauth-compact-table-wrap">
+            <table class="table table-sm spa-preauth-compact-table mb-0">
+                <thead class="table-dark">
+                    <tr><th>No.</th><th>Doctor</th><th>Reg. ID</th><th>Spec.</th><th>Contact</th></tr>
+                </thead>
+                <tbody>
+                    @include('hospital.scheme-preauth._partials.teams', ['preauth_teams' => @$preauth_teams, 'is_action_hide' => 1])
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="spa-preview-section spa-preview-section--last">
+        <h6 class="spa-preview-section-title">Finance</h6>
+        <div class="table-responsive spa-preauth-compact-table-wrap">
+            <table class="table table-sm spa-preauth-compact-table mb-0">
+                <thead class="table-dark">
+                    <tr><th>#</th><th>Pkg</th><th>Type</th><th>Strat</th><th>Qty</th><th>Cost</th><th>Adj</th><th>Inc.</th><th>Total</th></tr>
+                </thead>
+                <tbody>
+                    @include('hospital.scheme-preauth._partials.finance', ['procedures' => @$procedures])
+                </tbody>
+            </table>
+        </div>
+        <ul class="spa-preview-finance-totals list-unstyled mb-0">
+            @include('hospital.scheme-preauth._partials.finance-total', ['procedures' => @$procedures])
+        </ul>
+    </section>
 </div>
