@@ -573,7 +573,6 @@
                                                                 class="uploaded-file file-upload-display d-none">
                                                                 <span
                                                                     class="file-name">Sample.pdf</span>
-                                                                <i class="fas fa-trash "></i>
                                                                 <button
                                                                     class="remove-file-btn bg-transparent border-0 p-0">
                                                                     <svg xmlns="http://www.w3.org/2000/svg"
@@ -693,7 +692,6 @@
                                                                 class="uploaded-file file-upload-display d-none">
                                                                 <span
                                                                     class="file-name">Sample.pdf</span>
-                                                                <i class="fas fa-trash "></i>
                                                                 <button
                                                                     class="remove-file-btn bg-transparent border-0 p-0">
                                                                     <svg xmlns="http://www.w3.org/2000/svg"
@@ -963,7 +961,7 @@
                                                                 </thead>
                                                                 <tbody
                                                                     class="table-border-bottom-0 investigation-body">
-                                                                    @include('hospital.scheme-preauth._partials.investigations',['preauthRegister_id'=>$preauthRegister->id])
+                                                                    @include('hospital.scheme-preauth._partials.investigations',['preauth_register_id'=>$preauthRegister->id])
                                                                 </tbody>
                                                             </table>
                                                         </div>
@@ -987,12 +985,17 @@
                                                             class="form-group">
                                                             <select class="form-control select2" id="care_team_id"
                                                                 name="care_team_id">
-                                                                <option value="">Select Team</option>
-                                                                @foreach($teams as $team)
-                                                                    <option value="{{ $team->id }}">{{ $team->name }}</option>
+                                                                <option value="">Select Doctor</option>
+                                                                @foreach($careTeamDoctors as $doctor)
+                                                                    <option value="{{ $doctor->id }}">
+                                                                        {{ trim($doctor->first_name . ' ' . $doctor->last_name) }}
+                                                                        @if($doctor->specialist)
+                                                                            — {{ $doctor->specialist->name }}
+                                                                        @endif
+                                                                    </option>
                                                                 @endforeach
                                                             </select>
-                                                            <label for="care_team_id">Select</label>
+                                                            <label for="care_team_id">Select Doctor</label>
                                                         </div>
                                                     </div>
                                                     <div class="col-md-6 mb-4">

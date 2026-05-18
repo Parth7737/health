@@ -28,7 +28,6 @@
                     class="uploaded-file file-upload-display d-none">
                     <span
                         class="file-name">Sample.pdf</span>
-                    <i class="fas fa-trash "></i>
                     <button
                         class="remove-file-btn bg-transparent border-0 p-0">
                         <svg xmlns="http://www.w3.org/2000/svg"

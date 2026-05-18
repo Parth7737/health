@@ -16,9 +16,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'superadmin' => AdminMiddleware::class,
             'hospital' => HospitalMiddleware::class,
+            'scheme_preauth.import' => \App\Http\Middleware\AuthorizeSchemePreauthImport::class,
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+        ]);
+
+        $middleware->validateCsrfTokens(except: [
+            'integration/scheme-preauth/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

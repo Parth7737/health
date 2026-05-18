@@ -129,6 +129,17 @@ Route::prefix('integration/radiology/pacs')->group(function () {
     Route::get('worklist', [RadiologyRisController::class, 'pacsWorklistFeed'])->name('integration.radiology.pacs.worklist');
 });
 
+Route::prefix('integration/scheme-preauth/reference-options')
+    ->middleware('scheme_preauth.import')
+    ->group(function () {
+        Route::get('/', [\App\Http\Controllers\Integration\PreauthReferenceOptionImportController::class, 'index'])
+            ->name('integration.scheme-preauth.reference-options.index');
+        Route::get('/sha-map', [\App\Http\Controllers\Integration\PreauthReferenceOptionImportController::class, 'shaMap'])
+            ->name('integration.scheme-preauth.reference-options.sha-map');
+        Route::post('/import', [\App\Http\Controllers\Integration\PreauthReferenceOptionImportController::class, 'import'])
+            ->name('integration.scheme-preauth.reference-options.import');
+    });
+
 Route::get('/patient-profile', function () {
     return view('front.patient-profile');
 });

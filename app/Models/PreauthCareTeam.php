@@ -15,4 +15,9 @@ class PreauthCareTeam extends Model
     {
         return $this->belongsTo(HospitalTeam::class, 'hospital_team_id');
     }
+
+    public function staff(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class, 'staff_id');
+    }
 }
