@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use App\Scopes\HospitalScope;
 
@@ -103,10 +104,9 @@ class BedAllocation extends Model
         return $this->hasMany(IpdProgressNote::class, 'bed_allocation_id');
     }
 
-    public function treatmentPlanProcedures(): HasMany
+    public function preauthRegister(): HasOne
     {
-        return $this->hasMany(IpdAllocationTreatmentPlanProcedure::class, 'bed_allocation_id')
-            ->orderBy('line_order');
+        return $this->hasOne(PreauthRegister::class, 'bed_allocation_id')->latestOfMany('id');
     }
 
     /**

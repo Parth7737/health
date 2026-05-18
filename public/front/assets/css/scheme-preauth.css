@@ -1,0 +1,969 @@
+/**
+ * Scheme preauth — hospital HIMS theme (scoped under .scheme-preauth-page).
+ * Overrides SHA/Materio markup + bs-stepper defaults to match hims.css tokens.
+ */
+.scheme-preauth-page {
+  --spa-primary: var(--primary);
+  --spa-primary-dark: var(--primary-dark);
+  --spa-primary-mid: var(--primary-mid);
+  --spa-primary-light: var(--primary-light);
+  --spa-primary-xlight: var(--primary-xlight);
+  --spa-accent: var(--accent);
+  --spa-accent-light: var(--accent-light);
+  --spa-pending: var(--warning-dark);
+  --spa-pending-light: var(--warning-light);
+  --spa-success: var(--success);
+  --spa-success-light: var(--success-light);
+  --spa-danger: var(--danger);
+  --spa-border: var(--border);
+  --spa-border-light: var(--border-light);
+  --spa-surface: var(--surface);
+  --spa-surface-2: var(--surface-2);
+  --spa-surface-3: var(--surface-3);
+  --spa-bg: var(--bg);
+  --spa-text: var(--text);
+  --spa-text-2: var(--text-2);
+  --spa-text-sec: var(--text-sec);
+  --spa-muted: var(--text-muted);
+  --spa-text-light: var(--text-light);
+  color: var(--spa-text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Typography & chrome ─────────────────────────────────────── */
+.scheme-preauth-page .breadcrumb {
+  margin-bottom: 1rem;
+  font-size: 13px;
+}
+
+.scheme-preauth-page .breadcrumb-item,
+.scheme-preauth-page .breadcrumb-item a {
+  color: var(--spa-muted);
+}
+
+.scheme-preauth-page .breadcrumb-item.active {
+  color: var(--spa-text-sec);
+  font-weight: 600;
+}
+
+.scheme-preauth-page .breadcrumb-item a:hover {
+  color: var(--spa-primary);
+}
+
+.scheme-preauth-page h4,
+.scheme-preauth-page h5,
+.scheme-preauth-page h6 {
+  color: var(--spa-text);
+}
+
+.scheme-preauth-page .text-danger {
+  color: var(--spa-danger) !important;
+}
+
+.scheme-preauth-page .text-info,
+.scheme-preauth-page .colored.text-info {
+  color: var(--spa-primary) !important;
+}
+
+.scheme-preauth-page .text-muted {
+  color: var(--spa-muted) !important;
+}
+
+.scheme-preauth-page .text-primary {
+  color: var(--spa-primary) !important;
+}
+
+.scheme-preauth-page a:not(.btn) {
+  color: var(--spa-primary);
+}
+
+.scheme-preauth-page a:not(.btn):hover {
+  color: var(--spa-primary-dark);
+}
+
+.scheme-preauth-page .border-primary {
+  border-color: var(--spa-primary) !important;
+}
+
+.scheme-preauth-page .border-secondary {
+  border-color: var(--spa-border) !important;
+}
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.scheme-preauth-page .card {
+  background: var(--spa-surface);
+  border: 1px solid var(--spa-border-light);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  color: var(--spa-text);
+}
+
+.scheme-preauth-page .scheme-preauth-beneficiary-card {
+  border-color: var(--spa-primary) !important;
+}
+
+.scheme-preauth-page .scheme-preauth-beneficiary-card .card-body {
+  padding: 1.25rem 1.5rem;
+}
+
+.scheme-preauth-page .number-3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--spa-text);
+}
+
+.scheme-preauth-page .number-2 {
+  font-size: 13px;
+  color: var(--spa-muted);
+}
+
+.scheme-preauth-page .infodata label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--spa-muted);
+  margin-bottom: 2px;
+  margin-top: 10px;
+}
+
+.scheme-preauth-page .infodata label:first-child {
+  margin-top: 0;
+}
+
+.scheme-preauth-page .infodata p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--spa-text-2);
+  line-height: 1.45;
+}
+
+.scheme-preauth-page .infodata p strong {
+  font-weight: 600;
+  color: var(--spa-text);
+}
+
+.scheme-preauth-page .colored {
+  color: var(--spa-text);
+}
+
+/* ── Status track (wrapped grid) ─────────────────────────────── */
+.scheme-preauth-page .bs-stepper.wizard-numbered {
+  background: var(--spa-surface);
+  border: 1px solid var(--spa-border-light);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.scheme-preauth-page .scheme-preauth-status-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 1rem 1.25rem;
+  background: var(--spa-primary-xlight);
+  border-bottom: 1px solid var(--spa-border-light);
+}
+
+@media (max-width: 1200px) {
+  .scheme-preauth-page .scheme-preauth-status-track {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .scheme-preauth-page .scheme-preauth-status-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.scheme-preauth-page .scheme-preauth-status-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--spa-border-light);
+  border-radius: var(--r-md);
+  background: var(--spa-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.scheme-preauth-page .scheme-preauth-status-step.active {
+  border-color: var(--spa-primary);
+  background: var(--spa-surface);
+  box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.12);
+}
+
+.scheme-preauth-page .scheme-preauth-status-step.crossed {
+  border-color: rgba(21, 101, 192, 0.28);
+  background: var(--spa-primary-light);
+}
+
+.scheme-preauth-page .scheme-preauth-status-step__title,
+.scheme-preauth-page .bs-stepper .bs-stepper-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--spa-text);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.scheme-preauth-page .scheme-preauth-status-step__meta,
+.scheme-preauth-page .bs-stepper .bs-stepper-subtitle {
+  font-size: 11px;
+  color: var(--spa-muted);
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.scheme-preauth-page .scheme-preauth-status-step__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.scheme-preauth-page .scheme-preauth-status-step__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.scheme-preauth-page .bs-stepper .bs-stepper-header {
+  display: none;
+}
+
+.scheme-preauth-page .bs-stepper .bs-stepper-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  min-width: 1.35rem;
+  border-radius: 50%;
+  background: var(--spa-text-light);
+  color: #fff;
+  font-size: 0.75rem;
+  border: 2px solid var(--spa-border);
+}
+
+.scheme-preauth-page .bs-stepper .bs-stepper-circle i {
+  visibility: hidden;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.scheme-preauth-page .scheme-preauth-status-step.active .bs-stepper-circle,
+.scheme-preauth-page .bs-stepper .step.active .bs-stepper-circle {
+  background: transparent;
+  border: 2px solid var(--spa-primary);
+  color: var(--spa-primary);
+}
+
+.scheme-preauth-page .scheme-preauth-status-step.crossed .bs-stepper-circle,
+.scheme-preauth-page .bs-stepper .step.crossed .bs-stepper-circle {
+  background: var(--spa-primary);
+  border-color: var(--spa-primary);
+  color: #fff;
+}
+
+.scheme-preauth-page .scheme-preauth-status-step.crossed .bs-stepper-circle i,
+.scheme-preauth-page .bs-stepper .step.crossed .bs-stepper-circle i {
+  visibility: visible;
+}
+
+.scheme-preauth-page .bs-stepper .line {
+  display: none;
+}
+
+.scheme-preauth-page .bs-stepper > .bs-stepper-content {
+  padding: 1.25rem 1.5rem 1.5rem;
+  background: var(--spa-surface);
+}
+
+.scheme-preauth-page .bs-stepper .content {
+  display: none;
+}
+
+.scheme-preauth-page .bs-stepper .content.active {
+  display: block;
+}
+
+/* ── Accordions (HIMS panel — no full-width orange bars) ─────── */
+.scheme-preauth-page .accordion-popout {
+  border: 1px solid var(--spa-border-light);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--spa-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.scheme-preauth-page .accordion-popout .accordion-item {
+  margin-bottom: 0;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--spa-border-light);
+  overflow: hidden;
+  background: var(--spa-surface);
+}
+
+.scheme-preauth-page .accordion-popout .accordion-item:last-child {
+  border-bottom: none;
+}
+
+.scheme-preauth-page .accordion-popout .accordion-header {
+  margin: 0;
+}
+
+.scheme-preauth-page .accordion-popout .accordion-button {
+  padding: 0.9rem 1.25rem;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--spa-surface);
+  color: var(--spa-text-sec);
+  box-shadow: none !important;
+  border: none;
+  border-left: 3px solid transparent;
+}
+
+.scheme-preauth-page .accordion-popout .accordion-button::after {
+  content: "" !important;
+  display: block;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin-left: auto;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23475569'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-size: 1rem;
+  background-position: center;
+  filter: none;
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+
+.scheme-preauth-page .accordion-popout .accordion-button:not(.collapsed)::after {
+  transform: rotate(-180deg);
+}
+
+.scheme-preauth-page .accordion-popout .accordion-button:focus {
+  box-shadow: inset 0 0 0 2px rgba(21, 101, 192, 0.12) !important;
+  border-color: transparent;
+}
+
+/* Collapsed headers — always readable (overrides global theme-form rules) */
+.scheme-preauth-page .accordion-popout .accordion-button.collapsed {
+  color: var(--spa-text-sec) !important;
+  background: var(--spa-surface) !important;
+}
+
+.scheme-preauth-page .accordion-button.theme-color.collapsed {
+  background: var(--spa-primary-xlight) !important;
+  color: var(--spa-primary) !important;
+  border-left-color: var(--spa-primary);
+}
+
+.scheme-preauth-page .accordion-button.theme-color:not(.collapsed) {
+  background: var(--spa-primary);
+  color: #fff;
+  border-left-color: var(--spa-primary-dark);
+}
+
+.scheme-preauth-page .accordion-button.theme-color:not(.collapsed)::after {
+  filter: brightness(0) invert(1);
+}
+
+/* Pending section — collapsed: neutral (NOT orange block); open: subtle warning header */
+.scheme-preauth-page .accordion-button.pending-color.collapsed {
+  background: var(--spa-surface);
+  color: var(--spa-text-sec);
+  border-left-color: var(--spa-warning);
+}
+
+.scheme-preauth-page .accordion-button.pending-color:not(.collapsed) {
+  background: var(--spa-warning);
+  /* color: #fff; */
+  border-left-color: var(--spa-warning-dark);
+}
+
+.scheme-preauth-page .accordion-button.pending-color:not(.collapsed)::after {
+  filter: brightness(0) invert(1);
+}
+
+.scheme-preauth-page .theme-color:not(.accordion-button) {
+  color: var(--spa-primary);
+}
+
+.scheme-preauth-page .pending-color:not(.accordion-button) {
+  color: var(--spa-warning-dark);
+}
+
+.scheme-preauth-page .accordion-body {
+  padding: 1.25rem 1.5rem;
+  background: var(--spa-surface-2);
+  color: var(--spa-text-2);
+  border-top: 1px solid var(--spa-border-light);
+}
+
+/* ── Inner section boxes ─────────────────────────────────────── */
+.scheme-preauth-page .inside-left-info-box .btn {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: var(--r-sm);
+}
+
+.scheme-preauth-page .inside-left-info-box {
+  border: 1px solid var(--spa-border-light);
+  border-left: 4px solid var(--spa-primary);
+  border-radius: var(--r-md);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  background: var(--spa-surface);
+}
+
+.scheme-preauth-page .inside-left-info-box.pending {
+  border-left-color: var(--spa-warning);
+}
+
+.scheme-preauth-page .inside-left-info-box.success {
+  border-left-color: var(--spa-primary);
+}
+
+.scheme-preauth-page .colored-verticle-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 1rem;
+  color: var(--spa-text-sec);
+}
+
+.scheme-preauth-page .status-dot {
+  display: none !important;
+}
+
+/* ── Forms — HIMS form-group / form-label / form-control ─────── */
+.scheme-preauth-page .spa-form-row {
+  --bs-gutter-x: 1rem;
+  --bs-gutter-y: 1rem;
+}
+
+.scheme-preauth-page .spa-form-row > [class*="col-"] {
+  margin-bottom: 0;
+}
+
+/* SHA/Materio markup: control first, label second — show label on top */
+.scheme-preauth-page .form-group,
+.scheme-preauth-page .form-floating {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  position: static;
+}
+
+.scheme-preauth-page .form-group > label,
+.scheme-preauth-page .form-floating > label {
+  order: 1;
+  position: static !important;
+  transform: none !important;
+  padding: 0 !important;
+  margin: 0 0 5px !important;
+  height: auto !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--spa-text-sec) !important;
+  opacity: 1 !important;
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none;
+}
+
+.scheme-preauth-page .form-group > label::after,
+.scheme-preauth-page .form-floating > label::after {
+  display: none !important;
+}
+
+.scheme-preauth-page .form-label,
+.scheme-preauth-page label.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--spa-text-sec);
+  margin-bottom: 5px;
+}
+
+.scheme-preauth-page .form-label .req,
+.scheme-preauth-page .form-group > label .text-danger {
+  color: var(--spa-danger) !important;
+}
+
+.scheme-preauth-page .form-group > .form-control,
+.scheme-preauth-page .form-group > select.form-control,
+.scheme-preauth-page .form-group > textarea.form-control,
+.scheme-preauth-page .form-floating > .form-control,
+.scheme-preauth-page .form-floating > .form-select,
+.scheme-preauth-page .form-floating > select.form-control {
+  order: 2;
+  width: 100%;
+  height: auto;
+  min-height: unset;
+  padding: 8px 12px;
+  border: 1.5px solid var(--spa-border);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--spa-text);
+  background: var(--spa-surface);
+  box-shadow: none;
+}
+
+.scheme-preauth-page .form-control:focus,
+.scheme-preauth-page select.form-control:focus,
+.scheme-preauth-page textarea.form-control:focus {
+  border-color: var(--spa-primary);
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.1);
+  background: var(--spa-surface);
+  outline: none;
+}
+
+.scheme-preauth-page .form-control::placeholder {
+  color: var(--spa-text-light);
+}
+
+.scheme-preauth-page .form-control:disabled,
+.scheme-preauth-page .form-control[readonly] {
+  background: var(--spa-surface-3);
+  color: var(--spa-muted);
+  cursor: not-allowed;
+}
+
+.scheme-preauth-page .form-group.has-error .form-control,
+.scheme-preauth-page .form-group.has-error .select2-selection {
+  border-color: var(--spa-danger) !important;
+}
+
+.scheme-preauth-page .form-group .error.text-danger,
+.scheme-preauth-page .form-group .field-error-message {
+  order: 3;
+  font-size: 11px;
+  color: var(--spa-danger);
+  margin-top: 4px;
+}
+
+/* Select2 — match registration modal */
+.scheme-preauth-page .form-group .select2-container {
+  order: 2;
+  width: 100% !important;
+}
+
+.scheme-preauth-page .select2-container--default .select2-selection--single {
+  height: auto !important;
+  min-height: 38px;
+  border: 1.5px solid var(--spa-border) !important;
+  border-radius: var(--r-sm) !important;
+  background: var(--spa-surface) !important;
+}
+
+.scheme-preauth-page .select2-container--default .select2-selection--single .select2-selection__rendered {
+  color: var(--spa-text) !important;
+  line-height: 36px !important;
+  padding-left: 12px !important;
+  padding-right: 28px !important;
+}
+
+.scheme-preauth-page .select2-container--default .select2-selection--single .select2-selection__arrow {
+  height: 36px !important;
+  top: 1px !important;
+}
+
+.scheme-preauth-page .select2-container--default.select2-container--open .select2-selection--single,
+.scheme-preauth-page .select2-container--default.select2-container--focus .select2-selection--single {
+  border-color: var(--spa-primary) !important;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.1);
+}
+
+.scheme-preauth-page .select2-dropdown {
+  border-color: var(--spa-border) !important;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+}
+
+.scheme-preauth-page .select2-results__option--highlighted.select2-results__option--selectable {
+  background-color: var(--spa-primary) !important;
+}
+
+/* Radio / checkbox — same as hims.css */
+.scheme-preauth-page .spa-radio-group .form-check,
+.scheme-preauth-page .d-flex > .form-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  min-height: unset;
+}
+
+.scheme-preauth-page .spa-radio-group,
+.scheme-preauth-page .d-flex:has(> .form-check) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 2px;
+}
+
+.scheme-preauth-page .form-check-input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--spa-primary);
+  cursor: pointer;
+  float: none;
+}
+
+.scheme-preauth-page .form-check-label {
+  font-size: 12.5px;
+  color: var(--spa-text);
+  cursor: pointer;
+  margin: 0;
+}
+
+.scheme-preauth-page .form-check.ms-4 {
+  margin-left: 0 !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.scheme-preauth-page .btn-primary {
+  background: var(--spa-primary);
+  border-color: var(--spa-primary-dark);
+  color: #fff;
+}
+
+.scheme-preauth-page .btn-primary:hover {
+  background: var(--spa-primary-dark);
+  border-color: var(--spa-primary-dark);
+  color: #fff;
+}
+
+.scheme-preauth-page .btn-success {
+  background: var(--spa-success);
+  border-color: #1b5e20;
+  color: #fff;
+}
+
+.scheme-preauth-page .btn-outline-secondary {
+  background: transparent;
+  color: var(--spa-text-sec);
+  border-color: var(--spa-border);
+}
+
+.scheme-preauth-page .btn-outline-secondary:hover {
+  background: var(--spa-surface-3);
+  color: var(--spa-text);
+}
+
+.scheme-preauth-page .btn-outline-primary,
+.scheme-preauth-page .btn-outline-info {
+  background: transparent;
+  color: var(--spa-primary);
+  border-color: var(--spa-primary);
+}
+
+.scheme-preauth-page .btn-outline-primary:hover,
+.scheme-preauth-page .btn-outline-info:hover {
+  background: var(--spa-primary-light);
+  color: var(--spa-primary-dark);
+}
+
+.scheme-preauth-page .btn-info {
+  background: var(--spa-primary-mid);
+  border-color: var(--spa-primary-dark);
+  color: #fff;
+}
+
+/* ── Tables ──────────────────────────────────────────────────── */
+.scheme-preauth-page .table {
+  color: var(--spa-text-2);
+  border-color: var(--spa-border-light);
+}
+
+.scheme-preauth-page .table > :not(caption) > * > * {
+  border-color: var(--spa-border-xlight, var(--spa-border-light));
+  background-color: transparent;
+  color: inherit;
+}
+
+.scheme-preauth-page .table thead th,
+.scheme-preauth-page .table-dark th,
+.scheme-preauth-page .accordion-body thead.table-dark th {
+  background: var(--spa-surface-3) !important;
+  color: var(--spa-text-sec) !important;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid var(--spa-border) !important;
+  border-top: none;
+  padding: 10px 12px;
+}
+
+.scheme-preauth-page .table tbody td {
+  color: var(--spa-text-2);
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.scheme-preauth-page .table-hover tbody tr:hover td {
+  background: var(--spa-primary-xlight);
+}
+
+.scheme-preauth-page .table-bordered {
+  border-color: var(--spa-border-light);
+}
+
+/* ── File upload (HIMS) ─────────────────────────────────────── */
+.scheme-preauth-page .file-upload-section {
+  width: 100%;
+}
+
+.scheme-preauth-page .file-upload-wrapper {
+  border: 1.5px dashed var(--spa-border);
+  border-radius: var(--r-sm);
+  padding: 14px 16px;
+  text-align: center;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 88px;
+  color: var(--spa-text-sec);
+  background: var(--spa-surface-2);
+  transition: border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
+}
+
+.scheme-preauth-page .file-upload-wrapper svg {
+  display: none;
+}
+
+.scheme-preauth-page .file-upload-wrapper::before {
+  content: "↑";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--spa-primary-xlight);
+  color: var(--spa-primary);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.scheme-preauth-page .file-upload-wrapper p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--spa-text-sec);
+}
+
+.scheme-preauth-page .file-upload-wrapper p strong {
+  color: var(--spa-primary);
+  font-weight: 600;
+}
+
+.scheme-preauth-page .file-upload-wrapper:hover {
+  border-color: var(--spa-primary);
+  background: var(--spa-primary-xlight);
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.08);
+}
+
+.scheme-preauth-page .file-upload-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--spa-border);
+  border-radius: var(--r-sm);
+  background: var(--spa-surface);
+  font-size: 12.5px;
+  color: var(--spa-text);
+}
+
+.scheme-preauth-page .file-upload-display .file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheme-preauth-page .file-upload-display .remove-file-btn {
+  color: var(--spa-danger);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.scheme-preauth-page .file-upload-display .remove-file-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.scheme-preauth-page ul.d-flex.listing-right {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.scheme-preauth-page ul.d-flex.listing-right li {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--spa-text-2);
+}
+
+.scheme-preauth-page ul.d-flex.listing-right li label {
+  margin-right: 12px;
+  color: var(--spa-muted);
+  font-weight: 500;
+}
+
+.scheme-preauth-page ul.d-flex.listing-right li span {
+  display: inline-block;
+  min-width: 120px;
+  font-weight: 600;
+  color: var(--spa-text);
+}
+
+/* Related products / badges */
+.scheme-preauth-page .product-category-badge,
+.scheme-preauth-page .related-product-item {
+  color: var(--spa-primary);
+}
+
+.scheme-preauth-page .btn-product-primary {
+  background: var(--spa-primary);
+  color: #fff;
+  border-radius: var(--r-sm);
+  padding: 8px 16px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scheme-preauth-page .btn-product-outline {
+  border: 1px solid var(--spa-border);
+  color: var(--spa-text-sec);
+  border-radius: var(--r-sm);
+  padding: 8px 16px;
+  text-decoration: none;
+}
+
+.scheme-preauth-page .btn-product-outline:hover {
+  background: var(--spa-surface-3);
+  color: var(--spa-text);
+}
+
+/* ── Modal preview ───────────────────────────────────────────── */
+.scheme-preauth-page + .modal .modal-content,
+#previewModal .modal-content {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--spa-border-light);
+  color: var(--spa-text);
+}
+
+#previewModal .modal-header {
+  background: var(--spa-surface-2);
+  border-bottom: 1px solid var(--spa-border-light);
+}
+
+#previewModal .modal-title {
+  color: var(--spa-text);
+  font-weight: 700;
+}
+
+#previewModal .modal-body {
+  background: var(--spa-surface);
+}
+
+#previewModal .modal-footer {
+  background: var(--spa-surface-2);
+  border-top: 1px solid var(--spa-border-light);
+}
+
+/* ── Loader & misc ───────────────────────────────────────────── */
+.scheme-preauth-loader,
+.scheme-preauth-page .loader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(238, 242, 247, 0.75);
+}
+
+.scheme-preauth-loader[style*="display: block"],
+.scheme-preauth-loader.show {
+  display: flex !important;
+}
+
+.scheme-preauth-page .spinner-border.text-primary {
+  color: var(--spa-primary) !important;
+}
+
+.scheme-preauth-page #preview {
+  min-width: 180px;
+}
+
+.scheme-preauth-page .btn i[class^="ri-"] {
+  vertical-align: -0.125em;
+}
+
+.scheme-preauth-page #social-links,
+.scheme-preauth-page #claim-pending,
+.scheme-preauth-page #account-details {
+  display: none !important;
+}
+
+/* Kill Materio / bs-stepper default blues inside page */
+.scheme-preauth-page .bs-stepper .step-trigger:focus {
+  color: var(--spa-primary);
+}
+
+.scheme-preauth-page .active .bs-stepper-circle {
+  background-color: transparent;
+}
+
+@media (max-width: 991px) {
+  .scheme-preauth-page .scheme-preauth-beneficiary-card .row-cols-5 > .col {
+    flex: 0 0 100%;
+    max-width: 100%;
+    border-bottom: 1px solid var(--spa-border-light);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .scheme-preauth-page .scheme-preauth-beneficiary-card .border-end {
+    border-right: none !important;
+  }
+
+  .scheme-preauth-page .scheme-preauth-status-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

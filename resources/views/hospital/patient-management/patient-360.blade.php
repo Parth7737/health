@@ -176,13 +176,10 @@
                     @if($isIpdActive && $activeIpdAllocation)
                         @can('edit-patient-management')
                             @if($p360HasSchemePayer)
-                            <button
-                                type="button"
-                                class="btn btn-primary btn-sm p360-treatment-plan-btn"
-                                data-bs-toggle="modal"
-                                data-bs-target="#p360TreatmentPlanModal"
-                                aria-haspopup="dialog"
-                            >Treatment Plan</button>
+                            <a
+                                href="{{ route('hospital.patient-management.scheme-preauth.start', ['patient_id' => $patient->id, 'bed_allocation_id' => $activeIpdAllocation->id]) }}"
+                                class="btn btn-primary btn-sm"
+                            >Scheme preauth</a>
                             @endif
                             <button
                                 type="button"
@@ -229,7 +226,7 @@
                 <button class="tab-btn" data-tab="tabProfile" onclick="switchEMRTab('tabProfile',this)">🧾 Details</button>
                 <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">📋 Orders</button>
                 @if($isIpdActive && $activeIpdAllocation && $p360HasSchemePayer)
-                    <button class="tab-btn" data-tab="tabProcedure" onclick="switchEMRTab('tabProcedure',this)">📋 Treatment Procedures</button>
+                    <button class="tab-btn" data-tab="tabProcedure" onclick="switchEMRTab('tabProcedure',this)">📋 Scheme preauth procedures</button>
                 @endif
                 <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">💊 Medications</button>
                 <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">📝 Clinical Notes</button>
@@ -589,50 +586,78 @@
             <div class="tab-pane" id="tabProcedure">
                 <div class="card">
                     <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                        <div class="card-title mb-0">Treatment plan</div>
+                        @php
+                            $p360Preauth = $schemePreauthRegister ?? null;
+                            $p360PreauthDraft = $p360Preauth && (int) $p360Preauth->status === \App\Models\PreauthRegister::STATUS_REGISTER;
+                        @endphp
+                        <div>
+                            <div class="card-title mb-0">Scheme preauth procedures</div>
+                            @if($p360Preauth)
+                                <div class="text-muted small mt-1">
+                                    Status: {{ $p360Preauth->status_label }}
+                                    @if($p360Preauth->register_id)
+                                        · Register ID: {{ $p360Preauth->register_id }}
+                                    @endif
+                                </div>
+                            @endif
+                        </div>
                         @can('edit-patient-management')
-                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#p360TreatmentPlanModal" aria-haspopup="dialog">Edit plan</button>
+                            @if($p360Preauth && $p360PreauthDraft)
+                                <a href="{{ route('hospital.patient-management.scheme-preauth.show', ['preauthRegister' => $p360Preauth->id]) }}" class="btn btn-primary btn-sm">Continue preauth</a>
+                            @elseif(!$p360Preauth)
+                                <a href="{{ route('hospital.patient-management.scheme-preauth.start', ['patient_id' => $patient->id, 'bed_allocation_id' => $activeIpdAllocation->id]) }}" class="btn btn-primary btn-sm">Open scheme preauth</a>
+                            @endif
                         @endcan
                     </div>
                     <div class="card-body">
                         <div class="p360-tp-table-wrap">
                             <div class="table-responsive rounded-2 p360-tp-table-border">
-                                <table class="table table-hover mb-0 p360-tp-table" id="p360ProcedureTabTable" aria-label="Admission treatment plan">
+                                <table class="table table-hover mb-0" aria-label="Scheme preauth procedures">
                                     <thead>
                                         <tr>
-                                            <th class="p360-tp-th-no">No.</th>
+                                            <th>No.</th>
                                             <th>Speciality</th>
-                                            <th class="p360-tp-th-procedure">Procedure</th>
-                                            <th>Implant</th>
-                                            <th>Qty</th>
+                                            <th>Procedure</th>
                                             <th>Stratification</th>
-                                            <th>Day / units</th>
-                                            <th>Unverified amt.</th>
-                                            <th>ICHI code</th>
-                                            <th class="p360-tp-th-actions">Actions</th>
+                                            <th>Days</th>
+                                            <th>Amount</th>
+                                            <th>ICD</th>
                                         </tr>
                                     </thead>
                                     <tbody id="p360ProcedureTabTableBody">
-                                        @forelse(($ipdTreatmentPlanProcedures ?? collect()) as $tpRow)
+                                        @forelse(($schemePreauthProcedures ?? collect()) as $preauthProc)
                                             @php
-                                                $tpAmt = (float) ($tpRow->amount_value ?? 0);
-                                                $tpAmtLabel = '₹' . number_format($tpAmt, 2);
+                                                $lineTotal = (float) ($preauthProc->procedure_price ?? 0) + (float) ($preauthProc->stratification_price ?? 0);
                                             @endphp
                                             <tr>
-                                                <td class="p360-tp-col-no">{{ $loop->iteration }}</td>
-                                                <td>{{ $tpRow->speciality_name ?: '—' }}</td>
-                                                <td><div class="p360-tp-proc-cell">{{ $tpRow->procedure_label ?: '—' }}</div></td>
-                                                <td>{{ $tpRow->implant_label ?: '—' }}</td>
-                                                <td>{{ $tpRow->implant_qty !== null && $tpRow->implant_qty !== '' ? $tpRow->implant_qty : '—' }}</td>
-                                                <td>{{ $tpRow->stratification_label ?: '—' }}</td>
-                                                <td>{{ $tpRow->no_of_days !== null && $tpRow->no_of_days !== '' ? $tpRow->no_of_days : '—' }}</td>
-                                                <td>{{ $tpAmtLabel }}</td>
-                                                <td>{{ $tpRow->ichi_code ?: '—' }}</td>
-                                                <td class="text-center text-muted">—</td>
+                                                <td>{{ $loop->iteration }}</td>
+                                                <td>{{ $preauthProc->speciality->name ?? '—' }}</td>
+                                                <td>{{ $preauthProc->procedure->procedure_name ?? '—' }}</td>
+                                                <td>{{ (float) ($preauthProc->stratification_price ?? 0) > 0 ? '₹' . number_format((float) $preauthProc->stratification_price, 2) : '—' }}</td>
+                                                <td>{{ $preauthProc->no_of_days ?: '—' }}</td>
+                                                <td>₹{{ number_format($lineTotal, 2) }}</td>
+                                                <td>{{ $preauthProc->procedure->icd_code ?? '—' }}</td>
                                             </tr>
+                                            @if($preauthProc->implant_id)
+                                            <tr>
+                                                <td>{{ $loop->iteration }}.1</td>
+                                                <td>{{ $preauthProc->speciality->name ?? '—' }}</td>
+                                                <td>{{ $preauthProc->implant->name ?? 'Implant' }}</td>
+                                                <td>—</td>
+                                                <td>Qty {{ $preauthProc->implant_qty ?? '—' }}</td>
+                                                <td>₹{{ number_format((float) ($preauthProc->implant_price ?? 0), 2) }}</td>
+                                                <td>—</td>
+                                            </tr>
+                                            @endif
                                         @empty
                                             <tr>
-                                                <td colspan="10" class="text-center text-muted">No treatment plan lines saved for this admission yet. Use <strong>Treatment Plan</strong> in the banner to add and save lines.</td>
+                                                <td colspan="7" class="text-center text-muted">
+                                                    @if(($p360Preauth ?? null) && !($p360PreauthDraft ?? false))
+                                                        No procedures on this preauth record yet, or preauth has already been submitted.
+                                                    @else
+                                                        No procedures added yet. Use <strong>Scheme preauth</strong> to add procedures.
+                                                    @endif
+                                                </td>
                                             </tr>
                                         @endforelse
                                     </tbody>
@@ -944,119 +969,6 @@
         </div>
     </div>
 </div>
-
-@if($p360HasSchemePayer)
-{{-- Patient 360 — Treatment Plan modal (masters + SHA-style show/hide) --}}
-<div class="modal fade" id="p360TreatmentPlanModal" tabindex="-1" aria-labelledby="p360TreatmentPlanModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
-        <div class="modal-content p360-tp-modal opd-content-wrap">
-            <div class="modal-header border-bottom">
-                <h5 class="modal-title d-flex align-items-center gap-2 mb-0" id="p360TreatmentPlanModalLabel">
-                    <span class="p360-tp-title-text">Treatment plan</span>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p360-tp-modal-body">
-                <form id="p360TreatmentPlanForm" class="p360-tp-form" onsubmit="return false;">
-                    <div class="row g-3 justify-content-center">
-                        <div class="col-md-8 col-lg-6">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpSpeciality">Speciality</label>
-                                <select class="form-control p360-tp-s2" id="p360TpSpeciality" name="speciality_id" aria-label="Speciality">
-                                    <option value="">Select speciality</option>
-                                    @foreach(($treatmentPlanSpecialities ?? collect()) as $tpSpec)
-                                        <option value="{{ $tpSpec->speciality_id }}">{{ $tpSpec->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-8 col-lg-6">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpProcedure">Procedure</label>
-                                <select class="form-control p360-tp-s2" id="p360TpProcedure" name="procedure_id" aria-label="Procedure">
-                                    <option value="">Select procedure</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-8 col-lg-6 p360-tp-implant-field d-none">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpImplantId">Implant</label>
-                                <select class="form-control p360-tp-s2" id="p360TpImplantId" name="implant_id" aria-label="Implant">
-                                    <option value="">Select implant</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-8 col-lg-6 p360-tp-implant-field d-none">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpImplantQty">Quantity</label>
-                                <input type="text" class="form-control" id="p360TpImplantQty" name="implant_qty" value="" readonly autocomplete="off" inputmode="numeric">
-                            </div>
-                            <div id="p360TpImplantQtyError" class="small text-danger"></div>
-                        </div>
-                        <div class="col-md-8 col-lg-6 p360-tp-stratification-field d-none">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpStratificationId">Stratification</label>
-                                <select class="form-control p360-tp-s2" id="p360TpStratificationId" name="stratification_id" aria-label="Stratification">
-                                    <option value="">Select stratification</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-8 col-lg-6">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpUnits">No. of days / units</label>
-                                <input type="text" class="form-control" id="p360TpUnits" name="no_of_days" value="" autocomplete="off" inputmode="numeric">
-                            </div>
-                        </div>
-                        <div class="col-md-8 col-lg-6 p360-tp-u100-field d-none">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpU100Amount">Unverified amount (₹)</label>
-                                <input type="number" step="0.01" min="0" class="form-control" id="p360TpU100Amount" name="u100_amount" value="" autocomplete="off">
-                            </div>
-                        </div>
-                        <div class="col-md-8 col-lg-6">
-                            <div class="form-group">
-                                <label class="form-label" for="p360TpIchi">ICHI / ICD code</label>
-                                <input type="text" class="form-control" id="p360TpIchi" name="ichi" value="" readonly autocomplete="off">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="text-center mt-4">
-                        <button type="button" class="btn btn-primary px-5" id="p360TreatmentPlanAddBtn" disabled>Add</button>
-                    </div>
-                </form>
-
-                <div class="p360-tp-table-wrap mt-4">
-                    <div class="table-responsive rounded-2 p360-tp-table-border">
-                        <table class="table table-hover mb-0 p360-tp-table" id="p360TreatmentPlanTable">
-                            <thead>
-                                <tr>
-                                    <th class="p360-tp-th-no">No.</th>
-                                    <th>Speciality</th>
-                                    <th class="p360-tp-th-procedure">Procedure</th>
-                                    <th>Implant</th>
-                                    <th>Qty</th>
-                                    <th>Stratification</th>
-                                    <th>Day / units</th>
-                                    <th>Unverified amt.</th>
-                                    <th>ICHI code</th>
-                                    <th class="p360-tp-th-actions">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="p360TreatmentPlanTableBody"></tbody>
-                        </table>
-                    </div>
-                    <p class="text-muted small mt-2 mb-0" id="p360TreatmentPlanEmptyHint">No lines yet. Fill the form and tap <strong>Add</strong>.</p>
-                </div>
-                <div class="text-center mt-4 pt-2 border-top">
-                    <button type="button" class="btn btn-success px-5" id="p360TreatmentPlanSaveBtn" disabled>Save treatment plan</button>
-                    <p class="text-muted small mt-2 mb-0" id="p360TreatmentPlanSaveHint">Saves all lines for this IPD admission. You can update charges and billing from these records later.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-@endif
-
 {{-- Patient 360 — New Order Modal --}}
 <div class="modal fade" id="p360Modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -1175,14 +1087,6 @@ window.Patient360Config = {
         url: @json($patient360OpdMarkCompletedUrl ?? ''),
     },
     ipdAllocationId: @json(($isIpdActive && $activeIpdAllocation) ? $activeIpdAllocation->id : null),
-    treatmentPlan: {
-        procedures: @json(route('hospital.patient-management.treatment-plan.procedures')),
-        procedureDetail: @json(route('hospital.patient-management.treatment-plan.procedure-detail')),
-        implantDetail: @json(route('hospital.patient-management.treatment-plan.implant-detail')),
-        stratificationDetail: @json(route('hospital.patient-management.treatment-plan.stratification-detail')),
-        lines: @json(route('hospital.patient-management.treatment-plan.lines')),
-        save: @json(route('hospital.patient-management.treatment-plan.save')),
-    },
     permissions: {
         canPathology: @json(auth()->user()->can('create-pathology-order')),
         canRadiology: @json(auth()->user()->can('create-radiology-order'))
@@ -1199,8 +1103,5 @@ window.Patient360Config = {
     }
 };
 </script>
-@if($p360HasSchemePayer)
-<script src="{{ asset('public/modules/sa/patient-360-treatment-plan.js') }}"></script>
-@endif
 <script src="{{ asset('public/modules/sa/patient-360.js') }}"></script>
 @endpush

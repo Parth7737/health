@@ -10,6 +10,11 @@
 
   const GOVERNMENT_PAYMENT_LABELS = new Set([
     'State Health Scheme / AB-PMJAY (Ayushman Bharat)',
+    'AB-PMJAY (Ayushman Bharat)',
+    'CGHS',
+    'ECHS',
+    'State Health Scheme',
+    'ESI',
   ]);
 
   const FIELD_TO_STEP = {
@@ -85,6 +90,10 @@
     casualty: 'reg_visit_type',
     scheme_beneficiary_card_id: 'reg_gov_card_search',
     scheme_type_id: 'reg_gov_scheme_id',
+    pin_code: 'reg_pin',
+    state: 'reg_state',
+    district: 'reg_district',
+    ayushman_bharat_id: 'reg_ab',
   };
 
   class PatientRegistrationFormController {
@@ -168,6 +177,7 @@
       });
 
       document.getElementById('reg_dob')?.addEventListener('change', () => this.calcAge());
+      document.getElementById('reg_scheme_newborn')?.addEventListener('change', () => this.syncSchemeNewbornDetailsVisibility());
       document.getElementById('reg_state')?.addEventListener('change', (event) => this.loadRegistrationDistricts(event.target.value));
       document.getElementById('reg_dept')?.addEventListener('change', async () => {
         await this.loadRegistrationDoctors();
@@ -475,6 +485,7 @@
       this.updateVisitType(this.getVisitType(), { syncSlots: false });
       this.syncVisibleSelect2();
       this.updateGovPaymentAvailability();
+      this.syncSchemeNewbornDetailsVisibility();
     }
 
     renderStaticOptions() {
@@ -587,6 +598,10 @@
         }
       }
 
+      if (stepNumber === 1 && !this.validateSchemeNewbornFields()) {
+        return false;
+      }
+
       if (stepNumber === 4) {
         const visitType = this.getVisitType();
         const selectedBed = document.getElementById('reg_bed')?.value || '';
@@ -615,6 +630,12 @@
           return false;
         }
         if (this.isGovSchemePanelVisible()) {
+          if (!this.validateSchemeAddressFields()) {
+            return false;
+          }
+          if (!this.validateSchemeNewbornFields()) {
+            return false;
+          }
           if (!document.getElementById('reg_gov_scheme_id')?.value) {
             this.setFieldError('reg_gov_scheme_id', 'Select a scheme.');
             document.getElementById('reg_gov_scheme_id')?.focus();
@@ -764,6 +785,77 @@
     isGovSchemePanelVisible() {
       const pay = document.getElementById('reg_payment')?.value || '';
       return this.isGovSchemePaymentLabel(pay) && this.isGovSchemeBedContext();
+    }
+
+    syncSchemeNewbornDetailsVisibility() {
+      const checked = !!document.getElementById('reg_scheme_newborn')?.checked;
+      const panel = document.getElementById('reg_scheme_newborn_details');
+      if (panel) {
+        panel.style.display = checked ? '' : 'none';
+      }
+      if (!checked) {
+        const cert = document.getElementById('reg_scheme_born_certificate');
+        if (cert) {
+          cert.value = '';
+        }
+      }
+    }
+
+    validateSchemeNewbornFields() {
+      if (!document.getElementById('reg_scheme_newborn')?.checked) {
+        return true;
+      }
+      const name = String(document.getElementById('reg_name')?.value || '').trim();
+      if (!name) {
+        this.setFieldError('reg_name', 'Enter the baby name in patient details above.');
+        document.getElementById('reg_name')?.focus();
+        return false;
+      }
+      const dob = String(document.getElementById('reg_dob')?.value || '').trim();
+      if (!dob) {
+        this.setFieldError('reg_dob', 'Enter date of birth in patient details above.');
+        document.getElementById('reg_dob')?.focus();
+        return false;
+      }
+      const gender = String(document.getElementById('reg_gender')?.value || '').trim();
+      if (!gender) {
+        this.setFieldError('reg_gender', 'Select gender in patient details above.');
+        document.getElementById('reg_gender')?.focus();
+        return false;
+      }
+      return true;
+    }
+
+    validateSchemeAddressFields() {
+      const address = String(document.getElementById('reg_address')?.value || '').trim();
+      if (address.length < 3) {
+        this.setFieldError('reg_address', 'Address is required for scheme registration.');
+        document.getElementById('reg_address')?.focus();
+        return false;
+      }
+      const pin = String(document.getElementById('reg_pin')?.value || '').trim();
+      if (pin.length < 4) {
+        this.setFieldError('reg_pin', 'PIN code is required for scheme registration.');
+        document.getElementById('reg_pin')?.focus();
+        return false;
+      }
+      if (!this.selectedMeaningfulText('reg_state')) {
+        this.setFieldError('reg_state', 'State is required for scheme registration.');
+        document.getElementById('reg_state')?.focus();
+        return false;
+      }
+      if (!this.selectedMeaningfulText('reg_district')) {
+        this.setFieldError('reg_district', 'District is required for scheme registration.');
+        document.getElementById('reg_district')?.focus();
+        return false;
+      }
+      const abId = String(document.getElementById('reg_ab')?.value || '').trim();
+      if (abId.length < 4) {
+        this.setFieldError('reg_ab', 'Ayushman Bharat ID is required for scheme registration.');
+        document.getElementById('reg_ab')?.focus();
+        return false;
+      }
+      return true;
     }
 
     resetGovSchemeState() {
@@ -1954,8 +2046,33 @@
         payload.scheme_auth_token = document.getElementById('reg_scheme_auth_token')?.value || null;
         payload.scheme_aadhar_otp = kyc === 'aadhar_otp' ? String(document.getElementById('reg_gov_otp')?.value || '').trim() || null : null;
         payload.scheme_is_newborn = !!document.getElementById('reg_scheme_newborn')?.checked;
+        if (payload.scheme_is_newborn) {
+          payload.scheme_born_baby_dob = document.getElementById('reg_dob')?.value || null;
+          payload.scheme_born_baby_name = document.getElementById('reg_name')?.value || null;
+          payload.scheme_born_baby_gender = document.getElementById('reg_gender')?.value || null;
+        }
       }
       return payload;
+    }
+
+    buildRegistrationRequestBody(payload) {
+      const certFile = document.getElementById('reg_scheme_born_certificate')?.files?.[0];
+      if (!certFile) {
+        return payload;
+      }
+      const formData = new FormData();
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value === null || value === undefined) {
+          return;
+        }
+        if (Array.isArray(value)) {
+          value.forEach((item) => formData.append(`${key}[]`, item));
+          return;
+        }
+        formData.append(key, value);
+      });
+      formData.append('scheme_born_baby_birth_certificate', certFile);
+      return formData;
     }
 
     async submitRegistration() {
@@ -1966,9 +2083,20 @@
       }
 
       const payload = this.collectPayload();
+      if (this.shouldPersistSchemePayload(payload)) {
+        if (!this.validateSchemeAddressFields()) {
+          this.setStep(2, { focusFirst: false });
+          return;
+        }
+        if (!this.validateSchemeNewbornFields()) {
+          this.setStep(1, { focusFirst: false });
+          return;
+        }
+      }
+      const requestBody = this.buildRegistrationRequestBody(payload);
       this.elements.submitBtn.disabled = true;
       try {
-        const data = await window.pmFetch(this.routes.register, { method: 'POST', body: payload });
+        const data = await window.pmFetch(this.routes.register, { method: 'POST', body: requestBody });
         const successMessage = `${data?.patient_name || payload.name} registered successfully.`;
         this.elements.genMrn.textContent = data?.mrn || '—';
         this.elements.genToken.textContent = data?.token || data?.admission_no || '—';
