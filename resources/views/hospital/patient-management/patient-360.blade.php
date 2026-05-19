@@ -27,10 +27,13 @@
     $initials = $initials ?: 'NA';
 
     $contextRecord = $isIpdActive ? $activeIpdAllocation : $latestOpdVisit;
+    $consultantName = $isIpdActive ? data_get($activeIpdAllocation, 'consultantDoctor.first_name') . ' ' . data_get($activeIpdAllocation, 'consultantDoctor.last_name') : data_get($latestOpdVisit, 'consultant.first_name') . ' ' . data_get($latestOpdVisit, 'consultant.last_name');
     $contextDate = data_get($contextRecord, $isIpdActive ? 'admission_date' : 'appointment_date');
     $dateText = $contextDate ? \Carbon\Carbon::parse($contextDate)->format('d M Y') : '-';
     $dateLabel = $isIpdActive ? 'Admitted' : 'Visited';
-
+    if($contextDate > now()->startOfDay()) {
+        $dateLabel = 'Scheduled';
+    }
     $wardName = data_get($activeIpdAllocation, 'bed.room.ward.ward_name') ?: data_get($activeIpdAllocation, 'bed.bedType.type_name') ?: 'Ward';
     $bedCode = data_get($activeIpdAllocation, 'bed.bed_code') ?: '-';
     $stayDayText = '-';
@@ -129,6 +132,8 @@
                             <span>Blood: <strong class="p360-meta-strong">{{ $patient->blood_group ?: '—' }}</strong></span>
                             <span class="p360-meta-sep" aria-hidden="true">·</span>
                             <span>{{ $dateLabel }}: <strong class="p360-meta-strong">{{ $dateText }}</strong></span>
+                            <span class="p360-meta-sep" aria-hidden="true">·</span>
+                            <span>Consultant: <strong class="p360-meta-strong">{{ $consultantName ?: '—' }}</strong></span>
                         </div>
                     </div>
                 </div>
@@ -226,7 +231,7 @@
                 <button class="tab-btn" data-tab="tabProfile" onclick="switchEMRTab('tabProfile',this)">🧾 Details</button>
                 <button class="tab-btn" data-tab="tabOrders" onclick="switchEMRTab('tabOrders',this)">📋 Orders</button>
                 @if($isIpdActive && $activeIpdAllocation && $p360HasSchemePayer)
-                    <button class="tab-btn" data-tab="tabProcedure" onclick="switchEMRTab('tabProcedure',this)">📋 Scheme preauth procedures</button>
+                    <button class="tab-btn" data-tab="tabProcedure" onclick="switchEMRTab('tabProcedure',this)">📋Preauth Procedures</button>
                 @endif
                 <button class="tab-btn" data-tab="tabMeds" onclick="switchEMRTab('tabMeds',this)">💊 Medications</button>
                 <button class="tab-btn" data-tab="tabNotes" onclick="switchEMRTab('tabNotes',this)">📝 Clinical Notes</button>

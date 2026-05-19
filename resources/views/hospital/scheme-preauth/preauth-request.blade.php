@@ -20,6 +20,9 @@
                 <a href="javascript:void(0);">Home</a>
             </li>
             <li class="breadcrumb-item active">Pre Authorization ({{ $preauthRegister->register_id ?: 'Draft' }})</li>
+            <li class="ms-auto">
+                <a href="{{ route('hospital.patient-management.patient-details', ['patient' => $patient->id]) }}" class="btn btn-primary btn-sm">Patient Details</a>
+            </li>
         </ol>
     </nav>
     <div class="scheme-preauth-stack">

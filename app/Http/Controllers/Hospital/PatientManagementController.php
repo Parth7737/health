@@ -431,14 +431,47 @@ class PatientManagementController extends BaseHospitalController
             });
         }
 
-        // Visit type filter via subquery
+        $hasActiveIpdForPatient = function ($sub) use ($isDoctorScoped, $doctorStaffId) {
+            $sub->select(DB::raw(1))
+                ->from('bed_allocations')
+                ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                ->where('bed_allocations.hospital_id', $this->hospital_id)
+                ->whereNull('bed_allocations.discharge_date');
+
+            if ($isDoctorScoped) {
+                $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+            }
+        };
+
+        // Visit type filter via current visit context. Active IPD wins over old OPD rows.
         if ($filter === 'opd') {
-            $query->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
+            $query->whereNotExists($hasActiveIpdForPatient)
+                ->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
                 $sub->select(DB::raw(1))
                     ->from('opd_patients')
                     ->whereColumn('opd_patients.patient_id', 'patients.id')
                     ->where('opd_patients.hospital_id', $this->hospital_id)
-                    ->whereDate('opd_patients.appointment_date', now()->toDateString());
+                    ->where(function ($type) {
+                        $type->whereNull('opd_patients.visit_type')
+                            ->orWhere('opd_patients.visit_type', 'OPD');
+                    })
+                    ->where(function ($emergency) {
+                        $emergency->whereNull('opd_patients.casualty')
+                            ->orWhere('opd_patients.casualty', '!=', 'Yes');
+                    });
+
+                if ($isDoctorScoped) {
+                    $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                }
+            });
+        } elseif ($filter === 'daycare') {
+            $query->whereNotExists($hasActiveIpdForPatient)
+                ->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
+                $sub->select(DB::raw(1))
+                    ->from('opd_patients')
+                    ->whereColumn('opd_patients.patient_id', 'patients.id')
+                    ->where('opd_patients.hospital_id', $this->hospital_id)
+                    ->where('opd_patients.visit_type', 'Daycare');
 
                 if ($isDoctorScoped) {
                     $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
@@ -450,7 +483,11 @@ class PatientManagementController extends BaseHospitalController
                     ->from('bed_allocations')
                     ->whereColumn('bed_allocations.patient_id', 'patients.id')
                     ->where('bed_allocations.hospital_id', $this->hospital_id)
-                    ->whereNull('bed_allocations.discharge_date');
+                    ->whereNull('bed_allocations.discharge_date')
+                    ->where(function ($source) {
+                        $source->whereNull('bed_allocations.admission_source')
+                            ->orWhere('bed_allocations.admission_source', '!=', 'emergency');
+                    });
 
                 if ($isDoctorScoped) {
                     $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
@@ -458,17 +495,28 @@ class PatientManagementController extends BaseHospitalController
             });
         } elseif ($filter === 'emergency') {
             $query->where(function ($sq) use ($isDoctorScoped, $doctorStaffId) {
-                $sq->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
+                $sq->where(function ($opdEmergency) use ($isDoctorScoped, $doctorStaffId) {
+                    $opdEmergency->whereNotExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
+                        $sub->select(DB::raw(1))
+                            ->from('bed_allocations')
+                            ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                            ->where('bed_allocations.hospital_id', $this->hospital_id)
+                            ->whereNull('bed_allocations.discharge_date');
+
+                        if ($isDoctorScoped) {
+                            $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                        }
+                    })->whereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
                     $sub->select(DB::raw(1))
                         ->from('opd_patients')
                         ->whereColumn('opd_patients.patient_id', 'patients.id')
                         ->where('opd_patients.hospital_id', $this->hospital_id)
-                        ->where('opd_patients.casualty', 'Yes')
-                        ->whereDate('opd_patients.appointment_date', now()->toDateString());
+                        ->where('opd_patients.casualty', 'Yes');
 
                     if ($isDoctorScoped) {
                         $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
                     }
+                    });
                 })->orWhereExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
                     $sub->select(DB::raw(1))
                         ->from('bed_allocations')
@@ -497,29 +545,146 @@ class PatientManagementController extends BaseHospitalController
         }
 
         if ($deptId) {
-            $query->where(function ($sq) use ($deptId, $isDoctorScoped, $doctorStaffId) {
-                $sq->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+            if ($filter === 'opd') {
+                $query->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
                     $sub->select(DB::raw(1))
                         ->from('opd_patients')
                         ->whereColumn('opd_patients.patient_id', 'patients.id')
                         ->where('opd_patients.hospital_id', $this->hospital_id)
+                        ->where(function ($type) {
+                            $type->whereNull('opd_patients.visit_type')
+                                ->orWhere('opd_patients.visit_type', 'OPD');
+                        })
+                        ->where(function ($emergency) {
+                            $emergency->whereNull('opd_patients.casualty')
+                                ->orWhere('opd_patients.casualty', '!=', 'Yes');
+                        })
                         ->where('opd_patients.hr_department_id', $deptId);
 
                     if ($isDoctorScoped) {
                         $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
                     }
-                })->orWhereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                });
+            } elseif ($filter === 'daycare') {
+                $query->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                    $sub->select(DB::raw(1))
+                        ->from('opd_patients')
+                        ->whereColumn('opd_patients.patient_id', 'patients.id')
+                        ->where('opd_patients.hospital_id', $this->hospital_id)
+                        ->where('opd_patients.visit_type', 'Daycare')
+                        ->where('opd_patients.hr_department_id', $deptId);
+
+                    if ($isDoctorScoped) {
+                        $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                    }
+                });
+            } elseif ($filter === 'ipd') {
+                $query->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
                     $sub->select(DB::raw(1))
                         ->from('bed_allocations')
                         ->whereColumn('bed_allocations.patient_id', 'patients.id')
                         ->where('bed_allocations.hospital_id', $this->hospital_id)
+                        ->whereNull('bed_allocations.discharge_date')
+                        ->where(function ($source) {
+                            $source->whereNull('bed_allocations.admission_source')
+                                ->orWhere('bed_allocations.admission_source', '!=', 'emergency');
+                        })
                         ->where('bed_allocations.hr_department_id', $deptId);
 
                     if ($isDoctorScoped) {
                         $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
                     }
                 });
-            });
+            } elseif ($filter === 'emergency') {
+                $query->where(function ($sq) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                    $sq->where(function ($opdEmergency) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                        $opdEmergency->whereNotExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
+                            $sub->select(DB::raw(1))
+                                ->from('bed_allocations')
+                                ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                                ->where('bed_allocations.hospital_id', $this->hospital_id)
+                                ->whereNull('bed_allocations.discharge_date');
+
+                            if ($isDoctorScoped) {
+                                $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                            }
+                        })->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                            $sub->select(DB::raw(1))
+                                ->from('opd_patients')
+                                ->whereColumn('opd_patients.patient_id', 'patients.id')
+                                ->where('opd_patients.hospital_id', $this->hospital_id)
+                                ->where('opd_patients.casualty', 'Yes')
+                                ->where('opd_patients.hr_department_id', $deptId);
+
+                            if ($isDoctorScoped) {
+                                $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                            }
+                        });
+                    })->orWhereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                        $sub->select(DB::raw(1))
+                            ->from('bed_allocations')
+                            ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                            ->where('bed_allocations.hospital_id', $this->hospital_id)
+                            ->whereNull('bed_allocations.discharge_date')
+                            ->where('bed_allocations.admission_source', 'emergency')
+                            ->where('bed_allocations.hr_department_id', $deptId);
+
+                        if ($isDoctorScoped) {
+                            $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                        }
+                    });
+                });
+            } elseif ($filter === 'discharged') {
+                $query->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                    $sub->select(DB::raw(1))
+                        ->from('bed_allocations')
+                        ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                        ->where('bed_allocations.hospital_id', $this->hospital_id)
+                        ->whereDate('bed_allocations.discharge_date', now()->toDateString())
+                        ->where('bed_allocations.hr_department_id', $deptId);
+
+                    if ($isDoctorScoped) {
+                        $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                    }
+                });
+            } else {
+                $query->where(function ($sq) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                    $sq->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                        $sub->select(DB::raw(1))
+                            ->from('bed_allocations')
+                            ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                            ->where('bed_allocations.hospital_id', $this->hospital_id)
+                            ->whereNull('bed_allocations.discharge_date')
+                            ->where('bed_allocations.hr_department_id', $deptId);
+
+                        if ($isDoctorScoped) {
+                            $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                        }
+                    })->orWhere(function ($opdDept) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                        $opdDept->whereNotExists(function ($sub) use ($isDoctorScoped, $doctorStaffId) {
+                            $sub->select(DB::raw(1))
+                                ->from('bed_allocations')
+                                ->whereColumn('bed_allocations.patient_id', 'patients.id')
+                                ->where('bed_allocations.hospital_id', $this->hospital_id)
+                                ->whereNull('bed_allocations.discharge_date');
+
+                            if ($isDoctorScoped) {
+                                $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+                            }
+                        })->whereExists(function ($sub) use ($deptId, $isDoctorScoped, $doctorStaffId) {
+                            $sub->select(DB::raw(1))
+                                ->from('opd_patients')
+                                ->whereColumn('opd_patients.patient_id', 'patients.id')
+                                ->where('opd_patients.hospital_id', $this->hospital_id)
+                                ->where('opd_patients.hr_department_id', $deptId);
+
+                            if ($isDoctorScoped) {
+                                $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+                            }
+                        });
+                    });
+                });
+            }
         }
 
         $total    = (clone $query)->count();
@@ -535,13 +700,28 @@ class PatientManagementController extends BaseHospitalController
         $patientIds = $patients->pluck('id')->all();
 
         // Latest OPD visits
-        $latestOpd = OpdPatient::query()
+        $latestOpdQuery = OpdPatient::query()
             ->whereIn('patient_id', $patientIds)
             ->where('hospital_id', $this->hospital_id)
             ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
                 $this->applyDoctorScopeConstraint($query, 'doctor_id', $doctorStaffId);
             })
-            ->select('id', 'patient_id', 'status', 'appointment_date', 'hr_department_id', 'visit_type', 'casualty')
+            ->select('id', 'patient_id', 'status', 'appointment_date', 'hr_department_id', 'visit_type', 'casualty');
+
+        if ($filter === 'opd') {
+            $latestOpdQuery->where(function ($type) {
+                    $type->whereNull('visit_type')->orWhere('visit_type', 'OPD');
+                })
+                ->where(function ($emergency) {
+                    $emergency->whereNull('casualty')->orWhere('casualty', '!=', 'Yes');
+                });
+        } elseif ($filter === 'daycare') {
+            $latestOpdQuery->where('visit_type', 'Daycare');
+        } elseif ($filter === 'emergency') {
+            $latestOpdQuery->where('casualty', 'Yes');
+        }
+
+        $latestOpd = $latestOpdQuery
             ->orderByDesc('id')
             ->get()
             ->unique('patient_id')
@@ -581,8 +761,8 @@ class PatientManagementController extends BaseHospitalController
             $dept      = '-';
 
             if ($ipd) {
-                // Keep original source type visible for admitted patients (e.g. Emergency admission).
-                $visitType = $sourceVisitType ?: ($ipd->admission_source === 'emergency' ? 'Emergency' : 'IPD');
+                // Active bed allocation is the current visit context; only emergency admissions stay labelled Emergency.
+                $visitType = $ipd->admission_source === 'emergency' ? 'Emergency' : 'IPD';
                 $status    = 'admitted';
                 $dept      = $departments[$ipd->hr_department_id] ?? '-';
             } elseif ($opd) {
@@ -1181,10 +1361,7 @@ class PatientManagementController extends BaseHospitalController
 
         $rows = $admissions->map(function ($row) use ($latestOpdByPatient) {
             $days = $row->admission_date ? Carbon::parse($row->admission_date)->diffInDays(now()) + 1 : '-';
-            $latestOpd = $latestOpdByPatient->get($row->patient_id);
-            $visitType = $latestOpd
-                ? ($latestOpd->casualty === 'Yes' ? 'Emergency' : ($latestOpd->visit_type ?: 'OPD'))
-                : ($row->admission_source === 'emergency' ? 'Emergency' : 'IPD');
+            $visitType = $row->admission_source === 'emergency' ? 'Emergency' : 'IPD';
 
             return [
                 'id'           => $row->id,
@@ -1227,25 +1404,25 @@ class PatientManagementController extends BaseHospitalController
 
         $patients = Patient::query()
             ->where('hospital_id', $this->hospital_id)
-            ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
-                $query->where(function ($sq) use ($doctorStaffId) {
-                    $sq->whereExists(function ($sub) use ($doctorStaffId) {
-                        $sub->select(DB::raw(1))
-                            ->from('opd_patients')
-                            ->whereColumn('opd_patients.patient_id', 'patients.id')
-                            ->where('opd_patients.hospital_id', $this->hospital_id);
+            // ->when($isDoctorScoped, function ($query) use ($doctorStaffId) {
+            //     $query->where(function ($sq) use ($doctorStaffId) {
+            //         $sq->whereExists(function ($sub) use ($doctorStaffId) {
+            //             $sub->select(DB::raw(1))
+            //                 ->from('opd_patients')
+            //                 ->whereColumn('opd_patients.patient_id', 'patients.id')
+            //                 ->where('opd_patients.hospital_id', $this->hospital_id);
 
-                        $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
-                    })->orWhereExists(function ($sub) use ($doctorStaffId) {
-                        $sub->select(DB::raw(1))
-                            ->from('bed_allocations')
-                            ->whereColumn('bed_allocations.patient_id', 'patients.id')
-                            ->where('bed_allocations.hospital_id', $this->hospital_id);
+            //             $this->applyDoctorScopeConstraint($sub, 'opd_patients.doctor_id', $doctorStaffId);
+            //         })->orWhereExists(function ($sub) use ($doctorStaffId) {
+            //             $sub->select(DB::raw(1))
+            //                 ->from('bed_allocations')
+            //                 ->whereColumn('bed_allocations.patient_id', 'patients.id')
+            //                 ->where('bed_allocations.hospital_id', $this->hospital_id);
 
-                        $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
-                    });
-                });
-            })
+            //             $this->applyDoctorScopeConstraint($sub, 'bed_allocations.consultant_doctor_id', $doctorStaffId);
+            //         });
+            //     });
+            // })
             ->where(function ($sq) use ($q) {
                 $sq->where('name', 'like', "%{$q}%")
                     ->orWhere('mrn', 'like', "%{$q}%")
@@ -1253,7 +1430,7 @@ class PatientManagementController extends BaseHospitalController
                     ->orWhere('phone', 'like', "%{$q}%")
                     ->orWhere('aadhar_no', 'like', "%{$q}%");
             })
-            ->select('id', 'mrn', 'patient_id', 'name', 'age_years', 'gender', 'phone', 'blood_group', 'date_of_birth')
+            ->select('id', 'mrn', 'patient_id', 'name', 'age_years', 'gender', 'phone', 'blood_group', 'date_of_birth', 'aadhar_no', 'ayushman_bharat_id')
             ->limit(10)
             ->get();
 
@@ -1267,6 +1444,8 @@ class PatientManagementController extends BaseHospitalController
                 'age_sex'    => ($p->age_years ?? '-') . '/' . ($p->gender ? strtoupper(substr($p->gender, 0, 1)) : '-'),
                 'blood_group' => $p->blood_group ?: '-',
                 'dob'        => $p->date_of_birth ? Carbon::parse($p->date_of_birth)->format('d-m-Y') : null,
+                'aadhar_no'  => $p->aadhar_no,
+                'ayushman_bharat_id' => $p->ayushman_bharat_id,
             ];
         }));
     }
@@ -1578,6 +1757,7 @@ class PatientManagementController extends BaseHospitalController
                 'bed.bedType:id,type_name',
                 'bed.room:id,room_number,ward_id',
                 'bed.room.ward:id,ward_name',
+                'consultantDoctor:id,first_name,last_name',
             ])
             ->orderByDesc('admission_date')
             ->orderByDesc('id')
@@ -1600,8 +1780,7 @@ class PatientManagementController extends BaseHospitalController
             ->where('hospital_id', $this->hospital_id)
             ->where('patient_id', $patient->id)
             ->with([
-                'consultant:id,first_name,last_name',
-                'tpa:id,name',
+                'consultant:id,first_name,last_name'
             ])
             ->orderByDesc('appointment_date')
             ->orderByDesc('id')
@@ -1624,6 +1803,7 @@ class PatientManagementController extends BaseHospitalController
                 'visit_type',
                 'payment_mode',
                 'tpa_id',
+                'doctor_id'
             ]);
 
             $visits = OpdPatient::select(
@@ -2908,6 +3088,26 @@ class PatientManagementController extends BaseHospitalController
             ], 422);
         }
 
+        
+        $activeIpdAllocation = BedAllocation::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('patient_id', $patient->id)
+            ->whereNull('discharge_date')
+            ->with([
+                'bed:id,bed_code,bed_type_id,room_id',
+                'bed.bedType:id,type_name',
+                'bed.room:id,room_number,ward_id',
+                'bed.room.ward:id,ward_name',
+            ])
+            ->orderByDesc('admission_date')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($activeIpdAllocation) {
+            return response()->json([
+                'errors' => [['code' => 'patient_id', 'message' => 'Patient already has an active IPD admission. Complete that first.']],
+            ], 422);
+        }
         try {
             $result = DB::transaction(function () use ($request, $patient, $chargeLedger, $timelineService) {
                 $apptDate = $request->appointment_date ?: now()->toDateString();
@@ -3018,7 +3218,8 @@ class PatientManagementController extends BaseHospitalController
         Request $request,
         BedAllocationService $bedAllocationService,
         ChargeLedgerService $chargeLedger,
-        PatientTimelineService $timelineService
+        PatientTimelineService $timelineService,
+        SchemePreauthRegisterService $schemePreauthRegisterService
     ) {
         $validator = Validator::make($request->all(), [
             'patient_id'      => 'required|exists:patients,id',
@@ -3028,7 +3229,13 @@ class PatientManagementController extends BaseHospitalController
             'admission_reason' => 'nullable|string',
             'tpa_id'          => 'nullable|exists:tpas,id',
             'advance_deposit' => 'nullable|numeric|min:0',
-            'payment_mode'    => 'nullable|string|max:50',
+            'payment_mode'    => 'nullable|string|max:120',
+            'scheme_type_id' => 'nullable|exists:scheme_types,id',
+            'scheme_beneficiary_card_id' => 'nullable|string|max:100',
+            'scheme_kyc_type' => 'nullable|in:without_auth,aadhar_otp,fingerprint,iris',
+            'scheme_lookup_token' => 'nullable|string|size:64',
+            'scheme_auth_token' => 'nullable|string|size:64',
+            'scheme_aadhar_otp' => 'nullable|digits:6',
         ]);
 
         if ($validator->fails()) {
@@ -3042,6 +3249,36 @@ class PatientManagementController extends BaseHospitalController
 
         if (!$patient) {
             return response()->json(['errors' => [['code' => 'patient_id', 'message' => 'Patient not found.']]], 422);
+        }
+
+        if ($this->isGovernmentPaymentModeLabel($request->payment_mode)) {
+            $schemeValidator = Validator::make($request->all(), [
+                'scheme_type_id' => 'required|exists:scheme_types,id',
+                'scheme_beneficiary_card_id' => 'required|string|min:4|max:100',
+                'scheme_kyc_type' => 'required|in:without_auth,aadhar_otp,fingerprint,iris',
+                'scheme_lookup_token' => 'required|string|size:64',
+                'scheme_auth_token' => 'required|string|size:64',
+                'scheme_aadhar_otp' => [
+                    Rule::requiredIf(static fn () => $request->input('scheme_kyc_type') === 'aadhar_otp'),
+                    'nullable',
+                    'digits:6',
+                ],
+            ]);
+            if ($schemeValidator->fails()) {
+                return response()->json(['errors' => Helpers::error_processor($schemeValidator)], 422);
+            }
+            $profileError = $this->schemePatientProfileMismatchMessage($patient);
+            if ($profileError !== null) {
+                return response()->json([
+                    'errors' => [['code' => 'patient_id', 'message' => $profileError]],
+                ], 422);
+            }
+            $schemeAuthError = $this->schemeAuthMismatchMessage($request);
+            if ($schemeAuthError !== null) {
+                return response()->json([
+                    'errors' => [['code' => 'scheme_beneficiary_card_id', 'message' => $schemeAuthError]],
+                ], 422);
+            }
         }
 
         $activeOpdVisit = $this->findBlockingOpdVisit($patient->id);
@@ -3067,6 +3304,20 @@ class PatientManagementController extends BaseHospitalController
 
         try {
             $admissionNo = $this->generateAdmissionNo();
+            $persistScheme = $this->isGovernmentPaymentModeLabel($request->payment_mode);
+
+            $bedSchemeAttributes = [
+                'payment_mode_label' => Str::limit(trim((string) $request->payment_mode), 120) ?: null,
+            ];
+            if ($persistScheme) {
+                $bedSchemeAttributes['scheme_type_id'] = (int) $request->scheme_type_id;
+                $bedSchemeAttributes['scheme_beneficiary_card_id'] = Str::limit(
+                    trim((string) $request->scheme_beneficiary_card_id),
+                    191
+                );
+                $bedSchemeAttributes['scheme_kyc_type'] = (string) $request->scheme_kyc_type;
+                $bedSchemeAttributes['scheme_beneficiary_verified_at'] = now();
+            }
 
             $allocation = $bedAllocationService->allocateBed(
                 $this->hospital_id,
@@ -3075,7 +3326,7 @@ class PatientManagementController extends BaseHospitalController
                 null,
                 'direct',
                 $request->admission_reason,
-                [
+                array_merge([
                     'admission_no'         => $admissionNo,
                     'admission_date'       => now()->format('Y-m-d H:i:s'),
                     'consultant_doctor_id' => $request->doctor_id,
@@ -3084,7 +3335,7 @@ class PatientManagementController extends BaseHospitalController
                     'tpa_reference_no'     => $request->tpa_reference_no,
                     'admission_reason'     => $request->admission_reason,
                     'admission_source'     => 'reception',
-                ]
+                ], $bedSchemeAttributes)
             );
 
             if ((float) ($request->advance_deposit ?? 0) > 0) {
@@ -3117,12 +3368,32 @@ class PatientManagementController extends BaseHospitalController
                 'logged_at'   => now()->format('Y-m-d H:i:s'),
             ]);
 
-            return response()->json([
+            $schemePreauthRegister = null;
+            if ($persistScheme) {
+                $schemePreauthRegister = $schemePreauthRegisterService->createOrGetDraftForAdmission(
+                    $this->hospital_id,
+                    $patient,
+                    $allocation,
+                    $schemePreauthRegisterService->contextFromRequest($request)
+                );
+            }
+
+            $response = [
                 'status'       => true,
                 'message'      => 'Patient admitted successfully.',
                 'admission_no' => $admissionNo,
                 'bed_no'       => $bed->bed_number,
-            ]);
+                'allocation_id' => $allocation->id,
+            ];
+
+            if ($schemePreauthRegister) {
+                $response['scheme_preauth_id'] = $schemePreauthRegister->id;
+                $response['scheme_preauth_url'] = route('hospital.patient-management.scheme-preauth.show', [
+                    'preauthRegister' => $schemePreauthRegister->id,
+                ]);
+            }
+
+            return response()->json($response);
         } catch (\Throwable $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
@@ -3530,6 +3801,173 @@ class PatientManagementController extends BaseHospitalController
         $shouldAdmit = $visitType === 'IPD' || $isEmergencyBedAdmission;
 
         return $shouldAdmit && $this->isGovernmentPaymentModeLabel($request->input('payment_mode'));
+    }
+
+    public function patientSchemeProfile(Request $request, $patient = null)
+    {
+        $patient = $this->findPatientForSchemeProfileUpdate($patient);
+
+        return response()->json($this->buildSchemePatientProfilePayload($patient));
+    }
+
+    public function patientSchemeProfileUpdate(Request $request, $patient = null)
+    {
+        $patient = $this->findPatientForSchemeProfileUpdate($patient);
+        $missing = $this->schemePatientProfileGaps($patient);
+
+        if ($missing === []) {
+            return response()->json(array_merge([
+                'status' => true,
+                'message' => 'Patient profile is already complete for scheme admission.',
+            ], $this->buildSchemePatientProfilePayload($patient)));
+        }
+
+        $rules = [];
+        if (in_array('address', $missing, true)) {
+            $rules['address'] = 'required|string|min:3|max:500';
+        }
+        if (in_array('pin_code', $missing, true)) {
+            $rules['pin_code'] = 'required|string|min:4|max:12';
+        }
+        if (in_array('state', $missing, true)) {
+            $rules['state'] = 'required|string|max:120';
+        }
+        if (in_array('district', $missing, true)) {
+            $rules['district'] = 'required|string|max:120';
+        }
+        if (in_array('ayushman_bharat_id', $missing, true)) {
+            $rules['ayushman_bharat_id'] = 'required|string|min:4|max:100';
+        }
+        $rules['aadhar_no'] = 'nullable|string|max:20';
+
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        if (in_array('address', $missing, true)) {
+            $patient->address = trim((string) $request->address);
+        }
+        if (in_array('pin_code', $missing, true)) {
+            $patient->pin_code = trim((string) $request->pin_code);
+        }
+        if (in_array('state', $missing, true)) {
+            $patient->state = $this->sanitizeRegistrationSelectText($request->state, ['Select State']);
+        }
+        if (in_array('district', $missing, true)) {
+            $patient->district = $this->sanitizeRegistrationSelectText($request->district, ['Select District']);
+        }
+        if (in_array('ayushman_bharat_id', $missing, true)) {
+            $patient->ayushman_bharat_id = trim((string) $request->ayushman_bharat_id);
+        }
+        if ($request->has('aadhar_no')) {
+            $patient->aadhar_no = trim((string) $request->aadhar_no) ?: null;
+        }
+
+        $patient->save();
+        $patient->refresh();
+
+        $payload = $this->buildSchemePatientProfilePayload($patient);
+        $payload['status'] = true;
+        $payload['message'] = $payload['complete']
+            ? 'Patient details saved. You can continue with scheme beneficiary verification.'
+            : 'Some required details are still missing. Please complete the form below.';
+
+        return response()->json($payload);
+    }
+
+    private function findPatientForSchemeProfileUpdate($patient): Patient
+    {
+        $id = (int) $patient;
+        abort_unless($id > 0, 404);
+
+        $row = Patient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereKey($id)
+            ->first();
+
+        abort_unless($row, 404, 'Patient not found.');
+
+        [$isDoctorScoped, $doctorStaffId] = $this->resolvePatientManagementDoctorScope();
+        if ($isDoctorScoped && ! $this->doctorCanAccessPatient((int) $row->id, $doctorStaffId)) {
+            abort(403, 'You are not authorized to access this patient.');
+        }
+
+        return $row;
+    }
+
+    /**
+     * @return array{complete: bool, missing: list<string>, profile: array<string, string|null>, state_id: int|null, district_id: int|null}
+     */
+    private function buildSchemePatientProfilePayload(Patient $patient): array
+    {
+        $missing = $this->schemePatientProfileGaps($patient);
+        $stateName = $this->sanitizeRegistrationSelectText($patient->state, ['Select State']);
+        $districtName = $this->sanitizeRegistrationSelectText($patient->district, ['Select District']);
+        $stateId = null;
+        $districtId = null;
+
+        if ($stateName) {
+            $stateId = IndianState::query()->where('name', $stateName)->value('id');
+            if ($stateId && $districtName) {
+                $districtId = IndianDistrict::query()
+                    ->where('state_id', $stateId)
+                    ->where('name', $districtName)
+                    ->value('id');
+            }
+        }
+
+        return [
+            'complete' => $missing === [],
+            'missing' => $missing,
+            'profile' => [
+                'address' => trim((string) $patient->address) ?: null,
+                'pin_code' => trim((string) $patient->pin_code) ?: null,
+                'state' => $stateName,
+                'district' => $districtName,
+                'ayushman_bharat_id' => trim((string) $patient->ayushman_bharat_id) ?: null,
+                'aadhar_no' => trim((string) $patient->aadhar_no) ?: null,
+            ],
+            'state_id' => $stateId ? (int) $stateId : null,
+            'district_id' => $districtId ? (int) $districtId : null,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function schemePatientProfileGaps(Patient $patient): array
+    {
+        $missing = [];
+        if (strlen(trim((string) $patient->address)) < 3) {
+            $missing[] = 'address';
+        }
+        if (strlen(trim((string) $patient->pin_code)) < 4) {
+            $missing[] = 'pin_code';
+        }
+        if (! $this->sanitizeRegistrationSelectText($patient->state, ['Select State'])) {
+            $missing[] = 'state';
+        }
+        if (! $this->sanitizeRegistrationSelectText($patient->district, ['Select District'])) {
+            $missing[] = 'district';
+        }
+        if (strlen(trim((string) $patient->ayushman_bharat_id)) < 4) {
+            $missing[] = 'ayushman_bharat_id';
+        }
+
+        return $missing;
+    }
+
+    /**
+     * Validates patient master data required for scheme IPD admit (existing patients).
+     */
+    private function schemePatientProfileMismatchMessage(Patient $patient): ?string
+    {
+        if ($this->schemePatientProfileGaps($patient) === []) {
+            return null;
+        }
+
+        return 'Patient profile is incomplete for scheme admission. Fill the required details in the IPD admit form below.';
     }
 
     /**

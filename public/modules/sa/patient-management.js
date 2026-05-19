@@ -1086,7 +1086,9 @@ async function viewPatient360(mrn) {
         <div class="fw-700 fs-13 mb-8">Last OPD Details</div>
         <div class="fs-12"><b>Department:</b> ${escapeHtml(latestOpd?.dept_name || '-')}</div>
         <div class="fs-12"><b>Doctor:</b> ${escapeHtml(latestOpd?.doctor_name || '-')}</div>
+        <div class="fs-12"><b>Date:</b> ${escapeHtml(latestOpd?.appointment_date ? new Date(latestOpd.appointment_date).toLocaleDateString('en-IN') : '-')}</div>
         <div class="fs-12"><b>Slot:</b> ${escapeHtml(latestOpd?.slot || '-')}</div>
+        <div class="fs-12"><b>Visit Type:</b> ${escapeHtml(latestOpd?.visit_type || '-')}</div>
         <div class="fs-12"><b>Chief Complaint:</b> ${escapeHtml(latestOpd?.symptoms_description || '-')}</div>
       </div>`;
 

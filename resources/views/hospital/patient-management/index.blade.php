@@ -154,6 +154,28 @@
     background: var(--surface-2);
     margin-top: 8px;
   }
+  #ipdAdmitModal #admitGovSchemeBlock .reg-gov-kyc label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  #ipdAdmitModal #admitGovSchemeBlock .reg-gov-kyc label:focus-within {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  #ipdAdmitModal #admitGovSchemeBlock .reg-gov-result {
+    font-size: 12px;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    margin-top: 8px;
+  }
 
   /*
    * Wizard stepper (hims.css): .step-item { flex: 1 } forces equal-width columns so long
@@ -437,6 +459,7 @@
       <select class="form-control" style="width:140px" id="ptFilter">
         <option value="">All Patients</option>
         <option value="opd">OPD</option>
+        <option value="daycare">Day Care</option>
         <option value="ipd">IPD</option>
         <option value="emergency">Emergency</option>
         <option value="discharged">Discharged</option>
@@ -1061,7 +1084,10 @@
         </select>
       </div>
       <div class="form-group"><label class="form-label">Payment</label>
-        <select class="form-control" id="tok_payment"><option value="Cash">Cash</option><option value="AB-PMJAY">AB-PMJAY</option><option value="CGHS">CGHS</option><option value="ECHS">ECHS</option><option value="Private Insurance">Private Insurance</option></select>
+        <select class="form-control" id="tok_payment" data-no-select2="1" >
+          <option>Cash</option>
+          <option>Private Insurance</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">Applied Charge (₹)</label>
@@ -1117,8 +1143,100 @@
           </div>
         </div>
         <div>
-          <div class="form-group"><label class="form-label">Payment / Insurance</label>
-            <select class="form-control" id="admit_payment"><option>Cash</option><option>AB-PMJAY</option><option>CGHS</option><option>Private Insurance</option></select>
+          <div class="form-group"><label class="form-label">Payment Mode</label>
+            <select class="form-control" id="admit_payment" data-no-select2="1" title="Payment mode uses native dropdown for scheme flow compatibility">
+              <option>Cash</option>
+              <option>State Health Scheme / AB-PMJAY (Ayushman Bharat)</option>
+              <option>Private Insurance</option>
+            </select>
+          </div>
+          <div id="admitSchemeProfileBlock" class="reg-gov-scheme-panel" style="display:none;margin-top:10px;padding:12px;border:1px solid rgba(245,124,0,.35);border-radius:10px;background:var(--warning-light)">
+            <div class="fw-700 fs-12 mb-4" style="color:var(--warning-dark)">Patient details required for scheme admission</div>
+            <p class="fs-11 text-muted" style="margin:0 0 8px" id="admitSchemeProfileHint">Some details are missing on this patient record. Fill them below to continue with the same flow as new registration.</p>
+            <ul class="fs-11" id="admitSchemeProfileMissingList" style="margin:0 0 10px;padding-left:18px;color:var(--warning-dark)"></ul>
+            <div class="form-group" id="admit_profile_address_wrap" style="display:none">
+              <label class="form-label" for="admit_profile_address">Address <span class="req">*</span></label>
+              <textarea class="form-control" id="admit_profile_address" rows="2" placeholder="House No, Street, Village/Colony…"></textarea>
+            </div>
+            <div class="form-row cols-2">
+              <div class="form-group" id="admit_profile_pin_wrap" style="display:none">
+                <label class="form-label" for="admit_profile_pin">PIN Code <span class="req">*</span></label>
+                <input type="text" class="form-control" id="admit_profile_pin" placeholder="248001"/>
+              </div>
+              <div class="form-group" id="admit_profile_ab_wrap" style="display:none">
+                <label class="form-label" for="admit_profile_ab">Ayushman Bharat ID <span class="req">*</span></label>
+                <input type="text" class="form-control" id="admit_profile_ab" placeholder="AB-PMJAY ID"/>
+              </div>
+            </div>
+            <div class="form-row cols-2">
+              <div class="form-group" id="admit_profile_state_wrap" style="display:none">
+                <label class="form-label" for="admit_profile_state">State <span class="req">*</span></label>
+                <select class="form-control" id="admit_profile_state" data-no-select2="1">
+                  <option value="">Select State</option>
+                  @foreach(($states ?? []) as $state)
+                  <option value="{{ $state->id }}">{{ $state->name }}</option>
+                  @endforeach
+                </select>
+              </div>
+              <div class="form-group" id="admit_profile_district_wrap" style="display:none">
+                <label class="form-label" for="admit_profile_district">District <span class="req">*</span></label>
+                <select class="form-control" id="admit_profile_district" data-no-select2="1">
+                  <option value="">Select District</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" id="admit_profile_aadhaar_wrap" style="display:none">
+              <label class="form-label" for="admit_profile_aadhaar">Aadhaar Number <span class="fs-11 text-muted">(optional — helps beneficiary search)</span></label>
+              <input type="text" class="form-control" id="admit_profile_aadhaar" placeholder="XXXX XXXX XXXX" maxlength="14"/>
+            </div>
+            <div style="margin-top:10px">
+              <button class="btn btn-primary btn-sm" type="button" id="admit_scheme_profile_save">Save patient details</button>
+            </div>
+          </div>
+          <div id="admitGovSchemeBlock" class="reg-gov-scheme-panel" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border-light);border-radius:10px;background:var(--surface-2)">
+            <div class="fw-700 fs-12 mb-8">Government scheme beneficiary</div>
+            <p class="fs-11 text-muted" style="margin:0 0 10px">Select scheme, enter Ayushman / ABHA / mobile or other scheme ID, search, then complete authentication. Patient Ayushman / Aadhaar pre-fills search when available.</p>
+            <div class="form-row cols-3">
+              <div class="form-group">
+                <label class="form-label" id="admit_gov_scheme_label">Scheme <span class="req">*</span></label>
+                <select class="form-control" id="admit_gov_scheme_id" data-no-select2="1" aria-labelledby="admit_gov_scheme_label">
+                  <option value="">Select scheme</option>
+                  @foreach(($schemeTypes ?? []) as $schemeType)
+                  <option value="{{ $schemeType->id }}">{{ $schemeType->name }}</option>
+                  @endforeach
+                </select>
+              </div>
+              <div class="form-group" style="grid-column:span 2">
+                <label class="form-label" id="admit_gov_search_label">Beneficiary ID / search <span class="req">*</span></label>
+                <div class="input-group">
+                  <input type="text" class="form-control" id="admit_gov_card_search" placeholder="Ayushman ID / mobile / ABHA…" aria-labelledby="admit_gov_search_label" autocomplete="off"/>
+                  <button class="btn btn-primary" type="button" id="admit_gov_search_btn">Search</button>
+                </div>
+              </div>
+            </div>
+            <div id="admit_gov_result" class="reg-gov-result" style="display:none" role="status" aria-live="polite"></div>
+            <div class="form-group reg-gov-kyc" id="admit_gov_kyc_group" style="display:none;margin-top:10px">
+              <label class="form-label" id="admit_gov_kyc_label">Authentication <span class="req">*</span></label>
+              <div role="radiogroup" aria-labelledby="admit_gov_kyc_label" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+                <label><input type="radio" name="admit_gov_kyc" value="without_auth" checked autocomplete="off"/> Proceed without Aadhaar OTP</label>
+                <label><input type="radio" name="admit_gov_kyc" value="aadhar_otp" autocomplete="off"/> Aadhaar OTP</label>
+                <label><input type="radio" name="admit_gov_kyc" value="fingerprint" autocomplete="off"/> Fingerprint</label>
+                <label><input type="radio" name="admit_gov_kyc" value="iris" autocomplete="off"/> IRIS</label>
+              </div>
+            </div>
+            <div id="admit_gov_otp_row" class="form-row cols-2" style="display:none;margin-top:8px">
+              <div class="form-group">
+                <label class="form-label" for="admit_gov_otp">OTP</label>
+                <input type="text" class="form-control" id="admit_gov_otp" inputmode="numeric" maxlength="6" placeholder="6-digit OTP" autocomplete="one-time-code"/>
+              </div>
+            </div>
+            <div class="reg-gov-actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+              <button class="btn btn-outline-primary btn-sm" type="button" id="admit_gov_send_otp_btn" style="display:none">Send OTP</button>
+              <button class="btn btn-success btn-sm" type="button" id="admit_gov_confirm_auth_btn">Confirm authentication</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" id="admit_gov_clear_btn" style="display:none">Clear beneficiary</button>
+            </div>
+            <input type="hidden" id="admit_scheme_lookup_token" value=""/>
+            <input type="hidden" id="admit_scheme_auth_token" value=""/>
           </div>
           <div class="form-group"><label class="form-label">Advance Deposit (₹)</label>
             <div class="input-group"><span class="input-addon">₹</span><input type="number" class="form-control" id="admit_advance" placeholder="5000"/></div>
@@ -1159,8 +1277,11 @@
 @push('scripts')
 @php
   $pmOpdBindPlaceholder = 999999999;
+  $pmPatientBindPlaceholder = 888888888;
   $pmOpdQueueSkipUrl = str_replace((string) $pmOpdBindPlaceholder, '__ID__', route('hospital.patient-management.opd-queue-skip', ['opdPatient' => $pmOpdBindPlaceholder]));
   $pmOpdQueueUndoSkipUrl = str_replace((string) $pmOpdBindPlaceholder, '__ID__', route('hospital.patient-management.opd-queue-undo-skip', ['opdPatient' => $pmOpdBindPlaceholder]));
+  $pmPatientSchemeProfileUrl = str_replace((string) $pmPatientBindPlaceholder, '__ID__', route('hospital.patient-management.patient-scheme-profile.show', ['patient' => $pmPatientBindPlaceholder]));
+  $pmPatientSchemeProfileUpdateUrl = str_replace((string) $pmPatientBindPlaceholder, '__ID__', route('hospital.patient-management.patient-scheme-profile.update', ['patient' => $pmPatientBindPlaceholder]));
 @endphp
 <script>
 window.PM_ROUTES = {
@@ -1186,6 +1307,8 @@ window.PM_ROUTES = {
   issueNextToken: @json(route('hospital.patient-management.issue-next-token')),
   cancelBookingAppointment: @json(route('hospital.patient-management.cancel-booking-appointment')),
   ipdAdmit: @json(route('hospital.patient-management.ipd-admit')),
+  patientSchemeProfile: @json($pmPatientSchemeProfileUrl),
+  patientSchemeProfileUpdate: @json($pmPatientSchemeProfileUpdateUrl),
   opdQueueSkip: @json($pmOpdQueueSkipUrl),
   opdQueueUndoSkip: @json($pmOpdQueueUndoSkipUrl),
 };
@@ -1197,6 +1320,6 @@ window.PM_BOOT = {
 </script>
 <script src="{{ asset('public/modules/sa/patient-management.js') }}?v={{ time() }}"></script>
 <script src="{{ asset('public/modules/sa/patient-registration-form.js') }}?v={{ filemtime(public_path('modules/sa/patient-registration-form.js')) }}"></script>
-<script src="{{ asset('public/modules/sa/patient-visit-modals.js') }}"></script>
+<script src="{{ asset('public/modules/sa/patient-visit-modals.js') }}?v={{ filemtime(public_path('modules/sa/patient-visit-modals.js')) }}"></script>
 @include('layouts.partials.flatpickr-js')
 @endpush
