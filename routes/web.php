@@ -33,6 +33,10 @@ Route::get('/default-seeder', function() {
     \Artisan::call('db:seed NationalitySeeder');
     return true;
 });
+Route::get('/state-seeder', function() {
+    \Artisan::call('db:seed IndianStatesDistrictsSeeder');
+    return true;
+});
 Route::get('/fresh-seeder', function() {
     \Artisan::call('db:seed');
     return true;
