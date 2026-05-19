@@ -142,7 +142,7 @@
   }
 
   function buildCareDataAttributes(row) {
-    return `data-opd-id="${row.id}" data-patient-id="${row.patient_id || ''}" data-doctor-id="${row.doctor_id || ''}" data-doctor="${escapeHtml(row.doctor || '')}" data-dept="${escapeHtml(row.dept || '')}" data-token="${escapeHtml(row.token || '')}" data-name="${escapeHtml(row.name || '')}" data-case="${escapeHtml(row.case_no || '')}"`;
+    return `data-opd-id="${row.id}" data-patient-id="${row.patient_id || ''}" data-doctor-id="${row.doctor_id || ''}" data-doctor="${escapeHtml(row.doctor || '')}" data-dept="${escapeHtml(row.dept || '')}" data-token="${escapeHtml(row.token || '')}" data-name="${escapeHtml(row.name || '')}" data-case="${escapeHtml(row.case_no || '')}" data-status="${escapeHtml(row.status || '')}"`;
   }
 
   function createFlowChart() {
@@ -1759,6 +1759,19 @@
         .off('click.queueDesk', '.open-care-section')
         .on('click.queueDesk', '.open-care-section', function (event) {
           event.preventDefault();
+          if (window.Patient360OrderModal && typeof window.Patient360OrderModal.open === 'function') {
+            const status = String(this.dataset.status || '').toLowerCase();
+            const canComplete = status !== 'completed';
+            window.Patient360OrderModal.open({
+              mode: 'opd',
+              openContext: 'order',
+              openButtonId: 'doctorDashboardSeeConsultationBtn',
+              opdPatientId: this.dataset.opdId,
+              canComplete,
+              completeUrl: canComplete && ROUTES.updateStatus ? routeWithId(ROUTES.updateStatus, this.dataset.opdId) : ''
+            });
+            return;
+          }
           DoctorCareModal.open({
             opdPatientId: this.dataset.opdId,
             patientId: this.dataset.patientId,

@@ -435,6 +435,25 @@
       </div>
     </div>
   </div>
+
+  {{-- Reused Patient 360 — OPD New Order Modal --}}
+  <div class="modal fade" id="p360Modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="p360ModalTitle">New Order</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="p360ModalBody">
+          <div class="p-4 text-center text-muted">Loading...</div>
+        </div>
+        <div class="modal-footer p360-modal-footer d-flex flex-wrap align-items-center gap-2 justify-content-end">
+          <button type="button" id="p360SaveAndCompleteBtn" class="btn btn-primary px-5 d-none">Save and Complete</button>
+          <button type="button" id="p360SaveBtn" class="btn btn-primary px-5 d-none" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Alt+S or Ctrl+S to save · Enter when Save is focused" aria-keyshortcuts="Alt+S Ctrl+S">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 @endsection
 
@@ -473,12 +492,39 @@
     },
     snapshot: @json($snapshot)
   };
+
+  window.Patient360Config = {
+    routes: {
+      opd: {
+        careUnifiedForm: "{{ route('hospital.opd-patient.doctor-care.unified', ['opdPatient' => '__ID__']) }}",
+        prescriptionForm: "{{ route('hospital.opd-patient.prescription.form', ['opdPatient' => '__ID__']) }}",
+        prescriptionStore: "{{ route('hospital.opd-patient.prescription.store', ['opdPatient' => '__ID__']) }}",
+        prescriptionDestroy: "{{ route('hospital.opd-patient.prescription.destroy', ['opdPatient' => '__ID__']) }}",
+        prescriptionLoadDosages: "{{ route('hospital.opd-patient.prescription.load-dosages') }}",
+        diagnosticShow: "{{ route('hospital.opd-patient.diagnostics.showform', ['opdPatient' => '__ID__']) }}",
+        diagnosticStore: "{{ route('hospital.opd-patient.diagnostics.store', ['opdPatient' => '__ID__']) }}",
+        updateVitalsSocial: "{{ route('hospital.opd-patient.vitals-social.update', ['opdPatient' => '__ID__']) }}"
+      },
+      ipd: {}
+    },
+    csrf: "{{ csrf_token() }}",
+    opdVisitComplete: {
+      eligible: false,
+      url: ''
+    },
+    permissions: {
+      canPathology: @json(auth()->user()->can('create-pathology-order')),
+      canRadiology: @json(auth()->user()->can('create-radiology-order'))
+    },
+    vitals: {}
+  };
 </script>
 
 <!-- External Dependencies -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ asset('public/front/assets/js/editor/ckeditor/ckeditor.js') }}"></script>
 <script src="{{ asset('public/modules/sa/opd-care-shared.js') }}"></script>
+<script src="{{ asset('public/modules/sa/patient-360.js') }}"></script>
 
 <!-- Doctor Dashboard Module -->
 <script src="{{ asset('public/modules/sa/doctor-dashboard.js') }}"></script>
