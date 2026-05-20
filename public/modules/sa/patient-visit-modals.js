@@ -19,6 +19,15 @@
     payment_mode: 'tok_payment',
   };
 
+  const GOVERNMENT_PAYMENT_LABELS = new Set([
+    'State Health Scheme / AB-PMJAY (Ayushman Bharat)',
+    'AB-PMJAY (Ayushman Bharat)',
+    'CGHS',
+    'ECHS',
+    'State Health Scheme',
+    'ESI',
+  ]);
+
   const ADMIT_FIELD_MAP = {
     patient_id: 'admit_patient_search',
     hr_department_id: 'admit_dept',
@@ -27,6 +36,23 @@
     admission_reason: 'admit_reason',
     payment_mode: 'admit_payment',
     advance_deposit: 'admit_advance',
+    scheme_beneficiary_card_id: 'admit_gov_card_search',
+    scheme_type_id: 'admit_gov_scheme_id',
+    scheme_aadhar_otp: 'admit_gov_otp',
+    address: 'admit_profile_address',
+    pin_code: 'admit_profile_pin',
+    state: 'admit_profile_state',
+    district: 'admit_profile_district',
+    ayushman_bharat_id: 'admit_profile_ab',
+    aadhar_no: 'admit_profile_aadhaar',
+  };
+
+  const ADMIT_PROFILE_LABELS = {
+    address: 'Address',
+    pin_code: 'PIN code',
+    state: 'State',
+    district: 'District',
+    ayushman_bharat_id: 'Ayushman Bharat ID',
   };
 
   class PatientVisitModalsController {
@@ -51,6 +77,10 @@
       this._tokSearchActiveIndex = -1;
       /** Highlighted row index in #admit_search_results (-1 = none). */
       this._admitSearchActiveIndex = -1;
+      this.admitGovBeneficiaryLocked = false;
+      this.admitGovOtpInputRevealed = false;
+      this.admitSchemeProfileComplete = true;
+      this.admitSchemeProfileMissing = [];
     }
 
     init({ routes, boot }) {
@@ -220,6 +250,54 @@
       this.admit.form?.querySelectorAll('input, select, textarea').forEach((field) => {
         field.addEventListener('input', () => this.clearFieldError(field.id));
         field.addEventListener('change', () => this.clearFieldError(field.id));
+      });
+      this.admit.payment?.addEventListener('change', () => {
+        this.clearFieldError('admit_payment');
+        if (!this.isAdmitGovSchemePaymentLabel(this.admit.payment?.value)) {
+          this.resetAdmitGovSchemeState();
+          this.hideAdmitSchemeProfilePanel();
+        } else {
+          void this.refreshAdmitSchemeProfilePanel();
+        }
+        this.toggleAdmitGovSchemePanel();
+      });
+      document.getElementById('admit_scheme_profile_save')?.addEventListener('click', () => void this.saveAdmitSchemeProfile());
+      document.getElementById('admit_profile_state')?.addEventListener('change', (event) => {
+        void this.loadAdmitProfileDistricts(event.target.value, null);
+      });
+      document.getElementById('admit_gov_scheme_id')?.addEventListener('change', () => {
+        if (this.admitGovBeneficiaryLocked) {
+          return;
+        }
+        this.clearFieldError('admit_gov_scheme_id');
+        const lt = document.getElementById('admit_scheme_lookup_token');
+        const at = document.getElementById('admit_scheme_auth_token');
+        if (lt) lt.value = '';
+        if (at) at.value = '';
+        this.preloadAdmitGovBeneficiarySearch();
+        this.syncAdmitGovOtpSendButton();
+      });
+      document.getElementById('admit_gov_search_btn')?.addEventListener('click', () => void this.runAdmitGovBeneficiarySearch());
+      document.getElementById('admit_gov_confirm_auth_btn')?.addEventListener('click', () => void this.runAdmitGovConfirmAuth());
+      document.getElementById('admit_gov_send_otp_btn')?.addEventListener('click', () => void this.sendAdmitGovSchemeOtp());
+      document.getElementById('admit_gov_clear_btn')?.addEventListener('click', () => {
+        this.resetAdmitGovSchemeState();
+        sendmsg('info', 'Beneficiary cleared — you can search again.');
+      });
+      document.getElementById('admit_gov_card_search')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          void this.runAdmitGovBeneficiarySearch();
+        }
+      });
+      document.getElementById('admit_gov_otp')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          void this.runAdmitGovConfirmAuth();
+        }
+      });
+      document.querySelectorAll('#admitGovSchemeBlock input[name="admit_gov_kyc"]').forEach((r) => {
+        r.addEventListener('change', () => this.handleAdmitGovKycChange());
       });
 
       this.bindVisitModalKeyboardA11y();
@@ -407,7 +485,30 @@
       selectChain('admit_bed');
       selectChain('admit_doctor');
       selectChain('admit_duration');
-      selectChain('admit_payment');
+      const pay = document.getElementById('admit_payment');
+      if (pay) {
+        this.pushIfVisitModalFocusable(list, pay);
+      }
+      if (this.isAdmitGovSchemePanelVisible()) {
+        this.pushIfVisitModalFocusable(list, document.getElementById('admit_gov_scheme_id'));
+        this.pushIfVisitModalFocusable(list, document.getElementById('admit_gov_card_search'));
+        const kycGroup = document.getElementById('admit_gov_kyc_group');
+        if (kycGroup && kycGroup.style.display !== 'none') {
+          document.querySelectorAll('#admitGovSchemeBlock input[name="admit_gov_kyc"]').forEach((r) => {
+            this.pushIfVisitModalFocusable(list, r);
+          });
+        }
+        const otpRow = document.getElementById('admit_gov_otp_row');
+        if (otpRow && otpRow.style.display !== 'none') {
+          this.pushIfVisitModalFocusable(list, document.getElementById('admit_gov_otp'));
+        }
+        ['admit_gov_send_otp_btn', 'admit_gov_confirm_auth_btn', 'admit_gov_clear_btn'].forEach((id) => {
+          const btn = document.getElementById(id);
+          if (btn && btn.style.display !== 'none' && !btn.disabled) {
+            this.pushIfVisitModalFocusable(list, btn);
+          }
+        });
+      }
       this.pushIfVisitModalFocusable(list, document.getElementById('admit_advance'));
       this.pushIfVisitModalFocusable(list, document.getElementById('admit_special_instructions'));
       /* Bed preview chips: mouse-only — Tab skips to footer actions (see .bed-preview-chip tabindex). */
@@ -668,6 +769,11 @@
       }
       this.admit.doctor.innerHTML = '<option value="">Select Doctor</option>';
       this.renderAvailableBeds();
+      this.resetAdmitGovSchemeState();
+      this.admitSchemeProfileComplete = true;
+      this.admitSchemeProfileMissing = [];
+      this.hideAdmitSchemeProfilePanel();
+      this.toggleAdmitGovSchemePanel();
       this.initModalSelect2(this.admit.form, this.admit.modal);
     }
 
@@ -1577,6 +1683,8 @@
         name: decodeURIComponent(item.dataset.name || ''),
         phone: decodeURIComponent(item.dataset.phone || ''),
         ageSex: decodeURIComponent(item.dataset.ageSex || ''),
+        aadharNo: decodeURIComponent(item.dataset.aadhar || ''),
+        ayushmanBharatId: decodeURIComponent(item.dataset.ayushman || ''),
       };
       if (this.admit.patientId) {
         this.admit.patientId.value = this.admitPatient.id;
@@ -1593,6 +1701,9 @@
         this.admit.patientChip.innerHTML = `<div class="patient-chip-info"><div class="patient-chip-name">${this.escapeHtml(this.admitPatient.name)}</div><div class="patient-chip-meta">${this.escapeHtml(this.admitPatient.mrn)} | ${this.escapeHtml(this.admitPatient.phone || '-')} | ${this.escapeHtml(this.admitPatient.ageSex)}</div></div>`;
       }
       this.clearFieldError('admit_patient_search');
+      if (this.isAdmitGovSchemePaymentLabel(this.admit.payment?.value)) {
+        void this.refreshAdmitSchemeProfilePanel();
+      }
       this.focusAdmitDepartmentSelect();
     }
 
@@ -1609,6 +1720,11 @@
       if (q.length < 2) {
         if (this.admit.searchResults) {
           this.admit.searchResults.innerHTML = '';
+        }
+        if (!this.admit.patientId?.value) {
+          this.admitSchemeProfileComplete = true;
+          this.hideAdmitSchemeProfilePanel();
+          this.toggleAdmitGovSchemePanel();
         }
         return;
       }
@@ -1628,7 +1744,7 @@
         const phone = this.escapeHtml(patient.phone || '-');
         const ageSex = this.escapeHtml(patient.age_sex || '-');
         return `
-          <button type="button" class="tok-search-item" data-admit-patient="1" data-id="${patient.id}" data-mrn="${encodeURIComponent(patient.mrn || '')}" data-name="${encodeURIComponent(patient.name || '')}" data-phone="${encodeURIComponent(patient.phone || '')}" data-age-sex="${encodeURIComponent(patient.age_sex || '')}" data-gender="${encodeURIComponent(patient.gender || '')}">
+          <button type="button" class="tok-search-item" data-admit-patient="1" data-id="${patient.id}" data-mrn="${encodeURIComponent(patient.mrn || '')}" data-name="${encodeURIComponent(patient.name || '')}" data-phone="${encodeURIComponent(patient.phone || '')}" data-age-sex="${encodeURIComponent(patient.age_sex || '')}" data-gender="${encodeURIComponent(patient.gender || '')}" data-aadhar="${encodeURIComponent(patient.aadhar_no || '')}" data-ayushman="${encodeURIComponent(patient.ayushman_bharat_id || '')}">
             <div class="tok-search-name">${name}</div>
             <div class="tok-search-meta">${mrn} | ${phone} | ${ageSex}</div>
           </button>`;
@@ -1891,6 +2007,603 @@
       }
     }
 
+    isAdmitGovSchemePaymentLabel(paymentLabel) {
+      return GOVERNMENT_PAYMENT_LABELS.has(String(paymentLabel || '').trim());
+    }
+
+    isAdmitGovSchemePanelVisible() {
+      return this.isAdmitGovSchemePaymentLabel(this.admit.payment?.value || '');
+    }
+
+    patientSchemeProfileUrl(patientId, forUpdate = false) {
+      const template = forUpdate
+        ? this.routes.patientSchemeProfileUpdate
+        : this.routes.patientSchemeProfile;
+      if (!template || !patientId) {
+        return null;
+      }
+      return String(template).replace('__ID__', String(patientId));
+    }
+
+    hideAdmitSchemeProfilePanel() {
+      const block = document.getElementById('admitSchemeProfileBlock');
+      if (block) {
+        block.style.display = 'none';
+      }
+    }
+
+    async refreshAdmitSchemeProfilePanel() {
+      if (!this.isAdmitGovSchemePaymentLabel(this.admit.payment?.value || '') || !this.admit.patientId?.value) {
+        this.admitSchemeProfileComplete = true;
+        this.admitSchemeProfileMissing = [];
+        this.hideAdmitSchemeProfilePanel();
+        return;
+      }
+      const url = this.patientSchemeProfileUrl(this.admit.patientId.value, false);
+      if (!url) {
+        return;
+      }
+      try {
+        const data = await window.pmFetch(url);
+        this.applyAdmitSchemeProfilePayload(data);
+      } catch (error) {
+        sendmsg('error', error.message || 'Could not load patient profile for scheme admission.');
+      }
+    }
+
+    applyAdmitSchemeProfilePayload(data) {
+      const missing = Array.isArray(data?.missing) ? data.missing : [];
+      const profile = data?.profile || {};
+      this.admitSchemeProfileMissing = missing;
+      this.admitSchemeProfileComplete = !!data?.complete || missing.length === 0;
+
+      const block = document.getElementById('admitSchemeProfileBlock');
+      const list = document.getElementById('admitSchemeProfileMissingList');
+      const showProfile = this.isAdmitGovSchemePaymentLabel(this.admit.payment?.value || '')
+        && !!this.admit.patientId?.value
+        && !this.admitSchemeProfileComplete;
+
+      if (block) {
+        block.style.display = showProfile ? 'block' : 'none';
+      }
+      if (list) {
+        list.innerHTML = missing
+          .filter((key) => ADMIT_PROFILE_LABELS[key])
+          .map((key) => `<li>${this.escapeHtml(ADMIT_PROFILE_LABELS[key])}</li>`)
+          .join('');
+      }
+
+      const wraps = {
+        address: 'admit_profile_address_wrap',
+        pin_code: 'admit_profile_pin_wrap',
+        state: 'admit_profile_state_wrap',
+        district: 'admit_profile_district_wrap',
+        ayushman_bharat_id: 'admit_profile_ab_wrap',
+      };
+      Object.entries(wraps).forEach(([key, wrapId]) => {
+        const wrap = document.getElementById(wrapId);
+        if (wrap) {
+          wrap.style.display = missing.includes(key) ? '' : 'none';
+        }
+      });
+      const aadhaarWrap = document.getElementById('admit_profile_aadhaar_wrap');
+      if (aadhaarWrap) {
+        aadhaarWrap.style.display = !String(profile.aadhar_no || '').trim() ? '' : 'none';
+      }
+
+      const addressEl = document.getElementById('admit_profile_address');
+      if (addressEl && missing.includes('address')) {
+        addressEl.value = profile.address || '';
+      }
+      const pinEl = document.getElementById('admit_profile_pin');
+      if (pinEl && missing.includes('pin_code')) {
+        pinEl.value = profile.pin_code || '';
+      }
+      const abEl = document.getElementById('admit_profile_ab');
+      if (abEl && missing.includes('ayushman_bharat_id')) {
+        abEl.value = profile.ayushman_bharat_id || '';
+      }
+      const aadhaarEl = document.getElementById('admit_profile_aadhaar');
+      if (aadhaarEl && !String(profile.aadhar_no || '').trim()) {
+        aadhaarEl.value = profile.aadhar_no || '';
+      }
+      const stateEl = document.getElementById('admit_profile_state');
+      if (stateEl && missing.includes('state')) {
+        stateEl.value = data?.state_id ? String(data.state_id) : '';
+        if (missing.includes('district')) {
+          void this.loadAdmitProfileDistricts(stateEl.value, data?.district_id || null, profile.district || '');
+        }
+      } else if (missing.includes('district')) {
+        const stateForDistrict = document.getElementById('admit_profile_state')?.value || (data?.state_id ? String(data.state_id) : '');
+        void this.loadAdmitProfileDistricts(stateForDistrict, data?.district_id || null, profile.district || '');
+      }
+
+      if (this.admitPatient) {
+        this.admitPatient.ayushmanBharatId = profile.ayushman_bharat_id || this.admitPatient.ayushmanBharatId || '';
+        this.admitPatient.aadharNo = profile.aadhar_no || this.admitPatient.aadharNo || '';
+      }
+    }
+
+    async loadAdmitProfileDistricts(stateId, districtId = null, districtName = '') {
+      const districtEl = document.getElementById('admit_profile_district');
+      if (!districtEl) {
+        return;
+      }
+      if (!stateId) {
+        districtEl.innerHTML = '<option value="">Select District</option>';
+        return;
+      }
+      const districts = await window.pmFetch(`${this.routes.loadDistricts}?state_id=${encodeURIComponent(stateId)}`);
+      window.pmRenderOptions?.(districtEl, districts || [], { placeholder: 'Select District', valueKey: 'id', labelKey: 'name' });
+      if (districtId) {
+        districtEl.value = String(districtId);
+      } else if (districtName) {
+        const match = Array.from(districtEl.options).find((opt) => opt.text === districtName);
+        if (match) {
+          districtEl.value = match.value;
+        }
+      }
+    }
+
+    selectedAdmitProfileText(selectEl) {
+      if (!selectEl || selectEl.tagName !== 'SELECT') {
+        return null;
+      }
+      const text = selectEl.options[selectEl.selectedIndex]?.text?.trim() || '';
+      if (!text || /^select\s/i.test(text)) {
+        return null;
+      }
+      return text;
+    }
+
+    collectAdmitSchemeProfilePayload() {
+      const body = {};
+      const missing = this.admitSchemeProfileMissing || [];
+      if (missing.includes('address')) {
+        body.address = String(document.getElementById('admit_profile_address')?.value || '').trim();
+      }
+      if (missing.includes('pin_code')) {
+        body.pin_code = String(document.getElementById('admit_profile_pin')?.value || '').trim();
+      }
+      if (missing.includes('state')) {
+        body.state = this.selectedAdmitProfileText(document.getElementById('admit_profile_state'));
+      }
+      if (missing.includes('district')) {
+        body.district = this.selectedAdmitProfileText(document.getElementById('admit_profile_district'));
+      }
+      if (missing.includes('ayushman_bharat_id')) {
+        body.ayushman_bharat_id = String(document.getElementById('admit_profile_ab')?.value || '').trim();
+      }
+      const aadhaarWrap = document.getElementById('admit_profile_aadhaar_wrap');
+      if (aadhaarWrap && aadhaarWrap.style.display !== 'none') {
+        body.aadhar_no = String(document.getElementById('admit_profile_aadhaar')?.value || '').trim();
+      }
+      return body;
+    }
+
+    validateAdmitSchemeProfileFields(requireSaved = true) {
+      if (this.admitSchemeProfileComplete) {
+        return true;
+      }
+      const missing = this.admitSchemeProfileMissing || [];
+      const payload = this.collectAdmitSchemeProfilePayload();
+      if (missing.includes('address') && String(payload.address || '').length < 3) {
+        this.setFieldError('admit_profile_address', 'Address is required for scheme admission.');
+        document.getElementById('admit_profile_address')?.focus();
+        return false;
+      }
+      if (missing.includes('pin_code') && String(payload.pin_code || '').length < 4) {
+        this.setFieldError('admit_profile_pin', 'PIN code is required for scheme admission.');
+        document.getElementById('admit_profile_pin')?.focus();
+        return false;
+      }
+      if (missing.includes('state') && !payload.state) {
+        this.setFieldError('admit_profile_state', 'State is required for scheme admission.');
+        document.getElementById('admit_profile_state')?.focus();
+        return false;
+      }
+      if (missing.includes('district') && !payload.district) {
+        this.setFieldError('admit_profile_district', 'District is required for scheme admission.');
+        document.getElementById('admit_profile_district')?.focus();
+        return false;
+      }
+      if (missing.includes('ayushman_bharat_id') && String(payload.ayushman_bharat_id || '').length < 4) {
+        this.setFieldError('admit_profile_ab', 'Ayushman Bharat ID is required for scheme admission.');
+        document.getElementById('admit_profile_ab')?.focus();
+        return false;
+      }
+      if (!requireSaved) {
+        return true;
+      }
+      sendmsg('error', 'Save patient details in the highlighted section before scheme beneficiary verification.');
+      document.getElementById('admit_scheme_profile_save')?.focus();
+      return false;
+    }
+
+    async saveAdmitSchemeProfile() {
+      if (!this.admit.patientId?.value) {
+        sendmsg('error', 'Select a patient first.');
+        return;
+      }
+      if (!this.validateAdmitSchemeProfileFields(false)) {
+        return;
+      }
+      const url = this.patientSchemeProfileUrl(this.admit.patientId.value, true);
+      if (!url) {
+        sendmsg('error', 'Patient profile update is not configured.');
+        return;
+      }
+      const saveBtn = document.getElementById('admit_scheme_profile_save');
+      if (saveBtn) saveBtn.disabled = true;
+      try {
+        const data = await window.pmFetch(url, {
+          method: 'POST',
+          body: this.collectAdmitSchemeProfilePayload(),
+        });
+        this.applyAdmitSchemeProfilePayload(data);
+        sendmsg('success', data?.message || 'Patient details saved.');
+        if (this.admitSchemeProfileComplete) {
+          this.toggleAdmitGovSchemePanel();
+          this.preloadAdmitGovBeneficiarySearch();
+        }
+      } catch (error) {
+        const handled = this.applyErrors(ADMIT_FIELD_MAP, error.responseData?.errors || []);
+        if (!handled) {
+          sendmsg('error', error.message || 'Could not save patient details.');
+        }
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+      }
+    }
+
+    toggleAdmitGovSchemePanel() {
+      const govBlock = document.getElementById('admitGovSchemeBlock');
+      if (!govBlock) {
+        return;
+      }
+      const showGov = this.isAdmitGovSchemePanelVisible() && this.admitSchemeProfileComplete;
+      govBlock.style.display = showGov ? 'block' : 'none';
+      if (showGov) {
+        this.preloadAdmitGovBeneficiarySearch();
+      } else if (!this.isAdmitGovSchemePaymentLabel(this.admit.payment?.value || '')) {
+        this.resetAdmitGovSchemeState();
+        this.hideAdmitSchemeProfilePanel();
+      }
+      this.syncAdmitGovOtpSendButton();
+    }
+
+    resetAdmitGovSchemeState() {
+      this.admitGovBeneficiaryLocked = false;
+      const lookup = document.getElementById('admit_scheme_lookup_token');
+      const auth = document.getElementById('admit_scheme_auth_token');
+      if (lookup) lookup.value = '';
+      if (auth) auth.value = '';
+      const res = document.getElementById('admit_gov_result');
+      if (res) {
+        res.style.display = 'none';
+        res.innerHTML = '';
+      }
+      const kycGroup = document.getElementById('admit_gov_kyc_group');
+      if (kycGroup) kycGroup.style.display = 'none';
+      this.admitGovOtpInputRevealed = false;
+      this.syncAdmitGovOtpRowVisibility();
+      const otp = document.getElementById('admit_gov_otp');
+      if (otp) otp.value = '';
+      const without = document.querySelector('#admitGovSchemeBlock input[name="admit_gov_kyc"][value="without_auth"]');
+      if (without) without.checked = true;
+      this.applyAdmitGovBeneficiaryLockedUi();
+      this.syncAdmitGovOtpSendButton();
+    }
+
+    setAdmitGovBeneficiaryLocked(locked) {
+      this.admitGovBeneficiaryLocked = !!locked;
+      this.applyAdmitGovBeneficiaryLockedUi();
+    }
+
+    applyAdmitGovBeneficiaryLockedUi() {
+      const locked = this.admitGovBeneficiaryLocked;
+      const search = document.getElementById('admit_gov_card_search');
+      const btnSearch = document.getElementById('admit_gov_search_btn');
+      const scheme = document.getElementById('admit_gov_scheme_id');
+      const radios = document.querySelectorAll('#admitGovSchemeBlock input[name="admit_gov_kyc"]');
+      const confirmB = document.getElementById('admit_gov_confirm_auth_btn');
+      const clearB = document.getElementById('admit_gov_clear_btn');
+      if (search) search.readOnly = locked;
+      if (btnSearch) btnSearch.disabled = locked;
+      if (scheme) scheme.disabled = locked;
+      radios.forEach((r) => {
+        r.disabled = locked;
+      });
+      if (confirmB) confirmB.disabled = locked;
+      if (clearB) clearB.style.display = locked ? '' : 'none';
+      const otpField = document.getElementById('admit_gov_otp');
+      if (otpField) otpField.readOnly = locked;
+      this.syncAdmitGovOtpSendButton();
+    }
+
+    syncAdmitGovOtpSendButton() {
+      const sendOtp = document.getElementById('admit_gov_send_otp_btn');
+      if (!sendOtp) {
+        return;
+      }
+      const kyc = document.querySelector('#admitGovSchemeBlock input[name="admit_gov_kyc"]:checked')?.value;
+      const hasLookup = !!document.getElementById('admit_scheme_lookup_token')?.value;
+      const show = kyc === 'aadhar_otp' && hasLookup && this.isAdmitGovSchemePanelVisible();
+      sendOtp.style.display = show ? '' : 'none';
+      sendOtp.disabled = this.admitGovBeneficiaryLocked || !show;
+      this.syncAdmitGovOtpRowVisibility();
+    }
+
+    syncAdmitGovOtpRowVisibility() {
+      const row = document.getElementById('admit_gov_otp_row');
+      if (!row) {
+        return;
+      }
+      const kyc = document.querySelector('#admitGovSchemeBlock input[name="admit_gov_kyc"]:checked')?.value;
+      row.style.display = kyc === 'aadhar_otp' && this.admitGovOtpInputRevealed ? '' : 'none';
+    }
+
+    handleAdmitGovKycChange() {
+      if (this.admitGovBeneficiaryLocked) {
+        return;
+      }
+      this.clearFieldError('admit_gov_kyc_group');
+      const auth = document.getElementById('admit_scheme_auth_token');
+      if (auth) auth.value = '';
+      this.admitGovOtpInputRevealed = false;
+      const otpEl = document.getElementById('admit_gov_otp');
+      if (otpEl) otpEl.value = '';
+      this.syncAdmitGovOtpRowVisibility();
+      this.syncAdmitGovOtpSendButton();
+    }
+
+    renderAdmitGovBeneficiarySummary(b) {
+      return `<div><b>Name:</b> ${this.escapeHtml(b.name)}</div>
+        <div><b>Card / ID:</b> ${this.escapeHtml(b.card_id)}</div>
+        <div><b>Scheme:</b> ${this.escapeHtml(b.care_plan)}</div>`;
+    }
+
+    preloadAdmitGovBeneficiarySearch() {
+      if (this.admitGovBeneficiaryLocked) {
+        return;
+      }
+      const searchEl = document.getElementById('admit_gov_card_search');
+      if (!searchEl || !this.isAdmitGovSchemePanelVisible()) {
+        return;
+      }
+      const ab = String(this.admitPatient?.ayushmanBharatId || '').trim();
+      if (ab) {
+        searchEl.value = ab;
+        return;
+      }
+      const raw = String(this.admitPatient?.aadharNo || '').replace(/\D/g, '');
+      if (raw.length >= 4) {
+        searchEl.value = raw;
+      }
+    }
+
+    async runAdmitGovBeneficiarySearch() {
+      if (this.admitGovBeneficiaryLocked) {
+        return;
+      }
+      this.clearFieldError('admit_gov_card_search');
+      this.clearFieldError('admit_gov_scheme_id');
+      const authEl = document.getElementById('admit_scheme_auth_token');
+      if (authEl) authEl.value = '';
+      const schemeId = document.getElementById('admit_gov_scheme_id')?.value;
+      const search = String(document.getElementById('admit_gov_card_search')?.value || '').trim();
+      if (!schemeId) {
+        this.setFieldError('admit_gov_scheme_id', 'Select a scheme first.');
+        return;
+      }
+      if (search.length < 4) {
+        this.setFieldError('admit_gov_card_search', 'Enter at least 4 characters.');
+        return;
+      }
+      if (!this.routes.schemeBeneficiaryLookup) {
+        sendmsg('error', 'Beneficiary search is not configured.');
+        return;
+      }
+      try {
+        const data = await window.pmFetch(this.routes.schemeBeneficiaryLookup, {
+          method: 'POST',
+          body: {
+            scheme_type_id: schemeId,
+            beneficiary_search: search,
+          },
+        });
+        if (!data?.success) {
+          sendmsg('error', data?.msg || 'Beneficiary not found.');
+          return;
+        }
+        const lt = document.getElementById('admit_scheme_lookup_token');
+        if (lt) lt.value = data.lookup_token || '';
+        this.admitGovOtpInputRevealed = false;
+        const res = document.getElementById('admit_gov_result');
+        const kycGroup = document.getElementById('admit_gov_kyc_group');
+        if (res) {
+          res.style.display = 'block';
+          res.innerHTML = this.renderAdmitGovBeneficiarySummary(data.beneficiary || {});
+        }
+        if (kycGroup) kycGroup.style.display = 'block';
+        this.handleAdmitGovKycChange();
+        this.syncAdmitGovOtpSendButton();
+        sendmsg('success', 'Beneficiary loaded. Complete authentication below.');
+      } catch (error) {
+        const fromBody =
+          error.responseData && typeof window.pmExtractErrorMessage === 'function'
+            ? window.pmExtractErrorMessage(error.responseData)
+            : '';
+        sendmsg('error', fromBody || error.message || 'Search failed.');
+      }
+    }
+
+    async sendAdmitGovSchemeOtp() {
+      if (this.admitGovBeneficiaryLocked) {
+        return;
+      }
+      const schemeId = document.getElementById('admit_gov_scheme_id')?.value;
+      const search = String(document.getElementById('admit_gov_card_search')?.value || '').trim();
+      const lookupToken = document.getElementById('admit_scheme_lookup_token')?.value;
+      const kyc = document.querySelector('#admitGovSchemeBlock input[name="admit_gov_kyc"]:checked')?.value;
+      if (kyc !== 'aadhar_otp' || !lookupToken) {
+        sendmsg('error', 'Search the beneficiary before sending OTP.');
+        return;
+      }
+      if (!this.routes.schemeBeneficiarySendOtp) {
+        sendmsg('error', 'Send OTP is not configured.');
+        return;
+      }
+      try {
+        const data = await window.pmFetch(this.routes.schemeBeneficiarySendOtp, {
+          method: 'POST',
+          body: {
+            scheme_type_id: schemeId,
+            beneficiary_search: search,
+            lookup_token: lookupToken,
+            kyc_type: 'aadhar_otp',
+          },
+        });
+        if (!data?.success) {
+          sendmsg('error', data?.msg || 'Could not send OTP.');
+          return;
+        }
+        this.admitGovOtpInputRevealed = true;
+        this.syncAdmitGovOtpRowVisibility();
+        const otpEl = document.getElementById('admit_gov_otp');
+        if (otpEl) {
+          otpEl.value = '';
+          window.requestAnimationFrame(() => otpEl.focus());
+        }
+        const stub = data.test_otp != null && data.test_otp !== '' ? String(data.test_otp) : '';
+        const base = data.message || 'OTP sent.';
+        sendmsg('success', stub ? `${base} Test OTP: ${stub}` : base);
+      } catch (error) {
+        const fromBody =
+          error.responseData && typeof window.pmExtractErrorMessage === 'function'
+            ? window.pmExtractErrorMessage(error.responseData)
+            : '';
+        sendmsg('error', fromBody || error.message || 'Send OTP failed.');
+      }
+    }
+
+    async runAdmitGovConfirmAuth() {
+      if (this.admitGovBeneficiaryLocked) {
+        return;
+      }
+      this.clearFieldError('admit_gov_kyc_group');
+      this.clearFieldError('admit_gov_otp');
+      const schemeId = document.getElementById('admit_gov_scheme_id')?.value;
+      const search = String(document.getElementById('admit_gov_card_search')?.value || '').trim();
+      const lookupToken = document.getElementById('admit_scheme_lookup_token')?.value;
+      const kyc = document.querySelector('#admitGovSchemeBlock input[name="admit_gov_kyc"]:checked')?.value || 'without_auth';
+      if (!lookupToken) {
+        this.setFieldError('admit_gov_card_search', 'Search the beneficiary first.');
+        return;
+      }
+      let otp = '';
+      if (kyc === 'aadhar_otp') {
+        if (!this.admitGovOtpInputRevealed) {
+          sendmsg('error', 'Send OTP first, then enter the 6-digit code.');
+          return;
+        }
+        otp = String(document.getElementById('admit_gov_otp')?.value || '').trim();
+        if (!/^\d{6}$/.test(otp)) {
+          this.setFieldError('admit_gov_otp', 'Enter the 6-digit OTP.');
+          return;
+        }
+      }
+      if (!this.routes.schemeBeneficiaryConfirmAuth) {
+        sendmsg('error', 'Authentication endpoint is not configured.');
+        return;
+      }
+      try {
+        const data = await window.pmFetch(this.routes.schemeBeneficiaryConfirmAuth, {
+          method: 'POST',
+          body: {
+            scheme_type_id: schemeId,
+            beneficiary_search: search,
+            lookup_token: lookupToken,
+            kyc_type: kyc,
+            otp: otp || null,
+          },
+        });
+        if (!data?.success) {
+          sendmsg('error', data?.msg || 'Authentication failed.');
+          return;
+        }
+        const authEl = document.getElementById('admit_scheme_auth_token');
+        if (authEl) authEl.value = data.auth_token || '';
+        this.setAdmitGovBeneficiaryLocked(true);
+        sendmsg('success', 'Beneficiary authentication recorded. You can admit the patient.');
+      } catch (error) {
+        const fromBody =
+          error.responseData && typeof window.pmExtractErrorMessage === 'function'
+            ? window.pmExtractErrorMessage(error.responseData)
+            : '';
+        sendmsg('error', fromBody || error.message || 'Authentication failed.');
+      }
+    }
+
+    validateAdmitGovSchemeFields() {
+      if (!this.isAdmitGovSchemePanelVisible() || !this.admitSchemeProfileComplete) {
+        return true;
+      }
+      if (!document.getElementById('admit_gov_scheme_id')?.value) {
+        this.setFieldError('admit_gov_scheme_id', 'Select a scheme.');
+        document.getElementById('admit_gov_scheme_id')?.focus();
+        return false;
+      }
+      const cardSearch = String(document.getElementById('admit_gov_card_search')?.value || '').trim();
+      if (cardSearch.length < 4) {
+        this.setFieldError('admit_gov_card_search', 'Enter at least 4 characters to search the beneficiary.');
+        document.getElementById('admit_gov_card_search')?.focus();
+        return false;
+      }
+      if (!document.getElementById('admit_scheme_lookup_token')?.value) {
+        this.setFieldError('admit_gov_card_search', 'Search and load the beneficiary before admitting.');
+        document.getElementById('admit_gov_card_search')?.focus();
+        return false;
+      }
+      if (!document.getElementById('admit_scheme_auth_token')?.value) {
+        this.setFieldError('admit_gov_kyc_group', 'Complete beneficiary authentication (Confirm authentication).');
+        document.getElementById('admit_gov_confirm_auth_btn')?.focus();
+        return false;
+      }
+      const kyc = document.querySelector('#admitGovSchemeBlock input[name="admit_gov_kyc"]:checked')?.value;
+      if (kyc === 'aadhar_otp') {
+        const otp = String(document.getElementById('admit_gov_otp')?.value || '').trim();
+        if (!/^\d{6}$/.test(otp)) {
+          this.setFieldError('admit_gov_otp', 'Enter the 6-digit OTP used for authentication.');
+          document.getElementById('admit_gov_otp')?.focus();
+          return false;
+        }
+      }
+      return true;
+    }
+
+    collectAdmitPayload() {
+      const body = {
+        patient_id: this.admit.patientId.value,
+        hr_department_id: this.admit.dept.value,
+        doctor_id: this.admit.doctor.value || null,
+        bed_id: this.admit.bed.value,
+        admission_reason: this.admit.reason.value || null,
+        payment_mode: this.admit.payment.value || null,
+        advance_deposit: this.admit.advance.value || 0,
+      };
+      if (this.isAdmitGovSchemePaymentLabel(this.admit.payment?.value) && this.admitSchemeProfileComplete) {
+        const kyc = document.querySelector('#admitGovSchemeBlock input[name="admit_gov_kyc"]:checked')?.value || 'without_auth';
+        body.scheme_type_id = document.getElementById('admit_gov_scheme_id')?.value || null;
+        body.scheme_beneficiary_card_id = String(document.getElementById('admit_gov_card_search')?.value || '').trim() || null;
+        body.scheme_kyc_type = kyc;
+        body.scheme_lookup_token = document.getElementById('admit_scheme_lookup_token')?.value || null;
+        body.scheme_auth_token = document.getElementById('admit_scheme_auth_token')?.value || null;
+        body.scheme_aadhar_otp = kyc === 'aadhar_otp' ? String(document.getElementById('admit_gov_otp')?.value || '').trim() || null : null;
+      }
+      return body;
+    }
+
     validateAdmitForm() {
       this.clearFormErrors(this.admit.form);
       if (!this.admit.patientId.value) {
@@ -1908,6 +2621,12 @@
         this.admit.bed.focus();
         return false;
       }
+      if (!this.validateAdmitSchemeProfileFields()) {
+        return false;
+      }
+      if (!this.validateAdmitGovSchemeFields()) {
+        return false;
+      }
       return true;
     }
 
@@ -1919,18 +2638,18 @@
       try {
         const data = await window.pmFetch(this.routes.ipdAdmit, {
           method: 'POST',
-          body: {
-            patient_id: this.admit.patientId.value,
-            hr_department_id: this.admit.dept.value,
-            doctor_id: this.admit.doctor.value || null,
-            bed_id: this.admit.bed.value,
-            admission_reason: this.admit.reason.value || null,
-            payment_mode: this.admit.payment.value || null,
-            advance_deposit: this.admit.advance.value || 0,
-          }
+          body: this.collectAdmitPayload(),
         });
-        sendmsg('success', `Admission ${data.admission_no} created. Bed ${data.bed_no}.`);
+        let successMsg = `Admission ${data.admission_no} created. Bed ${data.bed_no}.`;
+        if (data.scheme_preauth_url) {
+          successMsg += ' Scheme preauth draft created.';
+        }
+        sendmsg('success', successMsg);
         closeModal('ipdAdmitModal');
+        if (data.scheme_preauth_url) {
+          window.location.href = data.scheme_preauth_url;
+          return;
+        }
         this.resetAdmitForm(true);
         await window.pmRefreshPatientDashboard?.();
         await this.loadAvailableBeds();

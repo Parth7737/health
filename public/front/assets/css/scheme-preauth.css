@@ -727,6 +727,432 @@
   border-color: var(--spa-border-light);
 }
 
+/* Procedures list — compact so table fits without horizontal scroll */
+.scheme-preauth-page .spa-procedures-table-wrap {
+  overflow-x: visible;
+}
+
+.scheme-preauth-page .spa-procedures-table {
+  font-size: 11px;
+  table-layout: fixed;
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.scheme-preauth-page .spa-procedures-table thead th {
+  font-size: 9.5px;
+  padding: 6px 5px;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+.scheme-preauth-page .spa-procedures-table tbody td {
+  font-size: 11px;
+  padding: 5px 6px;
+  line-height: 1.3;
+  vertical-align: middle;
+  word-break: break-word;
+}
+
+.scheme-preauth-page .spa-procedures-table th:nth-child(1),
+.scheme-preauth-page .spa-procedures-table td:nth-child(1) {
+  width: 4%;
+}
+
+.scheme-preauth-page .spa-procedures-table th:nth-child(2),
+.scheme-preauth-page .spa-procedures-table td:nth-child(2) {
+  width: 14%;
+}
+
+.scheme-preauth-page .spa-procedures-table th:nth-child(3),
+.scheme-preauth-page .spa-procedures-table td:nth-child(3) {
+  width: 28%;
+}
+
+.scheme-preauth-page .spa-procedures-table th:nth-child(4),
+.scheme-preauth-page .spa-procedures-table td:nth-child(4) {
+  width: 11%;
+}
+
+.scheme-preauth-page .spa-procedures-table th:nth-child(5),
+.scheme-preauth-page .spa-procedures-table td:nth-child(5) {
+  width: 8%;
+}
+
+.scheme-preauth-page .spa-procedures-table th:nth-child(6),
+.scheme-preauth-page .spa-procedures-table td:nth-child(6) {
+  width: 12%;
+}
+
+.scheme-preauth-page .spa-procedures-table th:nth-child(7),
+.scheme-preauth-page .spa-procedures-table td:nth-child(7) {
+  width: 11%;
+}
+
+.scheme-preauth-page .spa-procedures-table th:nth-child(8),
+.scheme-preauth-page .spa-procedures-table td:nth-child(8) {
+  width: 6%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.scheme-preauth-page .spa-procedure-name-text {
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.scheme-preauth-page .spa-procedure-name-text.short-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.scheme-preauth-page .spa-procedures-table .toggle-text {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.scheme-preauth-page .spa-procedure-delete-btn svg {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+}
+
+/* Investigations list — compact table + inline upload */
+.scheme-preauth-page .spa-investigations-table-wrap {
+  overflow-x: visible;
+}
+
+.scheme-preauth-page .spa-investigations-table {
+  font-size: 11px;
+  table-layout: fixed;
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.scheme-preauth-page .spa-investigations-table thead th {
+  font-size: 9.5px;
+  padding: 6px 5px;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+.scheme-preauth-page .spa-investigations-table tbody td {
+  font-size: 11px;
+  padding: 6px 8px;
+  line-height: 1.35;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.scheme-preauth-page .spa-investigations-table th:nth-child(1),
+.scheme-preauth-page .spa-investigations-table td:nth-child(1) {
+  width: 5%;
+}
+
+.scheme-preauth-page .spa-investigations-table th:nth-child(2),
+.scheme-preauth-page .spa-investigations-table td:nth-child(2) {
+  width: 32%;
+}
+
+.scheme-preauth-page .spa-investigations-table th:nth-child(3),
+.scheme-preauth-page .spa-investigations-table td:nth-child(3) {
+  width: 63%;
+}
+
+.scheme-preauth-page .spa-investigation-name-cell {
+  font-size: 11px;
+}
+
+.scheme-preauth-page .spa-investigation-upload {
+  max-width: 100%;
+}
+
+.scheme-preauth-page .spa-investigations-table .file-upload-section {
+  width: 100%;
+  max-width: 100%;
+}
+
+.scheme-preauth-page .spa-investigations-table .file-upload-wrapper {
+  min-height: 48px;
+  padding: 6px 10px;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.scheme-preauth-page .spa-investigations-table .file-upload-wrapper::before {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.scheme-preauth-page .spa-investigations-table .file-upload-wrapper p {
+  font-size: 11px;
+  margin: 0;
+}
+
+.scheme-preauth-page .spa-investigations-table .file-upload-display {
+  padding: 6px 8px;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.scheme-preauth-page .spa-investigations-table .file-upload-display .file-name {
+  white-space: normal;
+  word-break: break-all;
+}
+
+.scheme-preauth-page .spa-investigations-table .file-upload-display .remove-file-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.scheme-preauth-page .spa-investigation-hint {
+  display: block;
+  font-size: 9.5px;
+  line-height: 1.25;
+  margin-top: 4px;
+}
+
+.scheme-preauth-page .spa-investigation-view-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  margin-top: 6px;
+}
+
+/* Preview / read-only pages — tighter layout, no horizontal scroll */
+.scheme-preauth-preview-page {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.scheme-preauth-preview-page .row.row-cols-5 > .col {
+  min-width: 0;
+}
+
+.scheme-preauth-preview-page .infodata label {
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.scheme-preauth-preview-page .infodata p {
+  font-size: 11px;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.scheme-preauth-preview-page .inside-left-info-box {
+  padding: 12px 14px;
+}
+
+.scheme-preauth-preview-page .accordion-body {
+  padding: 12px 16px;
+}
+
+.scheme-preauth-preview-page .colored-verticle-title {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.scheme-preauth-preview-page .spa-preauth-compact-table-wrap {
+  overflow-x: visible;
+}
+
+.scheme-preauth-preview-page .spa-preauth-compact-table-wrap > table {
+  font-size: 11px;
+  table-layout: fixed;
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.scheme-preauth-preview-page .spa-preauth-compact-table-wrap > table thead th {
+  font-size: 9.5px;
+  padding: 6px 5px;
+  white-space: normal;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+.scheme-preauth-preview-page .spa-preauth-compact-table-wrap > table tbody td {
+  font-size: 11px;
+  padding: 5px 6px;
+  line-height: 1.3;
+  word-break: break-word;
+  vertical-align: middle;
+}
+
+.scheme-preauth-preview-page #previewModal .modal-dialog {
+  max-width: min(1140px, 96vw);
+}
+
+.scheme-preauth-preview-page #previewModal .modal-body {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Preview modal — modal sits outside .scheme-preauth-page wrapper */
+#previewModal .modal-dialog {
+  max-width: min(1200px, 96vw);
+}
+
+#previewModal .modal-body {
+  padding: 10px 14px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+
+#previewModalPrintArea.scheme-preauth-page .spa-preview-beneficiary-card {
+  background: var(--spa-surface-2);
+  border: 1px solid var(--spa-border-light) !important;
+  border-radius: 8px;
+}
+
+#previewModalPrintArea.scheme-preauth-page .spa-preview-beneficiary-name {
+  font-size: 13px;
+}
+
+@media (min-width: 576px) {
+  #previewModalPrintArea.scheme-preauth-page .border-sm-end {
+    border-right: 1px solid var(--spa-border-light) !important;
+  }
+}
+
+.scheme-preauth-page .spa-preview-content {
+  font-size: 11px;
+}
+
+.scheme-preauth-page .spa-preview-section {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--spa-border-light);
+}
+
+.scheme-preauth-page .spa-preview-section--last {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.scheme-preauth-page .spa-preview-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--spa-primary);
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.scheme-preauth-page .spa-preview-kv-grid {
+  display: grid;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.scheme-preauth-page .spa-preview-kv-grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.scheme-preauth-page .spa-preview-kv-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.scheme-preauth-page .spa-preview-kv-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.scheme-preauth-page .spa-preview-kv {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.scheme-preauth-page .spa-preview-kv--wide {
+  grid-column: 1 / -1;
+}
+
+.scheme-preauth-page .spa-preview-kv-label,
+.scheme-preauth-page .spa-preview-kv dt {
+  flex: 0 0 auto;
+  max-width: 42%;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--spa-muted);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.scheme-preauth-page .spa-preview-kv-value,
+.scheme-preauth-page .spa-preview-kv dd {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--spa-text-2);
+  margin: 0;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.scheme-preauth-page .spa-preview-kv-value .btn,
+.scheme-preauth-page .spa-preview-kv dd .btn {
+  font-size: 10px;
+  line-height: 1.2;
+  vertical-align: baseline;
+}
+
+.scheme-preauth-page .spa-preview-empty {
+  font-size: 11px;
+  color: var(--spa-muted);
+}
+
+.scheme-preauth-page .spa-preview-section .table-responsive {
+  margin-top: 0;
+}
+
+.scheme-preauth-page .spa-preview-finance-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--spa-border-light);
+  font-size: 10.5px;
+}
+
+.scheme-preauth-page .spa-preview-finance-totals li {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.scheme-preauth-page .spa-preview-columns .spa-preview-section {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+
+@media (max-width: 991px) {
+  .scheme-preauth-page .spa-preview-kv-grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scheme-preauth-page .spa-preview-kv-grid--3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+}
+
 /* ── File upload (HIMS) ─────────────────────────────────────── */
 .scheme-preauth-page .file-upload-section {
   width: 100%;

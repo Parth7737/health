@@ -9,7 +9,7 @@ use App\Models\BedAllocation;
 use App\Models\FamilyHistory;
 use App\Models\GeneralInfo;
 use App\Models\HospitalSpeciality;
-use App\Models\HospitalTeam;
+use App\Models\Staff;
 use App\Models\Patient;
 use App\Models\PersonalHistory;
 use App\Models\PreauthCareTeam;
@@ -68,7 +68,6 @@ class SchemePreauthController extends Controller
         $register = PreauthRegister::query()
             ->where('hospital_id', $this->hospital_id)
             ->where('bed_allocation_id', $allocation->id)
-            ->where('status', PreauthRegister::STATUS_REGISTER)
             ->first();
 
         if (! $register) {
@@ -122,18 +121,13 @@ class SchemePreauthController extends Controller
 
         $us = Speciality::query()->where('name', 'Unspecified Surgical Package')->where('code', 'US')->first();
 
-        $speciality_ids = $hospital_speciality->pluck('speciality_id')->filter();
-        $teams = HospitalTeam::query()
-            ->where('hospital_id', $this->hospital_id)
-            ->whereIn('speciality_id', $speciality_ids)
-            ->orderBy('name')
-            ->get();
+        $careTeamDoctors = $this->careTeamDoctorsQuery()->get();
 
         $preauth_investigations = PreauthInvestigation::query()->where('preauth_register_id', $preauthRegister->id)->get();
         $investigations = SchemePreauthHelper::getInvestigations($preauthRegister->id);
         $post_investigations = collect();
         $preauth_investigation_status = SchemePreauthHelper::getPreauthInvestigationsStatus($preauthRegister->id);
-        $preauth_teams = PreauthCareTeam::query()->where('preauth_register_id', $preauthRegister->id)->get();
+        $preauth_teams = $this->preauthTeamsQuery($preauthRegister->id)->get();
 
         $preauthBeneficiary = (object) [
             'image_url' => $patient->image ? asset('storage/'.$patient->image) : null,
@@ -147,7 +141,7 @@ class SchemePreauthController extends Controller
             'address' => $patient->address ?? '—',
         ];
 
-        $schemePreauthAfterSubmitUrl = route('hospital.patient-management.patient-360', ['patient' => $patient->id]);
+        $schemePreauthAfterSubmitUrl = route('hospital.patient-management.patient-details', ['patient' => $patient->id]);
 
         $case_profile = $preauthRegister->id;
 
@@ -172,7 +166,7 @@ class SchemePreauthController extends Controller
             'hospital_speciality',
             'us',
             'procedures',
-            'teams',
+            'careTeamDoctors',
             'preauth_teams',
             'investigations',
             'post_investigations',
@@ -195,6 +189,24 @@ class SchemePreauthController extends Controller
         abort_if($id <= 0, 403);
 
         return $id;
+    }
+
+    protected function careTeamDoctorsQuery()
+    {
+        return Staff::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->doctor()
+            ->active()
+            ->with(['designation', 'specialist'])
+            ->orderBy('first_name')
+            ->orderBy('last_name');
+    }
+
+    protected function preauthTeamsQuery(int $preauthRegisterId)
+    {
+        return PreauthCareTeam::query()
+            ->where('preauth_register_id', $preauthRegisterId)
+            ->with(['staff.designation', 'staff.specialist', 'hospital_team']);
     }
 
     public function generalInformation(Request $request)
@@ -655,24 +667,32 @@ class SchemePreauthController extends Controller
 
     public function careTeam(Request $request)
     {
-        $request->validate(['care_team_id' => 'required']);
+        $request->validate(['care_team_id' => 'required|integer']);
         $preauth_register_id = $this->sessionRegisterId();
         $preauth_register = PreauthRegister::query()->findOrFail($preauth_register_id);
         $this->authorizeRegister($preauth_register);
 
+        $doctor = $this->careTeamDoctorsQuery()
+            ->whereKey((int) $request->care_team_id)
+            ->first();
+
+        if (! $doctor) {
+            return response()->json(['success' => false, 'message' => 'Please select a valid doctor from your hospital.']);
+        }
+
         $exists = PreauthCareTeam::query()
             ->where('preauth_register_id', $preauth_register_id)
-            ->where('hospital_team_id', $request->care_team_id)
+            ->where('staff_id', $doctor->id)
             ->exists();
         if ($exists) {
             return response()->json(['success' => false, 'message' => 'Care Team Doctor already added. You can\'t add more!']);
         }
         $row = new PreauthCareTeam;
         $row->preauth_register_id = $preauth_register_id;
-        $row->hospital_team_id = $request->care_team_id;
+        $row->staff_id = $doctor->id;
         $row->save();
 
-        $preauth_teams = PreauthCareTeam::query()->where('preauth_register_id', $preauth_register_id)->get();
+        $preauth_teams = $this->preauthTeamsQuery($preauth_register_id)->get();
         $html = view('hospital.scheme-preauth._partials.teams', ['preauth_teams' => $preauth_teams])->render();
 
         return response()->json([
@@ -689,7 +709,7 @@ class SchemePreauthController extends Controller
         $this->authorizeRegister(PreauthRegister::query()->findOrFail($preauth_care_team->preauth_register_id));
         $preauth_register_id = $preauth_care_team->preauth_register_id;
         $preauth_care_team->delete();
-        $preauth_teams = PreauthCareTeam::query()->where('preauth_register_id', $preauth_register_id)->get();
+        $preauth_teams = $this->preauthTeamsQuery($preauth_register_id)->get();
         $html = view('hospital.scheme-preauth._partials.teams', ['preauth_teams' => $preauth_teams])->render();
 
         return response()->json([
@@ -778,11 +798,14 @@ class SchemePreauthController extends Controller
         $authentication_consent = AuthenticationConsent::query()->where('preauth_register_id', $preauth_register_id)->first();
         $admission_details = AdmissionDetails::query()->where('preauth_register_id', $preauth_register_id)->first();
         $preauth_diagnosis = PreauthDiagnosis::query()->where('preauth_register_id', $preauth_register_id)->get();
-        $preauth_teams = PreauthCareTeam::query()->where('preauth_register_id', $preauth_register_id)->get();
+        $preauth_teams = $this->preauthTeamsQuery($preauth_register_id)->get();
 
         $is_resubmission = (int) ($request->is_resubmission ?? 0);
         $procedures = PreauthProcedure::query()->where('preauth_register_id', $preauth_register_id)->get();
-        $investigations = PreauthInvestigation::query()->where('preauth_register_id', $preauth_register_id)->get();
+        $investigations = PreauthInvestigation::query()
+            ->with('investigation')
+            ->where('preauth_register_id', $preauth_register_id)
+            ->get();
         $preauth_investigation_status = SchemePreauthHelper::getPreauthInvestigationsStatus($preauth_register_id, $is_resubmission === 1 ? 1 : 0);
         $preauth_package_check_status = SchemePreauthHelper::getPreauthPackageStatus($preauth_register_id, $is_resubmission === 1 ? 1 : 0);
         $u100_package_check_status = SchemePreauthHelper::getU100PackageStatus($preauth_register_id, $is_resubmission === 1 ? 1 : 0);

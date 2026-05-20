@@ -1,11 +1,18 @@
-@extends('layouts.preauth.app')
+@extends('layouts.hospital.app', ['is_header_hiden' => true])
 @section('title','Pre-Authorization')
+
+@push('styles')
+<link rel="stylesheet" href="{{ asset('public/front/assets/vendor/fonts/remixicon/remixicon.css') }}" />
+<link rel="stylesheet" href="{{ asset('public/front/assets/vendor/libs/bs-stepper/bs-stepper.css') }}" />
+<link rel="stylesheet" href="{{ asset('public/front/assets/css/scheme-preauth.css') }}?v=9" />
+@endpush
+
 @section('content')
 
 @php
     use \App\Models\PreauthRegister;
 @endphp
-<div class="container-xxl flex-grow-1 container-p-y mb-5">
+<div class="container-xxl flex-grow-1 container-p-y mb-5 scheme-preauth-page scheme-preauth-preview-page">
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item">
@@ -22,10 +29,12 @@
                         <div class="col">
                             <div
                                 class="d-flex text-center justify-content-center flex-column border-end border-secondary">
+                                @if($preauth_register->benificiary->image_url)
                                 <div class="position-relative image-overlay">
-                                    <img src="{{ $preauth_register->benificiary->image_url }}" width="80" alt="avatar"
-                                        class="mb-3 rounded-circle" />
-                                </div>
+                                        <img src="{{ $preauth_register->benificiary->image_url }}" width="80" alt="avatar"
+                                            class="mb-3 rounded-circle" />
+                                    </div>
+                                @endif
                                 <span class="number-3 mb-2">{{ @$preauth_register->benificiary->name }}</span>
                                 <span class="number-2 mb-2">{{ @$preauth_register->benificiary->age }} Yr / {{ @$preauth_register->benificiary->gender }}</span>
                                 @if(@$preauth_register->is_new_born_baby == 1)
@@ -85,7 +94,7 @@
                 </div>
             </div>
             <div class="bs-stepper wizard-numbered mt-2">
-                @include('preauth._partials.preauth-step')
+                @include('hospital.scheme-preauth._partials.preauth-step')
                 <div class="bs-stepper-content">
                     <!-- Account Details -->
                     <div id="account-details" class="content">
@@ -431,19 +440,19 @@
                                             <div class="row g-5">
                                                 <div class="col-12">
                                                     <div
-                                                        class="table-responsive mt-5 text-nowrap">
-                                                        <table class="table">
+                                                        class="table-responsive mt-3 spa-preauth-compact-table-wrap">
+                                                        <table class="table table-sm spa-preauth-compact-table">
                                                             <thead class="table-dark">
                                                                 <tr>
                                                                     <th>No.</th>
-                                                                    <th>Diagnosis Code</th>
+                                                                    <th>Code</th>
                                                                     <th>Diagnosis Description</th>
                                                                     <th>Diagnosis Type</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody
                                                                 class="table-border-bottom-0 diagnosis-body">
-                                                                @include('preauth._partials.diagnosis',['is_action_hide'=>1])
+                                                                @include('hospital.scheme-preauth._partials.diagnosis',['is_action_hide'=>1])
                                                             </tbody>
                                                         </table>
                                                     </div>
@@ -464,22 +473,22 @@
                                             <div class="row justify-content-center">
                                                 <div class="col-12">
                                                     <div
-                                                        class="table-responsive mt-5 text-nowrap">
-                                                        <table class="table">
+                                                        class="table-responsive mt-3 spa-procedures-table-wrap">
+                                                        <table class="table table-sm spa-procedures-table">
                                                             <thead class="table-dark">
                                                                 <tr>
                                                                     <th>No.</th>
                                                                     <th>Speciality</th>
                                                                     <th>Procedure</th>
-                                                                    <th>Stratification</th>
-                                                                    <th>Day/Units</th>
+                                                                    <th>Strat.</th>
+                                                                    <th>Days</th>
                                                                     <th>Amount</th>
-                                                                    <th>ICHI Code</th>
+                                                                    <th>ICHI</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody
                                                                 class="table-border-bottom-0">
-                                                                @include('preauth._partials.procedures',['is_action_hide'=>1])
+                                                                @include('hospital.scheme-preauth._partials.procedures',['is_action_hide'=>1])
                                                             </tbody>
                                                         </table>
                                                     </div>
@@ -500,18 +509,18 @@
                                             <div class="row justify-content-center">
                                                 <div class="col-12">
                                                     <div
-                                                        class="table-responsive mt-5 text-nowrap">
-                                                        <table class="table">
+                                                        class="table-responsive mt-3 spa-investigations-table-wrap">
+                                                        <table class="table table-sm spa-investigations-table">
                                                             <thead class="table-dark">
                                                                 <tr>
                                                                     <th>No.</th>
-                                                                    <th>Name</th>
-                                                                    <th>Attachment</th>
+                                                                    <th>Investigation</th>
+                                                                    <th>Document</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody
                                                                 class="table-border-bottom-0 investigation-body">
-                                                                @include('preauth._partials.investigations',['preauth_register_id'=>$preauth_register->id,'is_preview'=>1])
+                                                                @include('hospital.scheme-preauth._partials.investigations',['preauth_register_id'=>$preauth_register->id,'is_preview'=>1])
                                                             </tbody>
                                                         </table>
                                                     </div>
@@ -629,23 +638,23 @@
                                                     <div class="row justify-content-center">
                                                         <div class="col-12">
                                                             <div
-                                                                class="table-responsive mt-5 text-nowrap">
-                                                                <table class="table">
+                                                                class="table-responsive mt-3 spa-procedures-table-wrap">
+                                                                <table class="table table-sm spa-procedures-table">
                                                                     <thead class="table-dark">
                                                                         <tr>
                                                                             <th>No.</th>
                                                                             <th>Speciality</th>
                                                                             <th>Procedure</th>
-                                                                            <th>Stratification</th>
-                                                                            <th>Day/Units</th>
+                                                                            <th>Strat.</th>
+                                                                            <th>Days</th>
                                                                             <th>Amount</th>
-                                                                            <th>ICHI Code</th>
-                                                                            <th>Actions</th>
+                                                                            <th>ICHI</th>
+                                                                            <th></th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody
                                                                         class="table-border-bottom-0 resubmission-procedure-body">
-                                                                        @include('preauth._partials.procedures',['is_enhancement'=>1])
+                                                                        @include('hospital.scheme-preauth._partials.procedures',['is_enhancement'=>1])
                                                                     </tbody>
                                                                 </table>
                                                             </div>
@@ -667,22 +676,22 @@
                                                         <div class="row justify-content-center">
                                                             <div class="col-12">
                                                                 <div
-                                                                    class="table-responsive mt-5 text-nowrap">
-                                                                    <table class="table">
+                                                                    class="table-responsive mt-3 spa-investigations-table-wrap">
+                                                                    <table class="table table-sm spa-investigations-table">
                                                                         <thead class="table-dark">
                                                                             <tr>
                                                                                 <th>No.</th>
-                                                                                <th>Name</th>
+                                                                                <th>Investigation</th>
                                                                                 <th>Attachment</th>
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody
                                                                             class="table-border-bottom-0 resubmission-investigation-body">
-                                                                            @include('preauth._partials.investigations',['preauth_register_id'=>$preauth_register->id,'is_preview'=>1])
+                                                                            @include('hospital.scheme-preauth._partials.investigations',['preauth_register_id'=>$preauth_register->id,'is_preview'=>1])
                                                                         </tbody>
                                                                         <tbody
                                                                             class="table-border-bottom-0 inhancement-doc d-none">
-                                                                            @include('preauth._partials.inhancement-docs',['preauth_register_id'=>$preauth_register->id])
+                                                                            @include('hospital.scheme-preauth._partials.inhancement-docs',['preauth_register_id'=>$preauth_register->id])
                                                                         </tbody>
                                                                     </table>
                                                                 </div>
@@ -710,7 +719,7 @@
                                                 </span>
                                             </h4>
                                             <div class="col-12">
-                                                <div class="table-responsive mt-5 text-nowrap">
+                                                <div class="table-responsive mt-3 spa-preauth-compact-table-wrap">
                                                     <table class="table">
                                                         <thead class="table-dark">
                                                             <tr>
@@ -723,7 +732,7 @@
                                                             </tr>
                                                         </thead>
                                                         <tbody class="table-border-bottom-0 care-team-body">
-                                                            @include('preauth._partials.teams',['is_action_hide'=>1])
+                                                            @include('hospital.scheme-preauth._partials.teams',['is_action_hide'=>1])
                                                         </tbody>
                                                     </table>
                                                 </div>
@@ -752,7 +761,7 @@
                                         </h4>
                                         <div class="row g-5">
                                             <div class="col-12">
-                                                <div class="table-responsive mt-5 text-nowrap">
+                                                <div class="table-responsive mt-3 spa-preauth-compact-table-wrap">
                                                     <table class="table">
                                                         <thead class="table-dark">
                                                             <tr>
@@ -768,13 +777,13 @@
                                                             </tr>
                                                         </thead>
                                                         <tbody class="table-border-bottom-0 finance-body">
-                                                            @include('preauth._partials.finance')
+                                                            @include('hospital.scheme-preauth._partials.finance')
                                                         </tbody>
                                                     </table>
                                                 </div>
                                                 @if(($preauth_register->status != PreauthRegister::STATUS_CLAIM_QUERIED) && ($preauth_register->status != PreauthRegister::STATUS_PREAUTH_QUERIED))
                                                     <ul class="d-flex listing-right finance-total-body">
-                                                        @include('preauth._partials.finance-total')
+                                                        @include('hospital.scheme-preauth._partials.finance-total')
                                                     </ul>
                                                 @endif
                                             </div>
@@ -1338,7 +1347,7 @@
                                                         <div class="row justify-content-center">
                                                             <div class="col-12">
                                                                 <div
-                                                                    class="table-responsive mt-2 text-nowrap">
+                                                                    class="table-responsive mt-2 spa-preauth-compact-table-wrap">
                                                                     <table class="table">
                                                                         <thead class="table-dark">
                                                                             <tr>
@@ -1349,7 +1358,7 @@
                                                                         </thead>
                                                                         <tbody
                                                                             class="table-border-bottom-0 investigation-body">
-                                                                            @include('preauth._partials.post-investigations',['preauth_register_id'=>$preauth_register->id])
+                                                                            @include('hospital.scheme-preauth._partials.post-investigations',['preauth_register_id'=>$preauth_register->id])
                                                                         </tbody>
                                                                     </table>
                                                                 </div>
@@ -1375,7 +1384,7 @@
                                                     </h4>
                                                     <div class="row g-5">
                                                         <div class="col-12">
-                                                            <div class="table-responsive text-nowrap">
+                                                            <div class="table-responsive spa-preauth-compact-table-wrap">
                                                                 <table class="table">
                                                                     <thead class="table-dark">
                                                                         <tr>
@@ -1451,7 +1460,7 @@
                                                                 </table>
                                                             </div>
                                                             <ul class="d-flex listing-right finance-total-body">
-                                                                @include('preauth._partials.finance-total')
+                                                                @include('hospital.scheme-preauth._partials.finance-total')
                                                             </ul>
                                                         </div>
                                                     </div>
@@ -1647,7 +1656,7 @@
                                                     </h4>
                                                     <div class="row g-5">
                                                         <div class="col-12">
-                                                            <div class="table-responsive text-nowrap">
+                                                            <div class="table-responsive spa-preauth-compact-table-wrap">
                                                                 <table class="table">
                                                                     <thead class="table-dark">
                                                                         <tr>
@@ -1723,7 +1732,7 @@
                                                                 </table>
                                                             </div>
                                                             <ul class="d-flex listing-right finance-total-body">
-                                                                @include('preauth._partials.finance-total')
+                                                                @include('hospital.scheme-preauth._partials.finance-total')
                                                             </ul>
                                                         </div>
                                                     </div>
@@ -1834,7 +1843,7 @@
                                                     </h4>
                                                     <div class="row g-5">
                                                         <div class="col-12">
-                                                            <div class="table-responsive text-nowrap">
+                                                            <div class="table-responsive spa-preauth-compact-table-wrap">
                                                                 <table class="table">
                                                                     <thead class="table-dark">
                                                                         <tr>
@@ -1910,7 +1919,7 @@
                                                                 </table>
                                                             </div>
                                                             <ul class="d-flex listing-right finance-total-body">
-                                                                @include('preauth._partials.finance-total')
+                                                                @include('hospital.scheme-preauth._partials.finance-total')
                                                             </ul>
                                                         </div>
                                                     </div>
@@ -3089,7 +3098,7 @@
         $(".loader-overlay").show();
         if(id != ''){
             $.ajax({
-                url: '{{route("preauth.get-procedures")}}',
+                url: '{{route("hospital.patient-management.scheme-preauth.get-procedures")}}',
                 headers: {
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
@@ -3150,7 +3159,7 @@
         $(".loader-overlay").show();
         if(id != ''){
             $.ajax({
-                url: '{{route("preauth.get-procedure-details")}}',
+                url: '{{route("hospital.patient-management.scheme-preauth.get-procedure-details")}}',
                 headers: {
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
@@ -3214,7 +3223,7 @@
         $(".loader-overlay").show();
         if(id != ''){
             $.ajax({
-                url: '{{route("preauth.get-implant-details")}}',
+                url: '{{route("hospital.patient-management.scheme-preauth.get-implant-details")}}',
                 headers: {
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
@@ -3267,7 +3276,7 @@
         $(".loader-overlay").show();
         if(id != ''){
             $.ajax({
-                url: '{{route("preauth.get-stratification-details")}}',
+                url: '{{route("hospital.patient-management.scheme-preauth.get-stratification-details")}}',
                 headers: {
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
@@ -3449,7 +3458,7 @@
         $(".loader-overlay").show();
         $('.error').remove();
         $.ajax({
-            url: '{{route("preauth.investigation.store")}}',
+            url: '{{route("hospital.patient-management.scheme-preauth.investigation.store")}}',
             headers: {
                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
             },
@@ -3660,7 +3669,7 @@
     $("#preview").on("click",function(){
         $(".loader-overlay").show();
         $.ajax({
-            url: '{{route("preauth.validate-form")}}',
+            url: '{{route("hospital.patient-management.scheme-preauth.validate-form")}}',
             headers: {
                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
             },
@@ -3742,7 +3751,7 @@
             if (willDelete) {
                 $(".loader-overlay").show();
                 $.ajax({
-                    url: '{{route("preauth.request-form-sumbit")}}',
+                    url: '{{route("hospital.patient-management.scheme-preauth.request-form-sumbit")}}',
                     headers: {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     },
@@ -3766,16 +3775,33 @@
             }
         });
     })
-    $("#print-form").on("click", function () {
-        var printContents = document.querySelector(".modal-body").innerHTML;
-        var originalContents = document.body.innerHTML;
-
-        document.body.innerHTML = printContents;
-        window.print();
-        document.body.innerHTML = originalContents;
-
-        location.reload();
-    });
+    function spaPrintPreauthPreview() {
+        var printArea = document.getElementById('previewModalPrintArea');
+        if (!printArea || !printArea.innerText.trim()) {
+            if (typeof errorMessage === 'function') {
+                errorMessage('Open preview and wait for content to load.');
+            }
+            return;
+        }
+        var cssHref = '{{ asset('public/front/assets/css/scheme-preauth.css') }}?v=9';
+        var iframe = document.createElement('iframe');
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+        document.body.appendChild(iframe);
+        var doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pre-Authorization</title>' +
+            '<link rel="stylesheet" href="' + cssHref + '">' +
+            '<style>body{padding:16px;font-family:Inter,sans-serif;font-size:12px;color:#111}@media print{body{padding:8px}}</style>' +
+            '</head><body class="scheme-preauth-page scheme-preauth-preview-page">' + printArea.innerHTML + '</body></html>');
+        doc.close();
+        setTimeout(function () {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(function () { iframe.remove(); }, 1500);
+        }, 500);
+    }
+    $("#print-form").on("click", spaPrintPreauthPreview);
     
     $("#claim_amount").on("input", function () {
         let qty = $(this).val();

@@ -26,7 +26,8 @@
         diagnosticPriority: {
             pathology: 'Routine',
             radiology: 'Routine'
-        }
+        },
+        opdVisitCompleteUrl: ''
     };
 
     var bsModal       = null;
@@ -198,6 +199,7 @@
                 state.openButtonId = this.id || '';
                 state.opdPatientId = this.dataset.opdId || '';
                 state.allocationId = this.dataset.allocationId || '';
+                state.opdVisitCompleteUrl = '';
                 openModal();
             });
         });
@@ -247,10 +249,10 @@
         }
         if (els.saveAndCompleteBtn) {
             var showComplete = state.mode === 'opd'
-                && state.openButtonId === 'patient360NewOrderBtn'
+                && state.openContext === 'order'
                 && cfg.opdVisitComplete
                 && cfg.opdVisitComplete.eligible
-                && cfg.opdVisitComplete.url;
+                && (state.opdVisitCompleteUrl || cfg.opdVisitComplete.url);
             if (showComplete) {
                 els.saveAndCompleteBtn.classList.remove('d-none');
                 els.saveAndCompleteBtn.disabled = false;
@@ -352,6 +354,9 @@
             wirePlugins();
             showSaveBtn();
             applyOpenContextFocus();
+            if (state.openContext === 'order') {
+                win.setTimeout(focusFirstModalField, 40);
+            }
         } catch (err) {
             if (els.body) {
                 els.body.innerHTML = '<div class="alert alert-danger m-3">Unable to load workspace. Please try again.</div>';
@@ -380,6 +385,9 @@
             wirePlugins();
             showSaveBtn();
             applyOpenContextFocus();
+            if (state.openContext === 'order') {
+                win.setTimeout(focusFirstModalField, 40);
+            }
         } catch (err) {
             if (els.body) {
                 els.body.innerHTML = '<div class="alert alert-danger m-3">Unable to load form. Please try again.</div>';
@@ -1200,7 +1208,8 @@
     async function saveAll(opts) {
         opts = opts || {};
         var thenComplete = !!opts.thenComplete;
-        if (thenComplete && (!cfg.opdVisitComplete || !cfg.opdVisitComplete.url)) {
+        var completeUrl = state.opdVisitCompleteUrl || (cfg.opdVisitComplete ? cfg.opdVisitComplete.url : '');
+        if (thenComplete && !completeUrl) {
             notify('error', 'Visit cannot be completed from this screen right now.');
             return;
         }
@@ -1402,8 +1411,8 @@
 
             hideLoader();
 
-            if (thenComplete && cfg.opdVisitComplete && cfg.opdVisitComplete.url) {
-                var cRes = await fetch(cfg.opdVisitComplete.url, {
+            if (thenComplete && completeUrl) {
+                var cRes = await fetch(completeUrl, {
                     method: 'POST',
                     headers: {
                         Accept: 'application/json',
@@ -1735,6 +1744,24 @@
             ipdSubjective.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }
+
+    win.Patient360OrderModal = {
+        open: function (options) {
+            options = options || {};
+            state.mode         = options.mode || 'opd';
+            state.openContext  = options.openContext || 'order';
+            state.openButtonId = options.openButtonId || 'externalPatient360NewOrderBtn';
+            state.opdPatientId = options.opdPatientId || options.opdId || '';
+            state.allocationId = options.allocationId || '';
+            state.opdVisitCompleteUrl = options.completeUrl || '';
+
+            if (cfg.opdVisitComplete) {
+                cfg.opdVisitComplete.eligible = !!options.canComplete;
+            }
+
+            openModal();
+        }
+    };
 
     // --- Boot ---
     if (doc.readyState === 'loading') {

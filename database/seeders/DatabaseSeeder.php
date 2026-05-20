@@ -114,6 +114,7 @@ class DatabaseSeeder extends Seeder
             SettingSeeder::class,
             HospitalPermissionsSeeder::class,
             CountryCodeSeeder::class,
+            IndianStatesDistrictsSeeder::class,
             NationalitySeeder::class,
         ]);
     }

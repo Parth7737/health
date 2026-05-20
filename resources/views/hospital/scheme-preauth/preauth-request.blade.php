@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="{{ asset('public/front/assets/vendor/fonts/remixicon/remixicon.css') }}" />
 <link rel="stylesheet" href="{{ asset('public/front/assets/vendor/libs/bs-stepper/bs-stepper.css') }}" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
-<link rel="stylesheet" href="{{ asset('public/front/assets/css/scheme-preauth.css') }}?v=5" />
+<link rel="stylesheet" href="{{ asset('public/front/assets/css/scheme-preauth.css') }}?v=11" />
 @endpush
 
 @section('content')
@@ -20,6 +20,9 @@
                 <a href="javascript:void(0);">Home</a>
             </li>
             <li class="breadcrumb-item active">Pre Authorization ({{ $preauthRegister->register_id ?: 'Draft' }})</li>
+            <li class="ms-auto">
+                <a href="{{ route('hospital.patient-management.patient-details', ['patient' => $patient->id]) }}" class="btn btn-primary btn-sm">Patient Details</a>
+            </li>
         </ol>
     </nav>
     <div class="scheme-preauth-stack">
@@ -73,9 +76,9 @@
                         <!-- <div class="col">
                             <div class="infodata">
                                 <label>Total Wallet Amount</label>
-                                <p class="colored text-info">â‚¹ 5,00,000.00</p>
+                                <p class="colored text-info">? 5,00,000.00</p>
                                 <label>Wallet Balance</label>
-                                <p class="colored text-info">â‚¹ 5,00,000.00</p>
+                                <p class="colored text-info">? 5,00,000.00</p>
                                 <div class="progress" style="height: 10px;">
                                     <div class="progress-bar bg-gradient-new" role="progressbar"
                                         style="width: 100%;" aria-valuenow="50" aria-valuemin="0"
@@ -124,7 +127,7 @@
                                                                 class="form-control" value="{{ @$general_info->temprature??'' }}"
                                                                 placeholder="" />
                                                             <label
-                                                                for="temprature">Temperature(Â°F) <span class="text-danger">*</span></label>
+                                                                for="temprature">Temperature(�F) <span class="text-danger">*</span></label>
                                                         </div>
                                                     </div>
                                                     <div class="col-md-6 col-lg-3">
@@ -573,7 +576,6 @@
                                                                 class="uploaded-file file-upload-display d-none">
                                                                 <span
                                                                     class="file-name">Sample.pdf</span>
-                                                                <i class="fas fa-trash "></i>
                                                                 <button
                                                                     class="remove-file-btn bg-transparent border-0 p-0">
                                                                     <svg xmlns="http://www.w3.org/2000/svg"
@@ -586,6 +588,9 @@
                                                                     </svg>
                                                                 </button>
                                                             </div>
+                                                            @if(@$authentication_consent->hospital_declaration_form)
+                                                                <label><a href="{{ asset('public/storage/'.@$authentication_consent->hospital_declaration_form) }}" target="_blank" class="btn btn-outline-primary btn-sm mt-2">View Document</a></label>
+                                                            @endif
                                                         </div>
                                                     </div>
                                                     <div class="col-md-6 col-lg-3">
@@ -693,7 +698,6 @@
                                                                 class="uploaded-file file-upload-display d-none">
                                                                 <span
                                                                     class="file-name">Sample.pdf</span>
-                                                                <i class="fas fa-trash "></i>
                                                                 <button
                                                                     class="remove-file-btn bg-transparent border-0 p-0">
                                                                     <svg xmlns="http://www.w3.org/2000/svg"
@@ -922,18 +926,18 @@
                                             <div class="row justify-content-center">
                                                 <div class="col-12">
                                                     <div
-                                                        class="table-responsive mt-5 text-nowrap">
-                                                        <table class="table">
+                                                        class="table-responsive mt-5 spa-procedures-table-wrap">
+                                                        <table class="table table-sm spa-procedures-table">
                                                             <thead class="table-dark">
                                                                 <tr>
                                                                     <th>No.</th>
                                                                     <th>Speciality</th>
                                                                     <th>Procedure</th>
-                                                                    <th>Stratification</th>
-                                                                    <th>Day/Units</th>
+                                                                    <th>Strat.</th>
+                                                                    <th>Days</th>
                                                                     <th>Amount</th>
-                                                                    <th>ICHI Code</th>
-                                                                    <th>Actions</th>
+                                                                    <th>ICHI</th>
+                                                                    <th></th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody
@@ -952,18 +956,18 @@
                                                 <div class="row justify-content-center">
                                                     <div class="col-12">
                                                         <div
-                                                            class="table-responsive mt-5 text-nowrap">
-                                                            <table class="table">
+                                                            class="table-responsive mt-5 spa-investigations-table-wrap">
+                                                            <table class="table table-sm spa-investigations-table">
                                                                 <thead class="table-dark">
                                                                     <tr>
                                                                         <th>No.</th>
-                                                                        <th>Name</th>
-                                                                        <th>Attachment</th>
+                                                                        <th>Investigation</th>
+                                                                        <th>Document</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody
                                                                     class="table-border-bottom-0 investigation-body">
-                                                                    @include('hospital.scheme-preauth._partials.investigations',['preauthRegister_id'=>$preauthRegister->id])
+                                                                    @include('hospital.scheme-preauth._partials.investigations',['preauth_register_id'=>$preauthRegister->id])
                                                                 </tbody>
                                                             </table>
                                                         </div>
@@ -987,12 +991,17 @@
                                                             class="form-group">
                                                             <select class="form-control select2" id="care_team_id"
                                                                 name="care_team_id">
-                                                                <option value="">Select Team</option>
-                                                                @foreach($teams as $team)
-                                                                    <option value="{{ $team->id }}">{{ $team->name }}</option>
+                                                                <option value="">Select Doctor</option>
+                                                                @foreach($careTeamDoctors as $doctor)
+                                                                    <option value="{{ $doctor->id }}">
+                                                                        {{ trim($doctor->first_name . ' ' . $doctor->last_name) }}
+                                                                        @if($doctor->specialist)
+                                                                            ? {{ $doctor->specialist->name }}
+                                                                        @endif
+                                                                    </option>
                                                                 @endforeach
                                                             </select>
-                                                            <label for="care_team_id">Select</label>
+                                                            <label for="care_team_id">Select Doctor</label>
                                                         </div>
                                                     </div>
                                                     <div class="col-md-6 mb-4">
@@ -1121,64 +1130,8 @@
                 <button type="button" class="btn-primary btn ms-4" id="print-form">Print Form</button>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <div class="card mb-6 p-0">
-                    <div class="card-body">
-                        <div class="row row-cols-5">
-                            <div class="col">
-                                <div
-                                    class="d-flex text-center justify-content-center flex-column border-end border-secondary">
-                                    <div class="position-relative image-overlay">
-                                        <img src="{{ $preauthBeneficiary->image_url }}" width="80" alt="avatar"
-                                            class="mb-3 rounded-circle" />
-                                    </div>
-                                    <span class="number-3 mb-2">{{ @$preauthBeneficiary->name }}</span>
-                                    <span class="number-2">{{ @$preauthBeneficiary->age }} Yr / {{ @$preauthBeneficiary->gender }}</span>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <div class="infodata">
-                                    <label>Care Plan</label>
-                                    <p><strong>{{ @$preauthBeneficiary->care_plan }}</strong></p>
-                                    <label>SGHS ID</label>
-                                    <p><strong>{{ @$preauthBeneficiary->card_id }}</strong></p>
-                                    <label>ABHA Number</label>
-                                    <p><strong>{{ @$preauthBeneficiary->aabha_id }}</strong></p>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <div class="infodata">
-                                    <label>Mobile Number</label>
-                                    <p>{{ @$preauthBeneficiary->mobile_no }}</p>
-                                    <label>Address</label>
-                                    <p>{{ @$preauthBeneficiary->address }} | {{ @$preauthRegister->city }}, {{ @$preauthRegister->district_name }}, {{ @$preauthRegister->state_name }} - {{ @$preauthRegister->pincode }}</p>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <div class="infodata">
-                                    <label>Registration ID</label>
-                                    <p>{{ $preauthRegister->register_id ?: 'Draft (pending SHA sync)' }}</p>
-                                    <label>Registration Date</label>
-                                    <p><strong>{{ date("d/m/Y h:i A",strtotime($preauthRegister->created_at)) }}</strong></p>
-                                </div>
-                            </div>
-                            <!-- <div class="col">
-                                <div class="infodata">
-                                    <label>Total Wallet Amount</label>
-                                    <p class="colored text-info">â‚¹ 5,00,000.00</p>
-                                    <label>Wallet Balance</label>
-                                    <p class="colored text-info">â‚¹ 5,00,000.00</p>
-                                    <div class="progress" style="height: 10px;">
-                                        <div class="progress-bar bg-gradient-new" role="progressbar"
-                                            style="width: 100%;" aria-valuenow="50" aria-valuemin="0"
-                                            aria-valuemax="100">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div> -->
-                        </div>
-                    </div>
-                </div>
+            <div class="modal-body spa-print-target scheme-preauth-page" id="previewModalPrintArea">
+                @include('hospital.scheme-preauth._partials.preview-beneficiary-bar')
                 <div id="preview-data"></div>
             </div>
             <div class="modal-footer">
@@ -2289,16 +2242,42 @@
             }
         });
     })
-    $("#print-form").on("click", function () {
-        var printContents = document.querySelector(".modal-body").innerHTML;
-        var originalContents = document.body.innerHTML;
-
-        document.body.innerHTML = printContents;
-        window.print();
-        document.body.innerHTML = originalContents;
-
-        location.reload();
-    });
+    function spaPrintPreauthPreview() {
+        var printArea = document.getElementById('previewModalPrintArea');
+        if (!printArea || !printArea.innerText.trim()) {
+            errorMessage('Open preview and wait for content to load.');
+            return;
+        }
+        var cssHref = '{{ asset('public/front/assets/css/scheme-preauth.css') }}?v=11';
+        var bsHref = document.querySelector('link[href*="bootstrap"]')?.href || '';
+        var iframe = document.createElement('iframe');
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+        document.body.appendChild(iframe);
+        var doc = iframe.contentWindow.document;
+        doc.open();
+        var headLinks = '<link rel="stylesheet" href="' + cssHref + '">';
+        if (bsHref) {
+            headLinks += '<link rel="stylesheet" href="' + bsHref + '">';
+        }
+        doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pre-Authorization</title>' +
+            headLinks +
+            '<style>body{padding:16px;font-family:Inter,sans-serif;font-size:12px;color:#111}@media print{body{padding:8px}}</style>' +
+            '</head><body class="scheme-preauth-page">' + printArea.innerHTML + '</body></html>');
+        doc.close();
+        var win = iframe.contentWindow;
+        var doPrint = function () {
+            win.focus();
+            win.print();
+            setTimeout(function () { iframe.remove(); }, 2000);
+        };
+        if (win.document.readyState === 'complete') {
+            setTimeout(doPrint, 300);
+        } else {
+            iframe.onload = function () { setTimeout(doPrint, 300); };
+        }
+    }
+    $("#print-form").on("click", spaPrintPreauthPreview);
 
     $("#weight,#height").on("change",function(){
         calculateBMI();
