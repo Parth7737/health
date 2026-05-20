@@ -7,13 +7,28 @@
     }
 @endphp
 
-<div class="eo-panel-title"><i class="fas fa-users" style="color:#4db6ac"></i> Staff strength &amp; services</div>
-<p class="eo-panel-sub">Declare clinical specialities and operational services for this facility.</p>
+<div class="eo-panel-title"><i class="fas fa-users" style="color:#4db6ac"></i> Staff Strength & Services</div>
+<p class="eo-panel-sub">Provide sanctioned vs filled positions and available clinical services.</p>
+
+{{-- ─── Staff Strength Table ─── --}}
+@if ($hospital)
+
+    <div class="eo-card">
+        @include('hospital.empanelment._partials.staff-strength-table', compact('uuid', 'hospital'))
+    </div>
+@else
+    <div class="eo-card">
+        <div class="eo-card-body text-muted">Save basic facility information first to fill staff strength.</div>
+    </div>
+@endif
 
 @if (!empty($empanelment_step_status->speciality_status))
     @if ($hospital)
         @php $specialities = App\CentralLogics\Helpers::getCommanData('Speciality'); @endphp
-        @include('hospital.empanelment._partials.speciality', compact('uuid', 'hospital', 'specialities'))
+        
+        <div class="eo-card">
+            @include('hospital.empanelment._partials.speciality', compact('uuid', 'hospital', 'specialities'))
+        </div>
     @else
         <div class="eo-card">
             <div class="eo-card-body text-muted">Save basic facility information first.</div>

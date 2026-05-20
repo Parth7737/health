@@ -188,8 +188,8 @@ body:has(.empanelment-onboarding-wrap) .layout-page .content-wrapper {
 @media (min-width: 1200px) {
     .eo-step-label {
         font-size: 11px;
-        max-width: none;
-        white-space: nowrap;
+        max-width: 6.75rem;
+        white-space: normal;
     }
 }
 
@@ -207,6 +207,58 @@ body:has(.empanelment-onboarding-wrap) .layout-page .content-wrapper {
     background: var(--eo-border2);
     margin: 0 4px;
     flex-shrink: 0;
+}
+
+@media (min-width: 1100px) {
+    .eo-stepper {
+        overflow-x: visible;
+        padding-bottom: 0;
+        gap: 0;
+    }
+
+    .eo-stepper::-webkit-scrollbar {
+        display: none;
+    }
+
+    .eo-step {
+        flex: 1 1 0;
+        min-width: 0;
+        justify-content: center;
+    }
+
+    .eo-step-circle {
+        width: 32px;
+        height: 32px;
+        font-size: 11px;
+        border-width: 1.5px;
+    }
+
+    .eo-step-label {
+        margin-left: 6px;
+        font-size: 9px;
+        line-height: 1.12;
+        max-width: 5.6rem;
+        text-align: left;
+    }
+
+    .eo-step-connector {
+        flex: 0 1 14px;
+        width: auto;
+        min-width: 8px;
+        margin: 0 2px;
+    }
+}
+
+@media (min-width: 1360px) {
+    .eo-step-label {
+        font-size: 10px;
+        max-width: 6.25rem;
+    }
+
+    .eo-step-connector {
+        flex-basis: 18px;
+        margin: 0 3px;
+    }
 }
 
 .eo-step.done + .eo-step-connector {
@@ -303,9 +355,24 @@ body:has(.empanelment-onboarding-wrap) .layout-page .content-wrapper {
     gap: 16px;
 }
 
+.eo-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
 @media (max-width: 991px) {
     .eo-grid-2,
-    .eo-grid-3 {
+    .eo-grid-3,
+    .eo-grid-4 {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 575px) {
+    .eo-grid-2,
+    .eo-grid-3,
+    .eo-grid-4 {
         grid-template-columns: 1fr;
     }
 }
@@ -720,7 +787,7 @@ body:has(.empanelment-onboarding-wrap) footer .footer-link {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    overflow-x: hidden;
+    overflow: visible;
     background: linear-gradient(180deg, #162038 0%, #0f1829 100%);
     border-bottom: 1px solid var(--eo-border);
     font-family: 'Inter', system-ui, sans-serif;
@@ -736,6 +803,7 @@ body:has(.empanelment-onboarding-wrap) footer .footer-link {
     gap: 16px;
     flex-wrap: wrap;
     min-height: 56px;
+    overflow: visible;
 }
 
 .eo-onboarding-navbar .eo-onb-brand {
@@ -793,6 +861,8 @@ body:has(.empanelment-onboarding-wrap) footer .footer-link {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
+    overflow: visible;
 }
 
 .eo-onboarding-navbar .eo-onb-logo-img {
@@ -807,4 +877,11 @@ body:has(.empanelment-onboarding-wrap) footer .footer-link {
 
 .eo-onboarding-navbar .eo-onb-dd {
     min-width: 200px;
+    z-index: 2200;
+    max-height: calc(100vh - 76px);
+    overflow-y: auto;
+}
+
+.eo-onboarding-navbar .dropdown {
+    position: relative;
 }

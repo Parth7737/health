@@ -110,17 +110,17 @@ class RegisterController extends Controller
         $user->mobile_no = $draft_register->mobile_no;
         $user->hospital_type = $draft_register->hospital_type;
         $user->parent_id = $request->hospital ?? 0;
-        $user->step = 2;
+        $user->step = 1;
         $user->save();
         $role = Role::updateOrCreate(
-            ['name' => 'Admin'],
+            ['name' => 'Administrator'],
             [
                 'guard_name' => 'web',
                 'is_custom' => 0,
                 'hospital_id' => null,
             ]
         );
-        $user->assignRole('Admin');
+        $user->assignRole('Administrator');
         $draft_register->delete();
         \Auth::login($user);
         return response()->json(['success' => true, 'message' => 'Profile Registered Successfully!']);

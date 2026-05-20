@@ -45,6 +45,11 @@ Route::group(['namespace' => 'App\Http\Controllers\Admin', 'prefix' => 'admin', 
     Route::post('load-specialities', 'SpecialityController@loaddata')->name('specialitiesload');  
     Route::post('show-specialities-form', 'SpecialityController@showform')->name('specialities.showform');
 
+    // Staff Strengths
+    Route::resource('staff-strengths', 'StaffStrengthController');
+    Route::post('load-staff-strengths', 'StaffStrengthController@loaddata')->name('staff-strengths-load');
+    Route::post('show-staff-strengths-form', 'StaffStrengthController@showform')->name('staff-strengths.showform');
+
     // Treatment plan masters (procedure / package related)
     Route::resource('scheme-types', 'SchemeTypeController');
     Route::post('load-scheme-types', 'SchemeTypeController@loaddata')->name('scheme-types-load');

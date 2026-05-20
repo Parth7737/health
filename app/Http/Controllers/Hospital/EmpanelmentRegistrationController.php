@@ -29,8 +29,7 @@ class EmpanelmentRegistrationController extends Controller
         }
         $allStepCompleted = Helpers::checkAllStepIsCompleteOrNot($uuid);
         $unlockedMaxStep = 8;
-        $initialWizardStep = $this->mapLegacyStepToWizardStep((int) ($user->step ?? 2));
-
+        $initialWizardStep = $this->mapLegacyStepToWizardStep((int) ($user->step ?? 1));
         return view('hospital.empanelment.form', compact('step', 'uuid', 'user', 'hospital', 'allStepCompleted', 'unlockedMaxStep', 'initialWizardStep'));
     }
 
@@ -67,40 +66,30 @@ class EmpanelmentRegistrationController extends Controller
             'onboarding_meta.ms_mobile' => 'nullable|string|max:15',
             'onboarding_meta.landline' => 'nullable|string|max:32',
             'onboarding_meta.helpline' => 'nullable|string|max:32',
-            'onboarding_meta.website' => 'nullable|string|max:512',
-            'onboarding_meta.infra_sanctioned_beds' => 'nullable|integer|min:0|max:99999',
-            'onboarding_meta.infra_functional_beds' => 'nullable|integer|min:0|max:99999',
-            'onboarding_meta.infra_icu_beds' => 'nullable|integer|min:0|max:99999',
-            'onboarding_meta.infra_ot' => 'nullable|integer|min:0|max:999',
-            'onboarding_meta.infra_inhouse_lab' => 'nullable|string|max:32',
-            'onboarding_meta.infra_blood_bank' => 'nullable|string|max:64',
-            'onboarding_meta.infra_power_backup' => 'nullable|string|max:64',
-            'onboarding_meta.infra_oxygen_supply' => 'nullable|string|max:64',
-            'onboarding_meta.infra_internet' => 'nullable|string|max:64',
-            'onboarding_meta.infra_ambulance' => 'nullable|string|max:64',
+            'onboarding_meta.website' => 'nullable|string|max:512'
         ];
 
-        if(auth()->user()->hospital_type == 'Multi-Branch' && auth()->user()->parent_id == 0){
-            $rules['chairman_name'] = 'required';
+        // if(auth()->user()->hospital_type == 'Multi-Branch' && auth()->user()->parent_id == 0){
+        //     $rules['chairman_name'] = 'required';
             
-            $rules['chairman_email'] = [
-                'required',
-                'email',
-                Rule::unique('users', 'email')
-            ];
-            if ($user) {
-                $rules['chairman_email'] = [
-                    'required',
-                    'email',
-                    Rule::unique('users', 'email')->ignore($user->id)
-                ];
-                $rules['password'] = 'nullable|string';
-                $rules['confirmation_password'] = 'same:password';
-            } else {
-                $rules['password'] = 'required|string';
-                $rules['confirmation_password'] = 'required|string|same:password';
-            }
-        }
+        //     $rules['chairman_email'] = [
+        //         'required',
+        //         'email',
+        //         Rule::unique('users', 'email')
+        //     ];
+        //     if ($user) {
+        //         $rules['chairman_email'] = [
+        //             'required',
+        //             'email',
+        //             Rule::unique('users', 'email')->ignore($user->id)
+        //         ];
+        //         $rules['password'] = 'nullable|string';
+        //         $rules['confirmation_password'] = 'same:password';
+        //     } else {
+        //         $rules['password'] = 'required|string';
+        //         $rules['confirmation_password'] = 'required|string|same:password';
+        //     }
+        // }
 
         $wizardObForType = (array) (auth()->user()->wizard_onboarding ?? []);
         if (!$request->filled('type_id') && !empty($wizardObForType['type_id'])) {
@@ -144,37 +133,38 @@ class EmpanelmentRegistrationController extends Controller
         }));
         $hospital->save();
 
-        if($hospital->hospital_type == 'Multi-Branch' && $hospital->parent_id == 0){
-            if(!$user){
-                $user = new User;
-                $user->assignRole('Chairman');
-            }
-            $user->name = $request->chairman_name;
-            $user->email = $request->chairman_email;
-            if ($request->filled('password')) {
-                $user->password = Hash::make($request->password);
-            }
-            $user->hospital_id = $hospital->id;
-            $user->save();
-        }
+        // if($hospital->hospital_type == 'Multi-Branch' && $hospital->parent_id == 0){
+        //     if(!$user){
+        //         $user = new User;
+        //         $user->assignRole('Chairman');
+        //     }
+        //     $user->name = $request->chairman_name;
+        //     $user->email = $request->chairman_email;
+        //     if ($request->filled('password')) {
+        //         $user->password = Hash::make($request->password);
+        //     }
+        //     $user->hospital_id = $hospital->id;
+        //     $user->save();
+        // }
         $enable_step = Helpers::get_settings('empanelment_step_status');
         $enable_step_decoded = json_decode($enable_step ?: '{}');
         if (!is_object($enable_step_decoded)) {
             $enable_step_decoded = (object) [
-                'speciality_status' => 0,
-                'service_status' => 0,
-                'licenses_status' => 0,
+                'speciality_status' => 1,
+                'service_status' => 1,
+                'licenses_status' => 1,
             ];
         }
-        if(($enable_step_decoded->speciality_status ?? 0) == 1){
-            $step = 3;
-        }elseif(($enable_step_decoded->service_status ?? 0) == 1){
-            $step = 4;
-        }elseif(($enable_step_decoded->licenses_status ?? 0) == 1){
-            $step = 5;
-        }else{
-            $step = 6;
-        }
+        // if(($enable_step_decoded->speciality_status ?? 0) == 1){
+        //     $step = 3;
+        // }elseif(($enable_step_decoded->service_status ?? 0) == 1){
+        //     $step = 4;
+        // }elseif(($enable_step_decoded->licenses_status ?? 0) == 1){
+        //     $step = 5;
+        // }else{
+        //     $step = 6;
+        // }
+        $step = 3;
         auth()->user()->update(['hospital_id' => $hospital->id,'step' => $step,'enable_step' => $enable_step]);
 
         return response()->json(['success' => true, 'message' => 'Information Saved Successfully!!', 'step' => $step, 'wizard_step' => 3]); 
@@ -480,6 +470,7 @@ class EmpanelmentRegistrationController extends Controller
         $w['type_id'] = (int) $request->type_id;
         $w['facility_type'] = $type ? $type->name : '';
         $user->wizard_onboarding = $w;
+        $user->step = 2;
         $user->save();
 
         if ($user->hospital_id) {
@@ -505,16 +496,33 @@ class EmpanelmentRegistrationController extends Controller
         }
         $request->validate([
             'onboarding_meta' => 'nullable|array',
-            'onboarding_meta.infra_sanctioned_beds' => 'nullable|integer|min:0|max:99999',
-            'onboarding_meta.infra_functional_beds' => 'nullable|integer|min:0|max:99999',
-            'onboarding_meta.infra_icu_beds' => 'nullable|integer|min:0|max:99999',
-            'onboarding_meta.infra_ot' => 'nullable|integer|min:0|max:999',
-            'onboarding_meta.infra_inhouse_lab' => 'nullable|string|max:32',
-            'onboarding_meta.infra_blood_bank' => 'nullable|string|max:64',
-            'onboarding_meta.infra_power_backup' => 'nullable|string|max:64',
-            'onboarding_meta.infra_oxygen_supply' => 'nullable|string|max:64',
-            'onboarding_meta.infra_internet' => 'nullable|string|max:64',
-            'onboarding_meta.infra_ambulance' => 'nullable|string|max:64',
+            // Bed Strength
+            'onboarding_meta.infra_sanctioned_beds'   => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_functional_beds'   => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_icu_beds'          => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_nicu_picu_beds'    => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_hdu_beds'          => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_labour_room_beds'  => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_isolation_beds'    => 'nullable|integer|min:0|max:99999',
+            'onboarding_meta.infra_burns_trauma_beds' => 'nullable|integer|min:0|max:99999',
+            // OT, Lab & Imaging
+            'onboarding_meta.infra_ot'                => 'nullable|integer|min:0|max:999',
+            'onboarding_meta.infra_labour_rooms'      => 'nullable|integer|min:0|max:999',
+            'onboarding_meta.infra_inhouse_lab'       => 'nullable|string|max:32',
+            'onboarding_meta.infra_blood_bank'        => 'nullable|string|max:64',
+            'onboarding_meta.infra_xray'              => 'nullable|string|max:32',
+            'onboarding_meta.infra_ultrasound'        => 'nullable|string|max:32',
+            'onboarding_meta.infra_ct_scan'           => 'nullable|string|max:32',
+            'onboarding_meta.infra_mri'               => 'nullable|string|max:32',
+            // Utilities & Connectivity
+            'onboarding_meta.infra_power_backup'      => 'nullable|string|max:64',
+            'onboarding_meta.infra_water_supply'      => 'nullable|string|max:64',
+            'onboarding_meta.infra_internet'          => 'nullable|string|max:64',
+            'onboarding_meta.infra_ambulance'         => 'nullable|string|max:64',
+            'onboarding_meta.infra_oxygen_supply'     => 'nullable|string|max:64',
+            'onboarding_meta.infra_pharmacy'          => 'nullable|string|max:64',
+            'onboarding_meta.infra_waste_management'  => 'nullable|string|max:64',
+            'onboarding_meta.infra_fire_noc'          => 'nullable|string|max:64',
         ]);
         $existingMeta = is_array($hospital->onboarding_meta) ? $hospital->onboarding_meta : [];
         $incomingMeta = $request->input('onboarding_meta', []);
@@ -533,6 +541,44 @@ class EmpanelmentRegistrationController extends Controller
         $hospital->save();
 
         return response()->json(['success' => true, 'message' => 'Infrastructure saved.', 'wizard_step' => 4, 'step' => 4]);
+    }
+
+    public function saveStaffStrength(Request $request, $uuid)
+    {
+        $user = User::where('uuid', $uuid)->first();
+        if (!$user || !$user->hospital_id) {
+            return response()->json(['success' => false, 'message' => 'Save basic information first.'], 422);
+        }
+        $hospital = Hospital::where('id', $user->hospital_id)->first();
+        if (!$hospital) {
+            return response()->json(['success' => false, 'message' => 'Hospital not found.'], 422);
+        }
+
+        $request->validate([
+            'staff_strength'                   => 'nullable|array',
+            'staff_strength.*.sanctioned'      => 'nullable|integer|min:0|max:99999',
+            'staff_strength.*.in_position'     => 'nullable|integer|min:0|max:99999',
+        ]);
+
+        $incoming = $request->input('staff_strength', []);
+        $cleaned  = [];
+        foreach ((array) $incoming as $id => $row) {
+            $sanc  = isset($row['sanctioned'])  && $row['sanctioned']  !== '' ? (int) $row['sanctioned']  : null;
+            $inpos = isset($row['in_position']) && $row['in_position'] !== '' ? (int) $row['in_position'] : null;
+            if ($sanc !== null || $inpos !== null) {
+                $cleaned[(int) $id] = array_filter([
+                    'sanctioned'  => $sanc,
+                    'in_position' => $inpos,
+                ], static fn($v) => $v !== null);
+            }
+        }
+
+        $meta                   = is_array($hospital->onboarding_meta) ? $hospital->onboarding_meta : [];
+        $meta['staff_strength'] = $cleaned;
+        $hospital->onboarding_meta = $meta;
+        $hospital->save();
+
+        return response()->json(['success' => true, 'message' => 'Staff strength saved successfully.']);
     }
 
     public function saveWizardMeta(Request $request, $uuid)
@@ -710,6 +756,9 @@ class EmpanelmentRegistrationController extends Controller
 
     private function mapLegacyStepToWizardStep(int $legacyStep): int
     {
+        if ($legacyStep <= 1) {
+            return 1;
+        }
         if ($legacyStep <= 2) {
             return 2;
         }

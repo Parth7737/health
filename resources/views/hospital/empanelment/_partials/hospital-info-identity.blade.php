@@ -73,8 +73,6 @@
                         <option value="PPP" @selected($own === 'PPP')>PPP</option>
                     </select>
                 </div>
-            </div>
-            <div class="eo-grid-2">
                 <div class="eo-form-group">
                     <label for="onboarding_meta_sub_category">Sub-category</label>
                     <select class="form-select" id="onboarding_meta_sub_category" name="onboarding_meta[sub_category]">

@@ -77,6 +77,7 @@
                           <li><a href="{{route('admin.hospitaltypes.index')}}">Hospital Type</a></li>
                           <li><a href="{{route('admin.hospital-documents.index')}}">Hospital Document</a></li>
                           <li><a href="{{route('admin.specialities.index')}}">Specialities</a></li>
+                          <li><a href="{{route('admin.staff-strengths.index')}}">Staff Strength</a></li>
                           <li><a href="{{route('admin.services.index')}}">Services</a></li>
                           <li><a href="{{route('admin.sub-services.index')}}">Sub Services</a></li>
                           <li><a href="{{route('admin.licenses.index')}}">Licenses</a></li>

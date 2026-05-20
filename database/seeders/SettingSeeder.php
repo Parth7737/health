@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\BusinessSetting;
 use App\Models\EmpanelmentDocument;
+use App\Models\StaffStrength;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
 
@@ -65,5 +66,13 @@ class SettingSeeder extends Seeder
             ['name' => 'Other documents'],
             ['is_required' => 0]
         );
+
+        //Staff Strength
+        $staffStrengths = ['Specialist Doctors','Medical Officers','Staff Nurses','ANM / LHV','Pharmacist','Lab Technician'];
+        foreach ($staffStrengths as $staffStrength) {
+            StaffStrength::firstOrCreate(
+                ['name' => $staffStrength],
+            );
+        }
     }
 }

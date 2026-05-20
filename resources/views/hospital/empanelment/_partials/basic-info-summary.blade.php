@@ -1,6 +1,6 @@
-<div class="eo-card mb-3">
+<div class="eo-card mb-5">
     <div class="eo-card-hdr">
-        <h3 class="eo-card-title"><i class="fas fa-id-badge"></i> Account holder (read-only)</h3>
+        <h3 class="eo-card-title"><i class="fas fa-id-badge"></i> Account Holder Information (Read-only)</h3>
     </div>
     <div class="eo-card-body">
         <div class="eo-readonly-grid">

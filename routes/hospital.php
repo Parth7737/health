@@ -9,6 +9,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
     Route::post('hospital-info/{uuid}', 'EmpanelmentRegistrationController@hospitalInfo')->name('empanelmentRegistration.hospitalinfo');
     Route::post('wizard/facility-type/{uuid}', 'EmpanelmentRegistrationController@saveFacilityType')->name('empanelmentRegistration.saveFacilityType');
     Route::post('wizard/infrastructure/{uuid}', 'EmpanelmentRegistrationController@saveHospitalInfrastructure')->name('empanelmentRegistration.saveInfrastructure');
+    Route::post('wizard/staff-strength/{uuid}', 'EmpanelmentRegistrationController@saveStaffStrength')->name('empanelmentRegistration.saveStaffStrength');
     Route::post('wizard/meta/{uuid}', 'EmpanelmentRegistrationController@saveWizardMeta')->name('empanelmentRegistration.saveWizardMeta');
     
     //update profile

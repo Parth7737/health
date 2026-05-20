@@ -1,59 +1,44 @@
-<div class="eo-panel-title"><i class="fas fa-stethoscope" style="color:#4db6ac"></i> Specialities</div>
-<p class="eo-panel-sub">Mark which clinical specialities are available at this facility. Save to continue.</p>
-
-<div class="eo-table-panel">
-<div  class="table-responsive mt-0 text-nowrap">
-    <form id="specialitiesForm">
-        <table class="table table-bordered">
-            <thead class="table-dark">
-                <tr>
-                    <th>Sr No.</th>
-                    <th>Speciality Name</th>
-                    <th>Code</th>
-                    <th>Avaliable</th>
-                    <th>Remarks</th>
-                </tr>
-            </thead>
-            <tbody class="table-border-bottom-0">
-                @foreach($specialities as $key => $value)
-                @php
-                    $availableSpeciality = App\CentralLogics\Helpers::getSingleSpecialities($hospital->id, $value->id)
-                @endphp
-                <tr>
-                    <td> {{$loop->iteration}}</td>
-                    <td>{{$value->name}}</td>
-                    <td> {{$value->code}} <input type="hidden" value="{{$value->id}}" name="speciality_id[]"></td>
-                    <td>
-                        <div class="form-check mt-4">
-                            <input class="form-check-input" @if($availableSpeciality && $availableSpeciality->available == 1) checked @endif type="checkbox" id="available{{$value->id}}" name="available_{{$value->id}}" value="1" onclick="visibleOfferedCheckbox('{{$value->id}}');" />
-                        </div>
-                    </td>
-                    <td>
-                        <input type="text" id="remark{{$value->id}}" value="{{$availableSpeciality && $availableSpeciality->remark != '' ? $availableSpeciality->remark : ''}}" name="remark_{{$value->id}}" class="form-control" placeholder="" />
-                    </td>
-                </tr>
-                @endforeach
-            
-            </tbody>
-        </table>
-        
-        @if($hospital->status == "Draft" || !@$hospital || $hospital->status == "Rejected")
-            <div class="col-md-12 mt-2">
-                <div
-                    class="d-flex justify-content-end">
-                    <button type="button"
-                    class="btn btn-primary savespecialities">SAVE</button>
-                </div>
-            </div>
-        @endif
-    </form>
-</div>
-</div>
-
-<div class="eo-step-nav">
-    <button type="button" class="eo-tb-btn" onclick="var p=window.eoWizardPrev && window.eoWizardPrev[4]; if(p) loadStep(p);"><i class="fas fa-arrow-left"></i> Back</button>
-    <span class="eo-nav-info">Select at least one speciality where “Available” is checked, then save.</span>
-    <span></span>
+<div id="specialityCard">
+    <div class="eo-card-hdr">
+        <h3 class="eo-card-title"><i class="fas fa-stethoscope" style="color:#4db6ac"></i> Specialities</h3>
+        <p class="eo-panel-sub">Mark which clinical specialities are available at this facility. Save to continue.</p>
+    </div>
+    <div class="eo-card-body">
+        <div class="table-responsive">
+            <table class="table eo-staff-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Sr No.</th>
+                        <th>Speciality Name</th>
+                        <th>Code</th>
+                        <th>Avaliable</th>
+                        <th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody class="table-border-bottom-0">
+                    @foreach($specialities as $key => $value)
+                    @php
+                        $availableSpeciality = App\CentralLogics\Helpers::getSingleSpecialities($hospital->id, $value->id)
+                    @endphp
+                    <tr>
+                        <td> {{$loop->iteration}}</td>
+                        <td>{{$value->name}}</td>
+                        <td> {{$value->code}} <input type="hidden" value="{{$value->id}}" name="speciality_id[]"></td>
+                        <td>
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" @if($availableSpeciality && $availableSpeciality->available == 1) checked @endif type="checkbox" id="available{{$value->id}}" name="available_{{$value->id}}" value="1" onclick="visibleOfferedCheckbox('{{$value->id}}');" />
+                            </div>
+                        </td>
+                        <td>
+                            <input type="text" id="remark{{$value->id}}" value="{{$availableSpeciality && $availableSpeciality->remark != '' ? $availableSpeciality->remark : ''}}" name="remark_{{$value->id}}" class="form-control" placeholder="" />
+                        </td>
+                    </tr>
+                    @endforeach
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <script>
