@@ -120,6 +120,11 @@ Route::group(['namespace' => 'App\Http\Controllers\Admin', 'prefix' => 'admin', 
     Route::post('load-license-types', 'LicenseTypeController@loaddata')->name('load-license-types');  
     Route::post('show-license-type-form', 'LicenseTypeController@showform')->name('license-types.showform');
 
+    // AB Empanelment Eligibility Checklist
+    Route::resource('empanelment-eligibilities', 'EmpanelmentEligibilityController');
+    Route::post('load-empanelment-eligibilities', 'EmpanelmentEligibilityController@loaddata')->name('load-empanelment-eligibilities');  
+    Route::post('show-empanelment-eligibility-form', 'EmpanelmentEligibilityController@showform')->name('empanelment-eligibilities.showform');
+
     // Hospital
     Route::resource('hospitals', 'HospitalController');
     Route::get('hospitals/create/wizard', 'AdminHospitalEmpanelmentController@createForm')->name('hospitals.create-wizard');

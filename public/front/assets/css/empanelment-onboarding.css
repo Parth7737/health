@@ -885,3 +885,105 @@ body:has(.empanelment-onboarding-wrap) footer .footer-link {
 .eo-onboarding-navbar .dropdown {
     position: relative;
 }
+
+.dinline {
+    display: inline-block !important;
+}
+#servicesCard .eo-service-group + .eo-service-group {
+    margin-top: 18px;
+}
+#servicesCard .eo-service-group-title {
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid var(--eo-border, #e5e7eb);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    color: var(--eo-text, #fff);
+    font-size: 13px;
+    font-weight: 700;
+}
+#servicesCard .eo-service-group .table-responsive {
+    border: 1px solid var(--eo-border, #e5e7eb);
+    border-radius: 0 0 8px 8px;
+}
+#servicesCard .eo-service-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+#servicesCard .eo-service-actions .form-control {
+    min-width: 180px;
+}
+#servicesCard .eo-service-remark {
+    min-width: 180px;
+}
+.eo-staff-table thead th {
+    background: rgba(255, 255, 255, .04) !important;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted) !important;
+    text-align: left;
+    border-bottom: 1px solid var(--border) !important;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+.eo-staff-table tbody tr:hover {
+    background: rgba(77, 182, 172, .05);
+}
+.eo-staff-table td {
+    padding: 8px 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--eo-border, #e5e7eb);
+    font-size: 13px;
+}
+.eo-staff-label {
+    font-weight: 500;
+    min-width: 160px;
+}
+.eo-staff-input {
+    width: 100px;
+    min-width: 80px;
+}
+.eo-vac-cell {
+    font-weight: 700;
+    font-size: 13px;
+    color: #e57373;
+}
+.eo-vac-cell.zero {
+    color: #66bb6a;
+}
+
+
+#licensesCard .eo-license-group + .eo-license-group {
+    margin-top: 18px;
+}
+#licensesCard .eo-license-group-title {
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid var(--eo-border, #e5e7eb);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    color: var(--eo-text, #fff);
+    font-size: 13px;
+    font-weight: 700;
+}
+#licensesCard .eo-license-group .table-responsive {
+    border: 1px solid var(--eo-border, #e5e7eb);
+    border-radius: 0 0 8px 8px;
+}
+#licensesCard .eo-license-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+#licensesCard .eo-license-actions .form-control {
+    min-width: 180px;
+}
+#licensesCard .eo-license-remark {
+    min-width: 180px;
+}

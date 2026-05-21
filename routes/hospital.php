@@ -8,6 +8,8 @@ Route::group(['middleware'=>['hospital.user','auth'],'namespace' => 'App\Http\Co
     Route::post('wizard/facility-type/{uuid}', 'EmpanelmentRegistrationController@saveFacilityType')->name('empanelmentRegistration.saveFacilityType');
     Route::post('wizard/infrastructure/{uuid}', 'EmpanelmentRegistrationController@saveHospitalInfrastructure')->name('empanelmentRegistration.saveInfrastructure');
     Route::post('wizard/staff-strength/{uuid}', 'EmpanelmentRegistrationController@saveStaffStrength')->name('empanelmentRegistration.saveStaffStrength');
+    Route::post('wizard/staff-services/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveStaffServices')->name('empanelmentRegistration.saveStaffServices');
+    Route::post('wizard/licenses-documents/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveLicensesDocuments')->name('empanelmentRegistration.saveLicensesDocuments');
     Route::post('wizard/meta/{uuid}', 'EmpanelmentRegistrationController@saveWizardMeta')->name('empanelmentRegistration.saveWizardMeta');
 
     Route::post('hospital/documents/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveHospitalDocuments')->name('empanelmentRegistration.saveDocuments');   

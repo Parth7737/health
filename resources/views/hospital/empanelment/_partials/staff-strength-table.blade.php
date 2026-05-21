@@ -68,46 +68,6 @@
     </div>
 </div>
 
-<style>
-.eo-staff-table thead th {
-    background: rgba(255, 255, 255, .04) !important;
-    padding: 10px 14px;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--muted) !important;
-    text-align: left;
-    border-bottom: 1px solid var(--border) !important;
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-}
-.eo-staff-table tbody tr:hover {
-    background: rgba(77, 182, 172, .05);
-}
-.eo-staff-table td {
-    padding: 8px 12px;
-    vertical-align: middle;
-    border-bottom: 1px solid var(--eo-border, #e5e7eb);
-    font-size: 13px;
-}
-.eo-staff-label {
-    font-weight: 500;
-    min-width: 160px;
-}
-.eo-staff-input {
-    width: 100px;
-    min-width: 80px;
-}
-.eo-vac-cell {
-    font-weight: 700;
-    font-size: 13px;
-    color: #e57373;
-}
-.eo-vac-cell.zero {
-    color: #66bb6a;
-}
-</style>
-
 <script>
 (function () {
     function calcVac(input) {

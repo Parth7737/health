@@ -1,28 +1,29 @@
-<style>
-      .dinline {
-         display: inline-block !important;
-      }
-</style>
-<div class="eo-panel-title"><i class="fas fa-hand-holding-medical" style="color:#64b5f6"></i> Services</div>
-<p class="eo-panel-sub">Declare available services and capacity as configured for your hospital.</p>
 
-<div class="eo-table-panel">
-<form  id="servicesForm" enctype="multipart/form-data">
-@foreach($services as $key => $value) 
-   @if(sizeof($value->subServices) > 0)
-   <div class="alert alert-info mb-0 rounded-0" role="alert">{{$value->name}}</div>
-   <div class="table-responsive mt-5 text-nowrap">
-      <table class="table table-bordered">
-         <thead class="table-dark">
-            <tr>
-               <th>Sr No.</th>
-               <th>Name</th>
-               <th style="width: 45%">Action</th>
-               <th>Remarks</th>
-            </tr>
-         </thead>
-         <tbody
-            class="table-border-bottom-0">
+@php $isCombinedStaffServices = !empty($combine_staff_services); @endphp
+<div id="servicesCard" class="eo-card">
+   <div class="eo-card-hdr">
+      <h3 class="eo-card-title"><i class="fas fa-hand-holding-medical" style="color:#64b5f6"></i> Services</h3>
+      <p class="eo-panel-sub">Declare available services and capacity as configured for your hospital.</p>
+   </div>
+   <div class="eo-card-body">
+      @if(!$isCombinedStaffServices)
+      <form id="servicesForm" enctype="multipart/form-data">
+      @endif
+         @foreach($services as $key => $value) 
+            @if(sizeof($value->subServices) > 0)
+            <div class="eo-service-group">
+               <div class="eo-service-group-title">{{$value->name}}</div>
+               <div class="table-responsive text-nowrap">
+                  <table class="table eo-staff-table mb-0">
+                     <thead>
+                        <tr>
+                           <th>Sr No.</th>
+                           <th>Name</th>
+                           <th style="width: 45%">Action</th>
+                           <th>Remarks</th>
+                        </tr>
+                     </thead>
+                     <tbody class="table-border-bottom-0">
             @foreach($value->subServices()->orderBy('sort_order', 'ASC')->get() as $k => $v)
             @php
                $isRequired = false;
@@ -38,6 +39,7 @@
                <td>{{$v->name}} @if($isRequired)<span class="text-danger">*</span>@endif
                </td>
                <td>
+                  <div class="eo-service-actions">
                   @if(sizeof($v->actions) > 0)
                      @php $action_id =''; $action_name = ''; @endphp
                      @foreach($v->actions as $kk => $action)
@@ -66,15 +68,14 @@
                         @endif
 
                         @if($action->type == 'text')
-                        <div class="form-floating form-floating-outline serviceerror">
+                        <div class="serviceerror">
                            <input type="text"
                               id="{{ str_replace(' ', '-', strtolower($v->name)) }}"
                               name="{{$value->id}}_{{$v->id}}_{{ str_replace(' ', '-', strtolower($v->name)) }}"
                               value="{{!empty($existData) && $existData->service_value != '' ? $existData->service_value : '' }}"
                               @if($v->name == 'Total Bed Strength') readonly @endif
                               class="form-control {{$v->name == 'Total Bed Strength' ? 'totalbeds' : ''}}"
-                              placeholder="text" {{$isRequired ? 'required' : ''}} />
-                           <label for="{{ str_replace(' ', '-', strtolower($v->name)) }}">{{$action->label}}</label>
+                              placeholder="{{$action->label}}" {{$isRequired ? 'required' : ''}} />
 
                            <input type="hidden"
                               id="{{ str_replace(' ', '-', strtolower($v->name)) }}_action"
@@ -84,14 +85,13 @@
                         @endif
 
                         @if($action->is_text_input)
-                        <div class="form-floating form-floating-outline serviceerror {{str_replace(' ', '-', strtolower($v->name))}}" @if(empty($existData) || $existData->text_value == '') style="display:none;" @endif>
+                        <div class="serviceerror {{str_replace(' ', '-', strtolower($v->name))}}" @if(empty($existData) || $existData->text_value == '') style="display:none;" @endif>
                            <input type="{{$action->bed_count == 1 ? 'number' : 'text'}}" @if($action->bed_count == 1) onchange="bedCount(this);" @endif 
                               id="{{ str_replace(' ', '-', strtolower($v->label)) }}_text"
                               name="{{$value->id}}_{{$v->id}}_{{ str_replace(' ', '-', strtolower($v->name)) }}_text"
                                 value="{{!empty($existData) && $existData->text_value != '' ? $existData->text_value : '' }}"
                               class="form-control  @if($action->bed_count == 1) countbeds @endif "
-                              placeholder="text"/>
-                           <label for="{{ str_replace(' ', '-', strtolower($action->sublabel)) }}">{{$action->sublabel}}</label>
+                              placeholder="{{$action->sublabel}}"/>
                         </div>
                         @endif
 
@@ -120,40 +120,47 @@
                         
                      @endforeach
                   @endif
+                  </div>
                </td>
                <td>
-                  <div class="form-floating form-floating-outline">
-                     <input type="text"
-                        id="{{$value->id}}_{{$v->id}}_remark"
-                        name="{{$value->id}}_{{$v->id}}_remark"
-                        class="form-control"
-                        placeholder="text" value="{{ (@$existData)?$existData->remark:'' }}"/>
-                     <label for="{{$value->id}}_{{$v->id}}_remark">Remark</label>
-                  </div>
+                  <input type="text"
+                     id="{{$value->id}}_{{$v->id}}_remark"
+                     name="{{$value->id}}_{{$v->id}}_remark"
+                     class="form-control eo-service-remark"
+                     placeholder=""
+                     value="{{ (@$existData)?$existData->remark:'' }}"/>
                </td>
             </tr>
             @endforeach
             
-         </tbody>
-      </table>
-   </div>
-   @endif
-@endforeach
-<input type="hidden" name="total_no_of_beds" id="total_no_of_beds">
+                     </tbody>
+                  </table>
+               </div>
+            </div>
+            @endif
+         @endforeach
+         <input type="hidden" name="total_no_of_beds" id="total_no_of_beds">
 
-@if($hospital->status == "Draft" || !@$hospital || $hospital->status == "Rejected" || !empty($is_admin_edit))
-   <div class="d-flex justify-content-end mt-3">
-      <button class="btn btn-primary saveservices" type="button" >SAVE</button>
+         @if($hospital->status == "Draft" || !@$hospital || $hospital->status == "Rejected" || !empty($is_admin_edit))
+            @if(!$isCombinedStaffServices)
+            <div class="d-flex justify-content-end mt-3">
+               <button class="btn btn-primary saveservices" type="button" >SAVE</button>
+            </div>
+            @endif
+         @endif
+      @if(!$isCombinedStaffServices)
+      </form>
+      @endif
    </div>
-@endif
-</form>
 </div>
 
+@if(!$isCombinedStaffServices)
 <div class="eo-step-nav">
     <button type="button" class="eo-tb-btn" onclick="if(typeof loadStep==='function')loadStep(4);"><i class="fas fa-arrow-left"></i> Back</button>
     <span class="eo-nav-info">Complete required service rows, then save.</span>
     <span></span>
 </div>
+@endif
 
 <script>
       $(document).ready(function () {

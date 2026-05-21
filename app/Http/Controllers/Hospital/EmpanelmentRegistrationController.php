@@ -581,6 +581,259 @@ class EmpanelmentRegistrationController extends Controller
         return response()->json(['success' => true, 'message' => 'Staff strength saved successfully.']);
     }
 
+    public function saveStaffServices(Request $request, $uuid, $hospital_id)
+    {
+        $user = User::where('uuid', $uuid)->first();
+        if (!$user || (int) $user->hospital_id !== (int) $hospital_id) {
+            return response()->json(['success' => false, 'message' => 'Hospital record required.'], 422);
+        }
+
+        $hospital = Hospital::where('id', $hospital_id)->first();
+        if (!$hospital) {
+            return response()->json(['success' => false, 'message' => 'Hospital not found.'], 422);
+        }
+
+        $enableStep = auth()->user()->enable_step
+            ? json_decode(auth()->user()->enable_step)
+            : json_decode(Helpers::get_settings('empanelment_step_status') ?: '{}');
+
+        if (!is_object($enableStep)) {
+            $enableStep = (object) ['speciality_status' => 0, 'service_status' => 0, 'licenses_status' => 0];
+        }
+
+        $rules = [
+            'staff_strength' => 'nullable|array',
+            'staff_strength.*.sanctioned' => 'nullable|integer|min:0|max:99999',
+            'staff_strength.*.in_position' => 'nullable|integer|min:0|max:99999',
+        ];
+        $messages = [];
+
+        $services = collect();
+        if (!empty($enableStep->service_status)) {
+            $services = Helpers::getCommanData('Service');
+            foreach ($services as $service) {
+                if (sizeof($service->subServices) > 0) {
+                    foreach ($service->subServices()->orderBy('sort_order', 'ASC')->get() as $subService) {
+                        if ($subService->is_required) {
+                            $name = str_replace(' ', '-', strtolower($subService->name));
+                            $field = $service->id . '_' . $subService->id . '_' . $name;
+                            $existingService = $hospital->services()
+                                ->where(['service_id' => $service->id, 'sub_service_id' => $subService->id])
+                                ->first();
+
+                            $rules[$field] = 'required';
+                            $messages[$field . '.required'] = 'This field is Required';
+
+                            if ($request->{$field} == 1) {
+                                $rules[$field . '_text'] = 'sometimes|required';
+                                $rules[$field . '_image'] = $existingService ? 'nullable|mimes:jpg,png,jpeg' : 'sometimes|required|mimes:jpg,png,jpeg';
+                                $messages[$field . '_text.required'] = 'This field is Required';
+                                $messages[$field . '_image.required'] = 'This field is Required';
+                                $messages[$field . '_image.mimes'] = 'Only jpg, png and jpeg images are allowed.';
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        $validator = Validator::make($request->all(), $rules, $messages);
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors()->messages()
+            ], 422);
+        }
+
+        if (!empty($enableStep->speciality_status)) {
+            $specialityIds = (array) $request->input('speciality_id', []);
+            $hasAvailableSpeciality = false;
+            foreach ($specialityIds as $specialityId) {
+                if ((int) $request->input('available_' . $specialityId, 0) === 1) {
+                    $hasAvailableSpeciality = true;
+                    break;
+                }
+            }
+
+            if (!$hasAvailableSpeciality) {
+                return response()->json(['success' => false, 'message' => 'Please Select One Speciality!!']);
+            }
+        }
+
+        $incoming = $request->input('staff_strength', []);
+        $cleaned = [];
+        foreach ((array) $incoming as $id => $row) {
+            $sanc = isset($row['sanctioned']) && $row['sanctioned'] !== '' ? (int) $row['sanctioned'] : null;
+            $inpos = isset($row['in_position']) && $row['in_position'] !== '' ? (int) $row['in_position'] : null;
+            if ($sanc !== null || $inpos !== null) {
+                $cleaned[(int) $id] = array_filter([
+                    'sanctioned' => $sanc,
+                    'in_position' => $inpos,
+                ], static fn($v) => $v !== null);
+            }
+        }
+
+        $meta = is_array($hospital->onboarding_meta) ? $hospital->onboarding_meta : [];
+        $meta['staff_strength'] = $cleaned;
+        $hospital->onboarding_meta = $meta;
+        $hospital->save();
+
+        if (!empty($enableStep->speciality_status)) {
+            HospitalSpeciality::where('hospital_id', $hospital_id)->delete();
+            foreach ((array) $request->input('speciality_id', []) as $specialityId) {
+                if ((int) $request->input('available_' . $specialityId, 0) === 1) {
+                    $hospital->specialities()->create([
+                        'uuid' => Helpers::generateUUID(),
+                        'speciality_id' => $specialityId,
+                        'available' => 1,
+                        'remark' => $request->input('remark_' . $specialityId),
+                    ]);
+                }
+            }
+        }
+
+        if (!empty($enableStep->service_status)) {
+            $isServiceValid = 0;
+            foreach ($services as $service) {
+                if (sizeof($service->subServices) > 0) {
+                    foreach ($service->subServices()->orderBy('sort_order', 'ASC')->get() as $subService) {
+                        $name = str_replace(' ', '-', strtolower($subService->name));
+                        $field = $service->id . '_' . $subService->id . '_' . $name;
+
+                        if ($request->has($field) && $request->{$field} !== '') {
+                            $isServiceValid = 1;
+                            $serviceData = [
+                                'uuid' => Helpers::generateUUID(),
+                                'service_id' => $service->id,
+                                'sub_service_id' => $subService->id,
+                                'action_id' => $request->{$field . '_action'},
+                                'service_value' => $request->{$field},
+                                'text_value' => $request->{$field . '_text'},
+                                'remark' => $request->{$service->id . '_' . $subService->id . '_remark'}
+                            ];
+
+                            if ($request->hasFile($field . '_image')) {
+                                $serviceData['image'] = $request->file($field . '_image')->store('serviceimage', 'public');
+                            }
+
+                            $hospital->services()->updateOrCreate(
+                                ['service_id' => $service->id, 'sub_service_id' => $subService->id],
+                                $serviceData
+                            );
+                        }
+                    }
+                }
+            }
+
+            if (!$isServiceValid) {
+                return response()->json(['success' => false, 'message' => 'Please Select Any One.']);
+            }
+        }
+
+        auth()->user()->update(['hospital_id' => $hospital_id, 'step' => 5]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Staff strength and services saved successfully.',
+            'step' => 5,
+            'wizard_step' => 5
+        ]);
+    }
+    public function saveLicensesDocuments(Request $request, $uuid, $hospital_id)
+    {
+        $hospital = Hospital::where('id', $hospital_id)->first();
+        if (!$hospital) {
+            return response()->json(['success' => false, 'message' => 'Hospital not found.'], 422);
+        }
+
+        // ========== LICENSES VALIDATION ==========
+        $licenses = Helpers::getCommanData('License');
+        $licensesRules = [];
+        $licensesMessages = [];
+        foreach ($licenses as $key => $value) {
+            foreach ($value->licenseType as $k => $v) {
+                if ($v->is_required) {
+                    $checkLicense = $hospital->licenses()->where(['license_id' => $value->id, 'license_type_id' => $v->id])->first();
+                    $licensesRules[$value->id . '_' . $v->id . '_dateissue'] = 'required|date';
+                    $licensesRules[$value->id . '_' . $v->id . '_dateexpiry'] = 'required|date';
+                    $licensesRules['document_' . $value->id . '_' . $v->id] = $checkLicense ? 'nullable|mimes:pdf' : 'required|mimes:pdf';
+
+                    $licensesMessages[$value->id . '_' . $v->id . '_dateissue.required'] = 'The Date of Issue for ' . $v->name . ' is required.';
+                    $licensesMessages[$value->id . '_' . $v->id . '_dateexpiry.required'] = 'The Date of Expiry for ' . $v->name . ' is required.';
+                    $licensesMessages['document_' . $value->id . '_' . $v->id . '.required'] = 'The Document for ' . $v->name . ' is required.';
+                    $licensesMessages['document_' . $value->id . '_' . $v->id . '.mimes'] = 'The Document for ' . $v->name . ' must be a file of type: pdf.';
+                }
+            }
+        }
+
+        // ========== DOCUMENTS VALIDATION ==========
+        $documents = Helpers::getCommanData('EmpanelmentDocument');
+        $documentsRules = [];
+        $documentsMessages = [];
+        foreach ($documents as $key => $value) {
+            if ($value->is_required) {
+                $checkDocument = $hospital->documents()->where(['document_id' => $value->id])->first();
+                $documentsRules['document_' . $value->id . '_doc'] = $checkDocument ? 'nullable' : 'required|mimes:pdf|max:10240';
+                $documentsMessages['document_' . $value->id . '_doc.required'] = 'The Document for ' . $value->name . ' is required.';
+                $documentsMessages['document_' . $value->id . '_doc.mimes'] = 'The Document for ' . $value->name . ' must be a file of type: pdf.';
+            }
+        }
+
+        $validator = Validator::make($request->all(), array_merge($licensesRules, $documentsRules), array_merge($licensesMessages, $documentsMessages));
+        if ($validator->fails()) {
+            $errors = $validator->errors();
+            return response()->json([
+                'message' => $errors->first(),
+                'errors' => $errors->messages()
+            ], 422);
+        }
+
+        // ========== SAVE LICENSES ==========
+        foreach ($licenses as $key => $value) {
+            foreach ($value->licenseType as $k => $v) {
+                if ($request->{$value->id . '_' . $v->id . '_dateissue'} && $request->{$value->id . '_' . $v->id . '_dateexpiry'}) {
+                    $issueDate = date('Y-m-d', strtotime($request->{$value->id . '_' . $v->id . '_dateissue'}));
+                    $expiryDate = date('Y-m-d', strtotime($request->{$value->id . '_' . $v->id . '_dateexpiry'}));
+
+                    $array = [
+                        'uuid' => Helpers::generateUUID(),
+                        'license_id' => $value->id,
+                        'license_type_id' => $v->id,
+                        'issue_date' => $issueDate,
+                        'expiry_date' => $expiryDate,
+                        'remark' => $request->{$value->id . '_' . $v->id . '_remark'}
+                    ];
+
+                    if ($request->hasFile('document_' . $value->id . '_' . $v->id)) {
+                        $filePath = $request->file('document_' . $value->id . '_' . $v->id)->store('certificate', 'public');
+                        $array['document'] = $filePath;
+                    }
+
+                    $hospital->licenses()->updateOrCreate(['license_id' => $value->id, 'license_type_id' => $v->id], $array);
+                }
+            }
+        }
+
+        // ========== SAVE DOCUMENTS ==========
+        foreach ($documents as $key => $value) {
+            $array = [
+                'uuid' => Helpers::generateUUID(),
+                'document_id' => $value->id,
+                'remarks' => $request->{$value->id . '_remarkdoc'}
+            ];
+
+            if ($request->hasFile('document_' . $value->id . '_doc')) {
+                $filePath = $request->file('document_' . $value->id . '_doc')->store('certificate', 'public');
+                $array['document'] = $filePath;
+            }
+
+            $hospital->documents()->updateOrCreate(['document_id' => $value->id], $array);
+        }
+
+        auth()->user()->update(['hospital_id' => $hospital_id, 'step' => 6]);
+
+        return response()->json(['success' => true, 'message' => 'Licenses and Documents Saved Successfully!!', 'step' => 6, 'wizard_step' => 6]);
+    }
     public function saveWizardMeta(Request $request, $uuid)
     {
         $request->validate([

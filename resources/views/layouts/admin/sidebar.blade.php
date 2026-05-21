@@ -82,6 +82,7 @@
                           <li><a href="{{route('admin.sub-services.index')}}">Sub Services</a></li>
                           <li><a href="{{route('admin.licenses.index')}}">Licenses</a></li>
                           <li><a href="{{route('admin.license-types.index')}}">License Types</a></li>
+                          <li><a href="{{route('admin.empanelment-eligibilities.index')}}">AB Eligibility Checklist</a></li>
                         </ul>
                     </li>
                     <!-- procedure masters -->
