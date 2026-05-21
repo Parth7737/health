@@ -1,8 +1,6 @@
 <?php
 use Illuminate\Support\Facades\Route;
-Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Controllers\Hospital', 'prefix' => 'hospital', 'as' => 'hospital.'], function () {
-    Route::get('/dashboard', 'DashboardController@index')->name('dashboard');
-    Route::get('/doctor-dashboard', 'DashboardController@doctorDashboard')->name('doctor-dashboard');
+Route::group(['middleware'=>['hospital.user','auth'],'namespace' => 'App\Http\Controllers\Hospital', 'prefix' => 'hospital', 'as' => 'hospital.'], function () {
     Route::post('step-load/{uuid}', 'EmpanelmentRegistrationController@stepLoad')->name('empanelmentRegistration.stepLoad');
     Route::get('/empanelment-registration', 'EmpanelmentRegistrationController@create')->name('empanelmentRegistration.create');
     Route::get('establisment-details/{uuid}', 'EmpanelmentRegistrationController@establismentDetails')->name('empanelmentRegistration.establismentDetails');
@@ -11,6 +9,19 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
     Route::post('wizard/infrastructure/{uuid}', 'EmpanelmentRegistrationController@saveHospitalInfrastructure')->name('empanelmentRegistration.saveInfrastructure');
     Route::post('wizard/staff-strength/{uuid}', 'EmpanelmentRegistrationController@saveStaffStrength')->name('empanelmentRegistration.saveStaffStrength');
     Route::post('wizard/meta/{uuid}', 'EmpanelmentRegistrationController@saveWizardMeta')->name('empanelmentRegistration.saveWizardMeta');
+
+    Route::post('hospital/documents/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveHospitalDocuments')->name('empanelmentRegistration.saveDocuments');   
+    Route::post('hospital/save-specialities/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveSpecialities')->name('empanelmentRegistration.saveSpecialities');
+    Route::post('hospital/save-services/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveServices')->name('empanelmentRegistration.saveServices');
+    Route::post('hospital/save-licenses/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveLicenses')->name('empanelmentRegistration.saveLicenses');
+    Route::post('hospital/submitForm/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@hospitalSubmit')->name('empanelmentRegistration.hospitalSubmit');   
+    Route::post('hospital/branches/loadBranchTable/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@loadBranchTable')->name('empanelmentRegistration.loadBranchTable');
+    Route::post('hospital/branches/deleteBranch', 'EmpanelmentRegistrationController@deleteBranch')->name('empanelmentRegistration.deleteBranch');
+    Route::post('hospital/branches/saveBranch/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveBranch')->name('empanelmentRegistration.saveBranch');
+});
+Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Controllers\Hospital', 'prefix' => 'hospital', 'as' => 'hospital.'], function () {
+    Route::get('/dashboard', 'DashboardController@index')->name('dashboard');
+    Route::get('/doctor-dashboard', 'DashboardController@doctorDashboard')->name('doctor-dashboard');
     
     //update profile
     Route::get('/profile', 'ProfileController@index')->name('profile');
@@ -32,14 +43,6 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         ->middleware(['permission:edit-hospital-data'])
         ->name('settings.general-setting.update');
 
-    Route::post('hospital/documents/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveHospitalDocuments')->name('empanelmentRegistration.saveDocuments');   
-    Route::post('hospital/save-specialities/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveSpecialities')->name('empanelmentRegistration.saveSpecialities');
-    Route::post('hospital/save-services/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveServices')->name('empanelmentRegistration.saveServices');
-    Route::post('hospital/save-licenses/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveLicenses')->name('empanelmentRegistration.saveLicenses');
-    Route::post('hospital/submitForm/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@hospitalSubmit')->name('empanelmentRegistration.hospitalSubmit');   
-    Route::post('hospital/branches/loadBranchTable/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@loadBranchTable')->name('empanelmentRegistration.loadBranchTable');
-    Route::post('hospital/branches/deleteBranch', 'EmpanelmentRegistrationController@deleteBranch')->name('empanelmentRegistration.deleteBranch');
-    Route::post('hospital/branches/saveBranch/{uuid}/{hospitalid}', 'EmpanelmentRegistrationController@saveBranch')->name('empanelmentRegistration.saveBranch');
 
     //Front Office
     Route::group(['prefix' => 'front-office', 'as' => 'front-office.'], function () {

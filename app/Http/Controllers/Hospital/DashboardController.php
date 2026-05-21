@@ -26,10 +26,10 @@ class DashboardController extends BaseHospitalController
      */
     public function index()
     {
-        if(Auth::user() && !Auth::user()->hasRole('Admininstrator') && !Auth::user()->hasRole('Admin')){
+        if(Auth::user() && !Auth::user()->hasRole('Administrator')){
             return view('hospital.dashboard');
         }
-        if(Auth::user()->hasRole('Admin') && auth()->user()->is_complete_registration == 0){
+        if(Auth::user()->hasRole('Administrator') && auth()->user()->is_complete_registration == 0){
             return redirect(route('hospital.empanelmentRegistration.create'));
         }else{
             if(Auth::user()->hasRole('Doctor')){

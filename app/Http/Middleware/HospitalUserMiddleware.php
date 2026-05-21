@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 
-class HospitalMiddleware
+class HospitalUserMiddleware
 {
     /**
      * Handle an incoming request.
@@ -18,13 +18,8 @@ class HospitalMiddleware
      */
     public function handle(Request $request, Closure $next)
     {
-        if (Auth::check()) {
-            
-            if(Auth::user()->hasRole('Administrator') && auth()->user()->is_complete_registration == 0){
-                return redirect(route('hospital.empanelmentRegistration.create'));
-            }else{
-                return $next($request);
-            }
+        if (Auth::check() && Auth::user()->hasRole('Administrator')) {
+            return $next($request);
         }
         return redirect()->route('hospital.login');
     }
