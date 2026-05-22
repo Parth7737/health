@@ -1044,7 +1044,7 @@ class EmpanelmentRegistrationController extends Controller
             return 8;
         }
 
-        return 2;
+        return 1;
     }
 
 }
