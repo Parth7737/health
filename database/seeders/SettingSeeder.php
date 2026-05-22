@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\BusinessSetting;
 use App\Models\EmpanelmentDocument;
 use App\Models\StaffStrength;
+use App\Models\EmpanelmentEligibility;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
 
@@ -65,6 +66,35 @@ class SettingSeeder extends Seeder
         EmpanelmentDocument::firstOrCreate(
             ['name' => 'Other documents'],
             ['is_required' => 0]
+        );
+
+        EmpanelmentEligibility::firstOrCreate(
+            ['title' => 'Minimum 50 inpatient beds'],
+            ['subtitle' => 'The hospital must have a minimum of 50 inpatient beds to be eligible for empanelment.', 'is_required' => 1]
+        );
+        EmpanelmentEligibility::firstOrCreate(
+            ['title' => 'Valid registration certificate'],
+            ['subtitle' => 'Active facility registration under Clinical Establishments Act', 'is_required' => 0]
+        );
+        EmpanelmentEligibility::firstOrCreate(
+            ['title' => 'Empanelment agreement signed'],
+            ['subtitle' => 'MoA with SHA Uttarakhand executed and notarised', 'is_required' => 0]
+        );
+        EmpanelmentEligibility::firstOrCreate(
+            ['title' => 'Cashless service commitment'],
+            ['subtitle' => 'Facility commits to providing cashless treatment to AB beneficiaries', 'is_required' => 0]
+        );
+        EmpanelmentEligibility::firstOrCreate(
+            ['title' => 'Package rate acceptance'],
+            ['subtitle' => 'Facility accepts PMJAY package rates without additional charges', 'is_required' => 0]
+        );
+        EmpanelmentEligibility::firstOrCreate(
+            ['title' => 'TMS portal integration ready'],
+            ['subtitle' => 'Transaction Management System access for real-time claim submission', 'is_required' => 0]
+        );
+        EmpanelmentEligibility::firstOrCreate(
+            ['title' => 'Inspection report cleared'],
+            ['subtitle' => 'Physical inspection by DISHA/SHA team — all parameters met', 'is_required' => 0]
         );
 
         //Staff Strength

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Hospital;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\EmpanelmentEligibility;
 use App\Models\UserHfr;
 use App\Models\{ Hospital, HospitalDistrict, HospitalState, HospitalType, User, HospitalSpeciality, HospitalService, HospitalLicense};
 use App\CentralLogics\Helpers;
@@ -839,6 +840,10 @@ class EmpanelmentRegistrationController extends Controller
         $request->validate([
             'section' => 'required|in:ab,hmis',
             'ab_empanelment' => 'nullable|array',
+            'ab_empanelment.eligibility' => 'nullable|array',
+            'ab_empanelment.eligibility.*' => 'integer|exists:empanelment_eligibilities,id',
+            'ab_empanelment.specialities' => 'nullable|array',
+            'ab_empanelment.specialities.*' => 'integer|exists:specialities,id',
             'ab_empanelment.sha_code' => 'nullable|string|max:64',
             'ab_empanelment.rohini_id' => 'nullable|string|max:64',
             'ab_empanelment.bank_account' => 'nullable|string|max:64',
@@ -849,6 +854,14 @@ class EmpanelmentRegistrationController extends Controller
             'hmis_setup.role_preset' => 'nullable|string|max:64',
             'hmis_setup.two_fa' => 'nullable|string|max:64',
             'hmis_setup.admin_password' => 'nullable|string|max:255',
+            'hmis_setup.abha_integration' => 'nullable|string|max:32',
+            'hmis_setup.nic_integration' => 'nullable|string|max:32',
+            'hmis_setup.hims_data_reporting' => 'nullable|string|max:32',
+            'hmis_setup.ambulance_integration' => 'nullable|string|max:32',
+            'hmis_setup.cmss_integration' => 'nullable|string|max:32',
+            'hmis_setup.payroll_integration' => 'nullable|string|max:32',
+            'hmis_setup.modules' => 'nullable|array',
+            'hmis_setup.modules.*' => 'string|max:64',
         ]);
         $user = User::where('uuid', $uuid)->first();
         if (!$user || !$user->hospital_id) {
@@ -860,7 +873,11 @@ class EmpanelmentRegistrationController extends Controller
         }
         $meta = is_array($hospital->onboarding_meta) ? $hospital->onboarding_meta : [];
         if ($request->section === 'ab') {
-            $ab = array_merge((array) ($meta['ab_empanelment'] ?? []), (array) $request->input('ab_empanelment', []));
+            $ab = (array) ($meta['ab_empanelment'] ?? []);
+            $incomingAb = (array) $request->input('ab_empanelment', []);
+            $incomingAb['eligibility'] = $request->input('ab_empanelment.eligibility', []);
+            $incomingAb['specialities'] = $request->input('ab_empanelment.specialities', []);
+            $ab = array_merge($ab, $incomingAb);
             $meta['ab_empanelment'] = array_filter($ab, static function ($v) {
                 return $v !== null && $v !== '';
             });
@@ -933,7 +950,9 @@ class EmpanelmentRegistrationController extends Controller
                     return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);
                 }
 
-                return view('hospital.empanelment._partials.wizard-ab-empanelment', compact('uuid', 'hospital'));
+                $eligibilities = EmpanelmentEligibility::orderBy('id')->get();
+                $specialities = Helpers::getCommanData('Speciality');
+                return view('hospital.empanelment._partials.wizard-ab-empanelment', compact('uuid', 'hospital', 'eligibilities', 'specialities'));
             case 7:
                 if (!$hospital) {
                     return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);

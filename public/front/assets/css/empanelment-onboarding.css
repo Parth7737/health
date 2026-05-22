@@ -28,8 +28,10 @@ body:has(.empanelment-onboarding-wrap) .layout-page .content-wrapper {
     --eo-teal: #00695c;
     --eo-green: #2e7d32;
     --eo-red: #ef5350;
+    --bg:#0d1b2e;--surface:#162038;--surface2:#1a2847;--border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.12);
+  --text:#e8f0fe;--muted:#7b9bbf;--muted2:#a0bbd8;
+  --sky:#1565c0;--teal:#00695c;--green:#2e7d32;--orange:#e65100;--red:#c62828;--purple:#6a1b9a;
 }
-
 .layout-page:has(.empanelment-onboarding-wrap) .content-wrapper {
     background: var(--eo-bg) !important;
     padding-bottom: 2rem !important;
@@ -987,3 +989,16 @@ body:has(.empanelment-onboarding-wrap) footer .footer-link {
 #licensesCard .eo-license-remark {
     min-width: 180px;
 }
+
+
+/* CHECKLIST */
+.checklist{display:flex;flex-direction:column;gap:10px}
+.cl-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s}
+.cl-item:hover{background:rgba(255,255,255,.05)}
+.cl-item.checked{background:rgba(46,125,50,.08);border-color:rgba(46,125,50,.25)}
+.cl-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;margin-top:1px}
+.cl-item.checked .cl-check{background:#2e7d32;border-color:#2e7d32;color:#fff}
+.cl-txt{flex:1}
+.cl-title{font-size:13px;font-weight:600;color:#fff}
+.cl-desc{font-size:11px;color:var(--muted);margin-top:2px}
+.cl-required{font-size:10px;color:#ef9a9a;font-weight:600}
