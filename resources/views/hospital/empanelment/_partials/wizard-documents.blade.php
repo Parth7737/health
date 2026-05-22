@@ -17,7 +17,7 @@
         @include('hospital.empanelment._partials.licenses', compact('uuid', 'hospital', 'licenses'))
     @endif
 
-    @include('hospital.empanelment._partials.documents', array_merge(compact('uuid', 'hospital'), ['hide_declaration' => true]))
+    @include('hospital.empanelment._partials.documents', compact('uuid', 'hospital'))
 @else
     <div class="eo-card">
         <div class="eo-card-body text-muted">Save basic facility information first.</div>

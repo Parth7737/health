@@ -1002,3 +1002,115 @@ body:has(.empanelment-onboarding-wrap) footer .footer-link {
 .cl-title{font-size:13px;font-weight:600;color:#fff}
 .cl-desc{font-size:11px;color:var(--muted);margin-top:2px}
 .cl-required{font-size:10px;color:#ef9a9a;font-weight:600}
+
+/* Review & submit (step 8) */
+.eo-review-body {
+    padding: 0;
+}
+.eo-review-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--eo-border, rgba(255, 255, 255, 0.08));
+    font-size: 13px;
+}
+.eo-review-row:last-child {
+    border-bottom: none;
+}
+.eo-rv-key {
+    color: var(--eo-muted, #94a3b8);
+    font-weight: 500;
+    flex: 0 0 42%;
+}
+.eo-rv-val {
+    color: var(--eo-text, #fff);
+    font-weight: 600;
+    text-align: right;
+    flex: 1;
+}
+.eo-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.eo-badge-teal {
+    background: rgba(77, 182, 172, 0.15);
+    color: #4db6ac;
+}
+.eo-badge-blue {
+    background: rgba(21, 101, 192, 0.2);
+    color: #64b5f6;
+}
+.eo-badge-muted {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--eo-muted, #94a3b8);
+}
+.eo-card-info {
+    background: rgba(21, 101, 192, 0.06);
+    border-color: rgba(21, 101, 192, 0.2);
+}
+.eo-info-icon {
+    color: #60a5fa;
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.eo-info-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--eo-text, #fff);
+    margin-bottom: 6px;
+}
+.eo-info-list {
+    font-size: 12px;
+    color: var(--eo-muted2, #94a3b8);
+    line-height: 2;
+    padding-left: 16px;
+    margin: 0;
+}
+.eo-info-list strong {
+    color: var(--eo-text, #fff);
+}
+.eo-declaration-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: rgba(46, 125, 50, 0.06);
+    border: 1px solid rgba(46, 125, 50, 0.2);
+    border-radius: 10px;
+}
+.eo-declaration-box input {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.eo-declaration-box label {
+    font-size: 12px;
+    color: var(--eo-muted2, #94a3b8);
+    cursor: pointer;
+    margin: 0;
+}
+.eo-declaration-disabled {
+    opacity: 0.55;
+    pointer-events: none;
+}
+.eo-review-pending-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.eo-review-pending-list li {
+    margin-bottom: 6px;
+}
+.eo-review-pending-list a {
+    color: #ffb74d;
+    text-decoration: underline;
+    font-size: 13px;
+}

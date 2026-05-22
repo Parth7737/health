@@ -12,8 +12,9 @@
 <div class="eo-panel-title"><i class="fas fa-hospital-user" style="color:#60a5fa"></i> Ayushman Bharat empanelment</div>
 <p class="eo-panel-sub">Configure Ayushman Bharat PM-JAY empanelment. Complete all eligibility criteria for SHA approval.</p>
 
+@if ($hospital)
 <form id="wizardAbForm">
-    
+@endif
     <input type="hidden" name="section" value="ab" />
     <div class="eo-card">
         <div class="eo-card-hdr">
@@ -114,14 +115,19 @@
             </div>
         </div>
     </div>
+@if ($hospital)
+    @if($hospital->status == "Draft" || $hospital->status == "Rejected" || !empty($is_admin_edit))
     <div class="eo-step-nav">
         <button type="button" class="eo-tb-btn" onclick="if(typeof loadStep==='function')loadStep(5)"><i class="fas fa-arrow-left"></i> Back</button>
         <span class="eo-nav-info">Step 6 of 8 — AB empanelment</span>
         <button type="button" class="eo-tb-btn primary" id="wizardAbSave"><i class="fas fa-save"></i> Save &amp; continue</button>
     </div>
+    @endif
 </form>
+@endif
 
 <script>
+    @if ($hospital)
     $('#wizardAbSave').on('click', function() {
         ldrshow();
         var fd = new FormData($('#wizardAbForm')[0]);
@@ -151,7 +157,7 @@
             }
         });
     });
-    
+    @endif
     function toggleCheck(el){
         el.parentElement.classList.toggle('checked');
         const cb = el.parentElement.querySelector('.cl-check');

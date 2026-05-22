@@ -27,7 +27,9 @@
 <div class="eo-panel-title"><i class="fas fa-cogs" style="color:#ce93d8"></i> HMIS &amp; IT setup</div>
 <p class="eo-panel-sub">Planned admin access for HMIS (non-binding; credentials can be finalised later).</p>
 
+@if ($hospital)
 <form id="wizardHmisForm">
+@endif
     <input type="hidden" name="section" value="hmis" />
     <div class="eo-card">
         <div class="eo-card-hdr">
@@ -157,12 +159,16 @@
             </div>
         </div>
     </div>
+@if ($hospital)
+    @if($hospital->status == "Draft" || $hospital->status == "Rejected" || !empty($is_admin_edit))
     <div class="eo-step-nav">
         <button type="button" class="eo-tb-btn" onclick="if(typeof loadStep==='function')loadStep(6)"><i class="fas fa-arrow-left"></i> Back</button>
         <span class="eo-nav-info">Step 7 of 8 — HMIS setup</span>
         <button type="button" class="eo-tb-btn primary" id="wizardHmisSave"><i class="fas fa-save"></i> Save &amp; continue</button>
     </div>
+    @endif
 </form>
+@endif
 
 <script>
     function toggleCheck(el) {
@@ -208,6 +214,7 @@
         });
     })();
 
+    @if ($hospital)
     $('#wizardHmisSave').on('click', function() {
         ldrshow();
         var fd = new FormData($('#wizardHmisForm')[0]);
@@ -237,4 +244,5 @@
             }
         });
     });
+    @endif
 </script>

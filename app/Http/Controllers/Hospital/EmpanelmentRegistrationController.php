@@ -919,9 +919,6 @@ class EmpanelmentRegistrationController extends Controller
             $hospital_id = $user->hospital_id;
             $hospital = Hospital::where('id', $user->hospital_id)->first();
         }
-        $allStepCompleted = Helpers::checkAllStepIsCompleteOrNot($uuid);
-        $is_multi_branch = $user->hospital_type == 'Multi-Branch' ? true : false;
-
         switch ($step) {
             case 1:
                 return view('hospital.empanelment._partials.wizard-facility-type', compact('uuid', 'user', 'hospital'));
@@ -944,7 +941,7 @@ class EmpanelmentRegistrationController extends Controller
                     return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);
                 }
 
-                return view('hospital.empanelment._partials.wizard-documents', compact('uuid', 'hospital', 'allStepCompleted'));
+                return view('hospital.empanelment._partials.wizard-documents', compact('uuid', 'hospital'));
             case 6:
                 if (!$hospital) {
                     return response('<div class="eo-card"><div class="eo-card-body text-warning">Save <strong>Basic information</strong> first.</div></div>', 200);

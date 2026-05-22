@@ -7,6 +7,7 @@ use App\Models\{
     HospitalSpeciality,
     HospitalTeam,
     PreauthRegister,
+    StaffStrength,
     User,
 };
 use Illuminate\Support\Facades\App;
@@ -161,48 +162,170 @@ class Helpers
         return $hospitalId;
     }
     
-    public static function checkAllStepIsCompleteOrNot($uuid) {
-        $completedStep = self::checkstepComplete($uuid);
-        if($completedStep['hospitalinfostep'] && $completedStep['specialiststep'] && $completedStep['servicestep'] && $completedStep['licensesstep'] && $completedStep['documentstep']) {
-            return true;
-        } else {
-            return false;
-        }
+    /**
+     * 8-step hospital empanelment wizard (see form.blade.php $wizardSteps).
+     */
+    public static function empanelmentWizardStepConfig(): array
+    {
+        return [
+            1 => ['key' => 'facility_type', 'label' => 'Select facility type'],
+            2 => ['key' => 'basic_info', 'label' => 'Basic information'],
+            3 => ['key' => 'infrastructure', 'label' => 'Infrastructure details'],
+            4 => ['key' => 'staff_services', 'label' => 'Staff strength & services'],
+            5 => ['key' => 'documents', 'label' => 'Documents'],
+            6 => ['key' => 'ab_empanelment', 'label' => 'Ayushman Bharat empanelment'],
+            7 => ['key' => 'hmis_setup', 'label' => 'HMIS & IT setup'],
+            8 => ['key' => 'review_submit', 'label' => 'Review & submit'],
+        ];
     }
 
-    public static function checkstepComplete($uuid) {
-        $user = User::where('uuid',$uuid)->first();
-        $hospitalinfostep = false;
-        $multibranchstep = false;
-        $documentstep = false;
-        $servicestep = false;
-        $specialiststep = false;
-        $licensesstep = false;
-        
-        $enable_step = $user->enable_step;
-        $enable_step_decoded = json_decode($enable_step);
-        if($user->hospital_id){
-            $hospital = Hospital::where('id', $user->hospital_id)->first();
-            $documentsdata = Helpers::getCommanData('EmpanelmentDocument');
-            $hospitalinfostep = true;
-            if(sizeof($documentsdata) > 0 && $hospital && $hospital->documents()->count() > 0) {
-                $documentstep = true;
-            } else if(sizeof($documentsdata) <= 0) {
-                $documentstep = true;
-            }
-            if( $hospital && $hospital->services->count() > 0 || @$enable_step_decoded->service_status == 0){
-                $servicestep = true;
-            }
-            if( $hospital && $hospital->specialities->count() > 0 || @$enable_step_decoded->speciality_status == 0){
-                $specialiststep = true;
-            }
-            if( $hospital && $hospital->licenses->count() > 0 || @$enable_step_decoded->licenses_status == 0){
-                $licensesstep = true;
+    public static function checkAllStepIsCompleteOrNot($uuid): bool
+    {
+        $completed = self::checkstepComplete($uuid);
+        $required = ['facility_type', 'basic_info', 'infrastructure', 'staff_services', 'documents', 'ab_empanelment', 'hmis_setup'];
+
+        foreach ($required as $key) {
+            if (empty($completed[$key])) {
+                return false;
             }
         }
 
+        return true;
+    }
 
-        return ['hospitalinfostep' => $hospitalinfostep, 'specialiststep' => $specialiststep, 'servicestep' => $servicestep, 'licensesstep' => $licensesstep, 'documentstep' => $documentstep];
+    public static function checkstepComplete($uuid): array
+    {
+        $user = User::where('uuid', $uuid)->first();
+        $enableStep = json_decode($user->enable_step ?? self::get_settings('empanelment_step_status') ?: '{}');
+        if (!is_object($enableStep)) {
+            $enableStep = (object) ['speciality_status' => 0, 'service_status' => 0, 'licenses_status' => 0];
+        }
+
+        $facilityType = false;
+        $basicInfo = false;
+        $infrastructure = false;
+        $staffServices = false;
+        $documents = false;
+        $abEmpanelment = false;
+        $hmisSetup = false;
+
+        if ($user) {
+            $wizard = (array) ($user->wizard_onboarding ?? []);
+            $facilityType = !empty($wizard['type_id']);
+        }
+
+        $hospital = null;
+        if ($user && $user->hospital_id) {
+            $hospital = Hospital::where('id', $user->hospital_id)->first();
+            if ($hospital) {
+                $om = is_array($hospital->onboarding_meta) ? $hospital->onboarding_meta : [];
+
+                $basicInfo = trim((string) $hospital->name) !== '' && trim((string) $hospital->code) !== '';
+
+                $infrastructure = array_key_exists('infra_sanctioned_beds', $om)
+                    && $om['infra_sanctioned_beds'] !== ''
+                    && $om['infra_sanctioned_beds'] !== null
+                    && array_key_exists('infra_functional_beds', $om)
+                    && $om['infra_functional_beds'] !== ''
+                    && $om['infra_functional_beds'] !== null;
+
+                $staffServices = self::isStaffServicesStepComplete($hospital, $om, $enableStep);
+
+                $docsOk = self::areRequiredEmpanelmentDocumentsComplete($hospital);
+
+                $licenses = self::getCommanData('License');
+                $licensesOk = ($hospital->licenses()->count() > 0) || (count($licenses) == 0);
+                $documents = $docsOk && $licensesOk;
+
+                $ab = (array) ($om['ab_empanelment'] ?? []);
+                $abEmpanelment = !empty($ab) && (
+                    (is_array($ab['eligibility'] ?? null) && count($ab['eligibility']) > 0)
+                    || !empty($ab['sha_code'])
+                    || !empty($ab['rohini_id'])
+                    || !empty($ab['bank_account'])
+                );
+
+                $hm = (array) ($om['hmis_setup'] ?? []);
+                $hmisSetup = !empty($hm) && (
+                    !empty($hm['admin_username'])
+                    || (is_array($hm['modules'] ?? null) && count($hm['modules']) > 0)
+                );
+            }
+        }
+
+        return [
+            'facility_type' => $facilityType,
+            'basic_info' => $basicInfo,
+            'infrastructure' => $infrastructure,
+            'staff_services' => $staffServices,
+            'documents' => $documents,
+            'ab_empanelment' => $abEmpanelment,
+            'hmis_setup' => $hmisSetup,
+            // Legacy keys (admin / older partials)
+            'hospitalinfostep' => $basicInfo,
+            'specialiststep' => empty($enableStep->speciality_status) || ($hospital && $hospital->specialities()->count() > 0),
+            'servicestep' => empty($enableStep->service_status) || ($hospital && $hospital->services()->count() > 0),
+            'licensesstep' => empty($enableStep->licenses_status) || ($hospital && $hospital->licenses()->count() > 0),
+            'documentstep' => $documents,
+        ];
+    }
+
+    protected static function isStaffServicesStepComplete(Hospital $hospital, array $om, object $enableStep): bool
+    {
+        $staffStrength = (array) ($om['staff_strength'] ?? []);
+        if (StaffStrength::count() > 0) {
+            $hasStaffData = false;
+            foreach ($staffStrength as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                if (isset($row['sanctioned']) && $row['sanctioned'] !== '' && $row['sanctioned'] !== null) {
+                    $hasStaffData = true;
+                    break;
+                }
+                if (isset($row['in_position']) && $row['in_position'] !== '' && $row['in_position'] !== null) {
+                    $hasStaffData = true;
+                    break;
+                }
+            }
+            if (!$hasStaffData) {
+                return false;
+            }
+        }
+
+        if (!empty($enableStep->speciality_status) && $hospital->specialities()->count() <= 0) {
+            return false;
+        }
+
+        if (!empty($enableStep->service_status) && $hospital->services()->count() <= 0) {
+            return false;
+        }
+
+        return true;
+    }
+
+    protected static function areRequiredEmpanelmentDocumentsComplete(Hospital $hospital): bool
+    {
+        $documents = self::getCommanData('EmpanelmentDocument');
+        if (count($documents) === 0) {
+            return true;
+        }
+
+        foreach ($documents as $doc) {
+            if (!$doc->is_required) {
+                continue;
+            }
+            $uploaded = $hospital->documents()
+                ->where('document_id', $doc->id)
+                ->whereNotNull('document')
+                ->where('document', '!=', '')
+                ->exists();
+            if (!$uploaded) {
+                return false;
+            }
+        }
+
+        return true;
     }
     public static function stepCheck($step, $hospital_id, $type, $who) {
         $check = TabStatus::where('tab', $step)->where('type', $type)->where('hospital_id', $hospital_id);
