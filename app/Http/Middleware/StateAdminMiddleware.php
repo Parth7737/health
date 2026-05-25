@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 
-class AdminMiddleware
+class StateAdminMiddleware
 {
     /**
      * Handle an incoming request.
@@ -18,7 +18,7 @@ class AdminMiddleware
      */
     public function handle(Request $request, Closure $next)
     {
-        if(Auth::user() && !Auth::user()->hasRole('Master Admin')){
+        if(Auth::user() && !Auth::user()->hasRole('State Super Admin')){
             auth()->logout();
         }
         if (Auth::check()) {

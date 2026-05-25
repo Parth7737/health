@@ -17,7 +17,7 @@
     <meta name="author" content="Paracare - Sakhuja Hospital">
     <!-- <link rel="icon" href="{{$logo}}" type="image/x-icon">
     <link rel="shortcut icon" href="{{$logo}}" type="image/x-icon"> -->
-    <title>@yield('title') - Paracare</title>
+    <title>@yield('title') | ParaCare+ HMIS — Uttarakhand</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="description" content="" />
     <x-route-js :routes="$routes ?? []" />

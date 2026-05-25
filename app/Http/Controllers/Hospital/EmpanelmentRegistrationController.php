@@ -972,16 +972,66 @@ class EmpanelmentRegistrationController extends Controller
             if (!$hospital) {
                 return response()->json(['success' => false, 'message' => 'Hospital not found']);
             }
-            // Allow resubmit when Rejected - clear reject reason on resubmit
+
+            // Preserve existing application ID on rejected resubmission.
+            if (!$hospital->application_id) {
+                $hospital->application_id = $this->generateApplicationId();
+            }
+
             $hospital->reject_reason = null;
             $hospital->status = 'Submitted';
             $hospital->status_update_date = date('Y-m-d H:i:s');
             $hospital->save();
             $url = route('hospital.dashboard');
-            return response()->json(['success' => true, 'message' => $hospital->code.' Hospital Payment Is Initiated!!', 'url' => $url]);
+
+            return response()->json([
+                'success' => true,
+                'application_id' => $hospital->application_id,
+                'url' => $url
+            ]);
         } else {
             return response()->json(['success' => false, 'message' => 'Please fill all details first of hospital']);
         }
+    }
+
+    private function generateApplicationId(): string
+    {
+        $prefix = 'ONB-UTT';
+        $financialYear = $this->getFinancialYearPrefix();
+        $pattern = $prefix . '-' . $financialYear . '-%';
+
+        $lastApplicationId = Hospital::where('application_id', 'like', $pattern)
+            ->orderBy('application_id', 'desc')
+            ->value('application_id');
+
+        $nextSequence = 1;
+        if ($lastApplicationId) {
+            $segments = explode('-', $lastApplicationId);
+            $lastSequence = intval(end($segments));
+            $nextSequence = $lastSequence + 1;
+        }
+
+        do {
+            $applicationId = sprintf('%s-%s-%05d', $prefix, $financialYear, $nextSequence);
+            $exists = Hospital::where('application_id', $applicationId)->exists();
+            if ($exists) {
+                $nextSequence++;
+            }
+        } while ($exists);
+
+        return $applicationId;
+    }
+
+    private function getFinancialYearPrefix(): string
+    {
+        $month = (int) date('n');
+        $year = (int) date('Y');
+
+        if ($month >= 4) {
+            return (string) $year;
+        }
+
+        return (string) ($year - 1);
     }
 
     public function paymentIntiate(Request $request, $uuid, $hospital_id) {

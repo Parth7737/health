@@ -21,6 +21,6 @@ class HospitalUserMiddleware
         if (Auth::check() && Auth::user()->hasRole('Administrator')) {
             return $next($request);
         }
-        return redirect()->route('hospital.login');
+        return redirect('/');
     }
 }

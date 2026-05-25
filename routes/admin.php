@@ -1,13 +1,5 @@
 <?php
 use Illuminate\Support\Facades\Route;
-Route::group(['namespace' => 'App\Http\Controllers\Admin', 'prefix' => 'admin', 'as' => 'admin.'], function () {
-    Route::get('/', function() {
-        return view('auth.login');
-    });
-    Route::get('login', function() {
-        return view('auth.login');
-    })->name('login');
-});
 Route::group(['namespace' => 'App\Http\Controllers\Admin', 'prefix' => 'admin', 'as' => 'admin.', 'middleware' => ['superadmin']], function () {
     Route::resource('dashboard', 'DashboardController');
     Route::resource('speciality', 'SpecialityController');

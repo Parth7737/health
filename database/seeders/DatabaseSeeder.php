@@ -28,6 +28,15 @@ class DatabaseSeeder extends Seeder
             'password' => \Hash::make(123456),
         ]);
 
+        
+        $state_admin = User::firstOrCreate(
+            ['email' => 'stateadmin@paracare.com'],
+            [
+            'name' => 'State Admin',
+            'email' => 'stateadmin@paracare.com',
+            'password' => \Hash::make(123456),
+        ]);
+
         $roles = [
             [
                 'name' => "Master Admin",
@@ -102,6 +111,8 @@ class DatabaseSeeder extends Seeder
             );
         }
         $user->assignRole('Master Admin');
+        $state_admin->assignRole('State Super Admin');
+        
         $hospital_types = ['State Government Hospital/Medical Collage','Central Government Hospital/Medical Collage','Private Hospital/Medical Collage'];
         foreach ($hospital_types as $hospital_type) {
             HospitalType::firstOrCreate(

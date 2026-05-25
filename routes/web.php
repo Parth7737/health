@@ -109,6 +109,8 @@ require __DIR__.'/admin.php';
 
 require __DIR__.'/hospital.php';
 
+require __DIR__.'/state-admin.php';
+
 //front pages\
 Route::get('/appointments', [HomeController::class, 'appointments']);
 Route::get('/new-dashboard', [HomeController::class, 'newDashboard'])->name('new-dashboard');

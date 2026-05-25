@@ -381,6 +381,7 @@ class Helpers
        
         switch ($user->getRoleNames()->first()) {
             case 'Master Admin': return route('admin.dashboard.index');
+            case 'State Super Admin': return route('state-admin.dashboard.index');
             case 'Doctor': return route('hospital.doctor-dashboard');
             case 'doctor': return route('hospital.doctor-dashboard');
             default: return route('hospital.dashboard');

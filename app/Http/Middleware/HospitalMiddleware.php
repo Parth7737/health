@@ -23,9 +23,13 @@ class HospitalMiddleware
             if(Auth::user()->hasRole('Administrator') && auth()->user()->is_complete_registration == 0){
                 return redirect(route('hospital.empanelmentRegistration.create'));
             }else{
-                return $next($request);
+                if (Auth::user()->hospital_id) {
+                    return $next($request);
+                } else {
+                    auth()->logout();
+                }
             }
         }
-        return redirect()->route('hospital.login');
+        return redirect('/');
     }
 }

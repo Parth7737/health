@@ -200,6 +200,33 @@
     @endif
 </div>
 
+
+<!-- SUCCESS MODAL -->
+<div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="background:#162038;border:1px solid rgba(46,125,50,.3);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+            <div class="modal-body text-center p-4">
+                <div class="mx-auto mb-4" style="width:72px;height:72px;background:rgba(46,125,50,.15);border:2px solid #2e7d32;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;color:#81c784;">
+                    <i class="fas fa-check"></i>
+                </div>
+                <h5 id="successModalLabel" class="text-white fw-bold mb-2">Application Submitted!</h5>
+                <p class="mb-4" style="color:var(--muted2);font-size:13px;">
+                    Your facility onboarding application has been submitted successfully. The DHO and SHA will review it within 3–15 working days.
+                </p>
+                <div class="rounded-3 mb-4 p-3" style="background:rgba(255,255,255,.04);">
+                    <div class="text-muted small mb-1">APPLICATION ID</div>
+                    <div id="generatedAppId" class="fw-bold" style="font-size:22px;color:#60a5fa;letter-spacing:2px;">
+                        ONB-UTT-2025-00124
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary refesh-page" data-bs-dismiss="modal" style="width:100%;justify-content:center;">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @if ($hospital && ($hospital->status == 'Draft' || $hospital->status == 'Rejected'))
 <script>
 (function () {
@@ -257,20 +284,8 @@
             success: function (response) {
                 ldrhide();
                 if (response.success) {
-                    if (typeof swal === 'function') {
-                        swal({
-                            title: 'Application submitted',
-                            text: response.message,
-                            icon: 'success',
-                            buttons: { confirm: { text: 'Ok', className: 'btn btn-success' } }
-                        }).then(function () {
-                            if (typeof successMessage === 'function') successMessage(response.message);
-                            setTimeout(function () { location.reload(); }, 1000);
-                        });
-                    } else {
-                        if (typeof successMessage === 'function') successMessage(response.message);
-                        setTimeout(function () { location.reload(); }, 1000);
-                    }
+                    $('#successModal').modal('show');
+                    $('#generatedAppId').text(response.application_id || '—');
                 } else if (typeof errorMessage === 'function') {
                     errorMessage(response.message || 'Submission failed.');
                 }
@@ -283,6 +298,9 @@
             }
         });
     }
+    $('.refesh-page').on('click', function () {
+        location.reload();
+    });
 })();
 </script>
 @endif
