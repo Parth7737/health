@@ -34,6 +34,7 @@
     var inventoryTable = null;
     var expiryTable = null;
     var poTable = null;
+    var statOrdersLoaded = false;
     var grnRowCount = 1;
 
     function getDispenseQueueLoadUrl() {
@@ -136,7 +137,7 @@
                     render: function (data, type) {
                         var priority = String(data || 'normal').toLowerCase();
                         if (type !== 'display') { return priority; }
-                        var cls = priority === 'stat' ? 'red' : (priority === 'urgent' ? 'orange' : 'gray');
+                        var cls = priority === 'emergency' ? 'red' : (priority === 'urgent' ? 'orange' : 'gray');
                         return '<span class="badge badge-' + cls + '">' + escapeHtml(priority.toUpperCase()) + '</span>';
                     }
                 },
@@ -153,7 +154,7 @@
                         var status = String(data || 'pending').toLowerCase().replace('_', ' ');
                         if (type !== 'display') { return status; }
                         var cls = status === 'pending' ? 'orange' : (status === 'on hold' ? 'gray' : 'green');
-                        return '<span class="badge badge-' + cls + '">' + escapeHtml(status) + '</span>';
+                        return '<span class="badge badge-' + cls + '">' + escapeHtml(status.toUpperCase()) + '</span>';
                     }
                 },
                 {
@@ -198,32 +199,76 @@
         }
     }
 
+    function getStatOrdersLoadUrl() {
+        if (typeof window.route === 'function') {
+            try {
+                return window.route('statOrdersLoad');
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
+
+    function renderStatOrders(listEl, stats) {
+        listEl.innerHTML = (stats || [])
+            .map(function (s) {
+                var elapsed = parseInt(String(s.elapsed || '0'), 10) || 0;
+                var elapsedText = s.elapsed || (elapsed + ' min');
+                return '' +
+                    '<div style="background:#fff5f5;border:1.5px solid rgba(198,40,40,.2);border-radius:10px;padding:14px;margin-bottom:10px">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">' +
+                    '<div><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+                    '<span class="badge badge-red">🚨 STAT</span><span class="fw-700 fs-13">' + escapeHtml(s.patient || s.patient_name || '-') + '</span></div>' +
+                    '<div class="fs-12 text-muted mb-4"><b>Drug:</b> ' + escapeHtml(s.drug || s.drugs || '-') + '</div>' +
+                    '<div class="fs-12 text-muted"><b>Ordered by:</b> ' + escapeHtml(s.doctor || s.ordered_by || '-') + ' | <b>Time:</b> ' + escapeHtml(s.time || '-') + '</div></div>' +
+                    '<div style="text-align:right;flex-shrink:0"><div style="font-size:20px;font-weight:900;color:' + (elapsed > 15 ? 'var(--danger)' : 'var(--warning)') + '">' + escapeHtml(elapsedText) + '</div>' +
+                    '<div class="fs-10 text-muted">elapsed</div>' +
+                    '<button class="btn btn-danger btn-xs mt-8" onclick="dispenseSTAT(this, \'' + (escapeHtml(s.rx || s.rx_no || '')) + '\')">🚨 Dispense NOW</button></div></div></div>';
+            })
+            .join('');
+    }
+
     function loadStatOrders() {
         var list = document.getElementById('statOrdersList');
         if (!list) {
             return;
         }
-        var stats = [
+
+        var sampleStats = [
             { rx: 'RX-STAT-001', patient: 'Mohan Lal Gupta - ICU Bed 3', drug: 'Inj. Noradrenaline 4mg + Dopamine 200mg', time: '10:05', elapsed: '8 min', doctor: 'Dr. Negi' },
             { rx: 'RX-STAT-002', patient: 'Deepak Rawat - HDU Bed 1', drug: 'Inj. Furosemide 80mg IV Push + O2 Supply', time: '10:12', elapsed: '1 min', doctor: 'Dr. Bisht' },
             { rx: 'RX-STAT-003', patient: 'Baby Renu - NICU Bed 2', drug: 'Inj. Ampicillin 250mg + Gentamicin 20mg', time: '09:55', elapsed: '18 min', doctor: 'Dr. Verma' }
         ];
 
-        list.innerHTML = stats
-            .map(function (s) {
-                var elapsed = parseInt(s.elapsed, 10);
-                return '' +
-                    '<div style="background:#fff5f5;border:1.5px solid rgba(198,40,40,.2);border-radius:10px;padding:14px;margin-bottom:10px">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">' +
-                    '<div><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
-                    '<span class="badge badge-red">🚨 STAT</span><span class="fw-700 fs-13">' + s.patient + '</span></div>' +
-                    '<div class="fs-12 text-muted mb-4"><b>Drug:</b> ' + s.drug + '</div>' +
-                    '<div class="fs-12 text-muted"><b>Ordered by:</b> ' + s.doctor + ' | <b>Time:</b> ' + s.time + '</div></div>' +
-                    '<div style="text-align:right;flex-shrink:0"><div style="font-size:20px;font-weight:900;color:' + (elapsed > 15 ? 'var(--danger)' : 'var(--warning)') + '">' + s.elapsed + '</div>' +
-                    '<div class="fs-10 text-muted">elapsed</div>' +
-                    '<button class="btn btn-danger btn-xs mt-8" onclick="dispenseSTAT(this, \'' + s.rx + '\')">🚨 Dispense NOW</button></div></div></div>';
+        var url = getStatOrdersLoadUrl();
+        if (!url || typeof window.fetch !== 'function') {
+            renderStatOrders(list, sampleStats);
+            return;
+        }
+
+        // Fetch dynamic STAT orders from server; fall back to sample on error.
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken() || ''
+            }
+        })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
+            .then(function (data) {
+                // support both plain array and Laravel-style { data: [...] }
+                var stats = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : null);
+                if (!stats) {
+                    renderStatOrders(list, sampleStats);
+                    return;
+                }
+                renderStatOrders(list, stats);
             })
-            .join('');
+            .catch(function () {
+                renderStatOrders(list, sampleStats);
+            });
     }
 
     function loadRxValidation() {
@@ -1017,6 +1062,12 @@
         toast('Refreshed', 'Queue refreshed', 'success', 2000);
     };
 
+    window.refreshStatOrders = function () {
+        loadStatOrders();
+        statOrdersLoaded = true;
+        toast('Refreshed', 'STAT orders refreshed', 'success', 2000);
+    };
+
     window.processSTAT = function () {
         toast('STAT Raised', 'STAT order raised - Pharmacist notified', 'error');
         window.closeModal('statOrderModal');
@@ -1260,6 +1311,13 @@
             }
         }
 
+        if (paneId === 'statPane') {
+            if (!statOrdersLoaded) {
+                loadStatOrders();
+                statOrdersLoaded = true;
+            }
+        }
+
         if (paneId === 'poPane') {
             var poWasInit = !!poTable;
             loadPOList();
@@ -1324,7 +1382,6 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         loadDispenseQueue();
-        loadStatOrders();
         loadRxValidation();
         loadGRNLog();
         loadMARContent();

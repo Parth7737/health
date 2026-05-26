@@ -98,6 +98,9 @@
 
             <div id="statPane" class="ph-pane ph-hidden">
                 <div class="alert alert-red mb-12"><span class="alert-icon">🚨</span><div><b>STAT Orders</b> — These require IMMEDIATE dispensing. Target time: &lt;15 minutes.</div></div>
+                <div class="ph-toolbar mb-12">
+                    <button class="btn btn-secondary btn-xs" type="button" onclick="refreshStatOrders()">🔄 Refresh STAT Orders</button>
+                </div>
                 <div id="statOrdersList"></div>
             </div>
 

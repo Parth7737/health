@@ -225,6 +225,13 @@
                             <label class="form-label">Prescription Valid Till</label>
                             <input type="text" class="form-control prescription-valid-till" name="valid_till" value="{{ $prescription?->valid_till ? $prescription->valid_till->format('d-m-Y') : now()->addDays(5)->format('d-m-Y') }}" placeholder="dd-mm-yyyy">
                         </div>
+                        <div class="col-lg-4">
+                            <label class="form-label">Dispense Type</label>
+                            <select class="form-select" name="dispense_type" tabindex="1">
+                                <option value="Normal" {{ $prescription && $prescription->dispense_type === 'Normal' ? 'selected' : '' }}>Normal</option>
+                                <option value="Emergency" {{ $prescription && $prescription->dispense_type === 'Emergency' ? 'selected' : '' }}>Emergency</option>
+                            </select>
+                        </div>
                         <div class="col-lg-8">
                             <div>
                                 <label class="form-label mb-1">Medicine <span class="text-danger">*</span></label>

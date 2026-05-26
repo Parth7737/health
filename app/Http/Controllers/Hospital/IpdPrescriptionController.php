@@ -48,6 +48,7 @@ class IpdPrescriptionController extends BaseHospitalController
 
         $validator = Validator::make($request->all(), [
             'prescription_id' => 'nullable|integer|exists:ipd_prescriptions,id',
+            'dispense_type' => 'nullable|in:Normal,Emergency',
             'valid_till' => 'nullable|date_format:d-m-Y',
             'header_note' => 'nullable|string',
             'footer_note' => 'nullable|string',
@@ -198,6 +199,7 @@ class IpdPrescriptionController extends BaseHospitalController
                 $prescription->doctor_id = $allocation->consultant_doctor_id;
                 $prescription->header_note = $request->input('header_note');
                 $prescription->footer_note = $request->input('footer_note');
+                $prescription->dispense_type = $request->input('dispense_type');
                 $prescription->valid_till = $request->filled('valid_till')
                     ? Carbon::createFromFormat('d-m-Y', $request->input('valid_till'))->format('Y-m-d')
                     : null;
