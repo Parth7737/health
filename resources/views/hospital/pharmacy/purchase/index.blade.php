@@ -21,13 +21,12 @@
                             <thead class="table-light">
                             <tr>
                                 <th>#</th>
-                                <th>Bill No</th>
+                                <th>PO No.</th>
                                 <th>Date</th>
                                 <th>Supplier</th>
-                                <th>Subtotal</th>
-                                <th>Discount</th>
-                                <th>Tax</th>
-                                <th>Net Total</th>
+                                <th>Items</th>
+                                <th>Est. Total</th>
+                                <th>Status</th>
                                 <th>Action</th>
                             </tr>
                             </thead>

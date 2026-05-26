@@ -170,10 +170,14 @@
             </div>
 
             <div id="grnListPane" class="ph-pane ph-hidden">
+                <div class="ph-toolbar mb-12">
+                    <div class="fw-700 fs-14">GRN Log</div>
+                    <button class="btn btn-success btn-sm" type="button" onclick="openModal('grnModal')">📥 New GRN</button>
+                </div>
                 <div class="table-wrap">
-                    <table class="hims-table">
-                        <thead><tr><th>GRN No.</th><th>Supplier</th><th>Invoice No.</th><th>Items</th><th>Total Value</th><th>Received By</th><th>Date</th><th>Status</th></tr></thead>
-                        <tbody id="grnBody"></tbody>
+                    <table class="hims-table display table-striped" id="grnLogTable">
+                        <thead><tr><th>#</th><th>GRN No.</th><th>PO Ref</th><th>Supplier</th><th>Invoice No.</th><th>Items</th><th>Total Value</th><th>Received By</th><th>Date</th></tr></thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
@@ -185,7 +189,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="hims-table display table-striped" id="purchaseOrdersTable">
-                        <thead><tr><th>PO No.</th><th>Supplier</th><th>Items</th><th>Value</th><th>Created By</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead><tr><th>#</th><th>PO No.</th><th>Date</th><th>Supplier</th><th>Items</th><th>Net Total</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -258,6 +262,7 @@
     </div>
 </div>
 
+{{-- ─── GRN Modal (PO-linked dynamic) ─── --}}
 <div class="modal-overlay hidden" id="grnModal" onclick="if(event.target===this) closeModal('grnModal')">
     <div class="modal modal-lg">
         <div class="modal-header">
@@ -265,48 +270,85 @@
             <button class="modal-close" type="button" onclick="closeModal('grnModal')">✕</button>
         </div>
         <div class="modal-body">
-            <div class="form-row cols-3">
-                <div class="form-group"><label class="form-label">Supplier Name <span class="req">*</span></label>
-                    <select class="form-control"><option>Cipla Ltd.</option><option>Sun Pharma</option><option>Dr. Reddy's</option><option>Abbott India</option><option>Lupin Ltd.</option></select>
+            <form id="grnForm">
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label class="form-label">Select Approved PO <span class="req">*</span></label>
+                        <select class="form-control" name="purchase_bill_id" id="grn_po_select">
+                            <option value="">— Select —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Supplier</label>
+                        <input class="form-control" id="grn_supplier_display" readonly placeholder="Auto from PO">
+                    </div>
                 </div>
-                <div class="form-group"><label class="form-label">Invoice No. <span class="req">*</span></label><input class="form-control" placeholder="INV-2024-XXXXX"></div>
-                <div class="form-group"><label class="form-label">Invoice Date</label><input type="date" class="form-control"></div>
-            </div>
-            <div class="form-row cols-3">
-                <div class="form-group"><label class="form-label">PO Reference</label><input class="form-control" placeholder="PO-2024-XXXXX"></div>
-                <div class="form-group"><label class="form-label">Vehicle No.</label><input class="form-control" placeholder="UK-XX-XXXX"></div>
-                <div class="form-group"><label class="form-label">Temperature (Cold Chain)</label><select class="form-control"><option>Room Temp (N/A)</option><option>2-8°C (Cold Chain OK)</option><option>Cold Chain Broken</option></select></div>
-            </div>
-            <div class="ph-toolbar mb-8 mt-12">
-                <div class="fw-700 fs-13">Drug Items</div>
-                <button class="btn btn-outline-primary btn-xs" type="button" onclick="addGRNRow()">+ Add Item</button>
-            </div>
-            <div class="table-wrap">
-                <table class="hims-table">
-                    <thead><tr><th>Drug Name</th><th>Batch No.</th><th>Mfg Date</th><th>Expiry</th><th>Qty</th><th>Free Qty</th><th>MRP ₹</th><th>Rate ₹</th><th>Amount</th><th></th></tr></thead>
-                    <tbody id="grnItemBody">
-                        <tr id="grnRow0">
-                            <td><input class="form-control ph-grid-input" placeholder="Drug name" oninput="calcGRNRow(0)"></td>
-                            <td><input class="form-control ph-grid-input ph-grid-input-batch" placeholder="Batch"></td>
-                            <td><input type="date" class="form-control ph-grid-input"></td>
-                            <td><input type="date" class="form-control ph-grid-input"></td>
-                            <td><input type="number" class="form-control ph-grid-input ph-grid-input-qty" id="grnQty0" oninput="calcGRNRow(0)" placeholder="100"></td>
-                            <td><input type="number" class="form-control ph-grid-input ph-grid-input-free" placeholder="0"></td>
-                            <td><input type="number" class="form-control ph-grid-input ph-grid-input-price" id="grnMRP0" placeholder="10"></td>
-                            <td><input type="number" class="form-control ph-grid-input ph-grid-input-price" id="grnRate0" oninput="calcGRNRow(0)" placeholder="8.5"></td>
-                            <td><span id="grnAmt0" class="fw-700 fs-12">₹0</span></td>
-                            <td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest('tr').remove(); updateGRNTotal();">✕</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="ph-total-wrap">
-                <span class="fw-700 fs-14">Total GRN Value: <span id="grnTotal" class="text-primary">₹0</span></span>
-            </div>
+                <div class="form-row cols-3">
+                    <div class="form-group">
+                        <label class="form-label">Invoice No.</label>
+                        <input class="form-control" name="invoice_no" placeholder="INV-XXXXX">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Invoice Date</label>
+                        <input type="date" class="form-control" name="invoice_date" value="{{ date('Y-m-d') }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Vehicle No.</label>
+                        <input class="form-control" name="vehicle_no" placeholder="UK-XX-XXXX">
+                    </div>
+                </div>
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label class="form-label">Temperature (Cold Chain)</label>
+                        <select class="form-control" name="temperature_status">
+                            <option value="Room Temp (N/A)">Room Temp (N/A)</option>
+                            <option value="2-8°C (Cold Chain OK)">2-8°C (Cold Chain OK)</option>
+                            <option value="Cold Chain Broken">Cold Chain Broken</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <input class="form-control" name="notes" placeholder="Optional remarks">
+                    </div>
+                </div>
+
+                <div class="ph-toolbar mb-8 mt-12">
+                    <div class="fw-700 fs-13">Receive Items — Inspect & Enter Details</div>
+                </div>
+                <div class="alert alert-orange mb-8" id="grnNoPoAlert" style="padding:8px 12px">
+                    <span class="alert-icon">ℹ️</span><div>Select an approved PO above to load items.</div>
+                </div>
+                <div class="table-wrap" id="grnItemsWrap" style="display:none">
+                    <table class="hims-table">
+                        <thead>
+                            <tr>
+                                <th>Drug Name</th>
+                                <th>Ordered</th>
+                                <th>Remaining</th>
+                                <th>Batch No. <span class="req">*</span></th>
+                                <th>Expiry</th>
+                                <th>Recd. Qty <span class="req">*</span></th>
+                                <th>Free Qty</th>
+                                <th>Rejected</th>
+                                <th>Pur. Price ₹</th>
+                                <th>Sale Price ₹</th>
+                                <th>MRP ₹</th>
+                                <th>Tax%</th>
+                                <th>Accepted</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="grnItemBody"></tbody>
+                    </table>
+                </div>
+                <div class="ph-total-wrap">
+                    <span class="fw-700 fs-14">Accepted Stock Value: <span id="grnTotal" class="text-primary">₹0.00</span></span>
+                </div>
+            </form>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" type="button" onclick="closeModal('grnModal')">Cancel</button>
-            <button class="btn btn-success" type="button" onclick="submitGRN()">✅ Submit GRN & Update Stock</button>
+            <button class="btn btn-success" type="button" id="submitGRNBtn">✅ Submit GRN & Inward Stock</button>
         </div>
     </div>
 </div>
@@ -336,8 +378,60 @@
         </div>
     </div>
 </div>
+{{-- ─── New Purchase Order Modal (simplified) ─── --}}
+<div class="modal-overlay hidden" id="newPOModal" onclick="if(event.target===this) closeModal('newPOModal')">
+    <div class="modal modal-md">
+        <div class="modal-header">
+            <div class="modal-title">📤 New Purchase Order</div>
+            <button class="modal-close" type="button" onclick="closeModal('newPOModal')">✕</button>
+        </div>
+        <div class="modal-body">
+            <form id="newPOForm">
+                <div class="form-row cols-3">
+                    <div class="form-group">
+                        <label class="form-label">Supplier <span class="req">*</span></label>
+                        <select class="form-control" name="supplier_id" id="po_supplier_id">
+                            <option value="">— Select —</option>
+                            @foreach($suppliers as $s)
+                                <option value="{{ $s->id }}">{{ $s->name }}{{ $s->phone ? ' ('.$s->phone.')' : '' }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Order Date <span class="req">*</span></label>
+                        <input type="date" class="form-control" name="bill_date" value="{{ date('Y-m-d') }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <input class="form-control" name="notes" placeholder="Optional remarks">
+                    </div>
+                </div>
+                <div class="ph-toolbar mb-8 mt-12">
+                    <div class="fw-700 fs-13">Order Items</div>
+                    <button class="btn btn-outline-primary btn-xs" type="button" id="addPOItemRow">+ Add Item</button>
+                </div>
+                <div class="table-wrap">
+                    <table class="hims-table">
+                        <thead><tr><th>Drug Name <span class="req">*</span></th><th>Qty <span class="req">*</span></th><th>Est. Rate ₹</th><th>Est. Amount</th><th></th></tr></thead>
+                        <tbody id="poItemBody"></tbody>
+                    </table>
+                </div>
+                <div class="ph-total-wrap">
+                    <span class="fw-700 fs-14">Estimated Total: <span id="poTotal" class="text-primary">₹0.00</span></span>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" type="button" onclick="closeModal('newPOModal')">Cancel</button>
+            <button class="btn btn-primary" type="button" id="submitNewPO">📤 Create Purchase Order</button>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 @include('layouts.partials.datatable-js')
+<script>
+window.poMedicines = @json($medicines);
+</script>
 @endpush

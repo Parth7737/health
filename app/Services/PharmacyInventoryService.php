@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\PharmacyGrn;
 use App\Models\PharmacyPurchaseBill;
 use App\Models\PharmacySaleBill;
 use App\Models\PharmacyStockBatch;
@@ -31,121 +32,264 @@ class PharmacyInventoryService
 
             $bill = PharmacyPurchaseBill::create([
                 'hospital_id' => $hospitalId,
-                'bill_no' => Arr::get($payload, 'bill_no') ?: $this->billNumberService->nextPurchaseBillNo($hospitalId, new \DateTime($billDate)),
-                'bill_date' => $billDate,
+                'bill_no'     => $this->billNumberService->nextPurchaseBillNo($hospitalId, new \DateTime($billDate)),
+                'bill_date'   => $billDate,
                 'supplier_id' => Arr::get($payload, 'supplier_id') ?: null,
-                'supplier_name' => Arr::get($payload, 'supplier_name'),
-                'supplier_invoice_no' => Arr::get($payload, 'supplier_invoice_no'),
-                'notes' => Arr::get($payload, 'notes'),
-                'created_by' => auth()->id(),
-                'updated_by' => auth()->id(),
+                'notes'       => Arr::get($payload, 'notes'),
+                'created_by'  => auth()->id(),
+                'updated_by'  => auth()->id(),
             ]);
 
-            $subtotal = 0.0;
-            $taxTotal = 0.0;
-            $discountTotal = 0.0;
+            $estimatedTotal = 0.0;
 
             foreach ($items as $item) {
-                $qtyPurchased = (float) Arr::get($item, 'quantity_purchased', 0);
-                $qtyFree = (float) Arr::get($item, 'quantity_free', 0);
-                $totalQty = $qtyPurchased + $qtyFree;
-
-                if ($totalQty <= 0) {
+                $qty = (float) Arr::get($item, 'quantity_purchased', 0);
+                if ($qty <= 0) {
                     throw new RuntimeException('Purchase item quantity must be greater than zero.');
                 }
 
-                $purchasePrice = (float) Arr::get($item, 'unit_purchase_price', 0);
-                $salePrice = (float) Arr::get($item, 'unit_sale_price', 0);
-                $mrp = (float) Arr::get($item, 'unit_mrp', $salePrice);
-                $taxPercent = (float) Arr::get($item, 'tax_percent', 0);
+                $estRate = (float) Arr::get($item, 'unit_purchase_price', 0);
+                $lineEst = round($qty * $estRate, 2);
 
-                $lineSubtotal = round($qtyPurchased * $purchasePrice, 2);
-                $lineTax = round(($lineSubtotal * $taxPercent) / 100, 2);
-                $lineTotal = round($lineSubtotal + $lineTax, 2);
-
-                $purchaseItem = $bill->items()->create([
-                    'medicine_id' => (int) Arr::get($item, 'medicine_id'),
-                    'batch_no' => (string) Arr::get($item, 'batch_no'),
-                    'mfg_date' => Arr::get($item, 'mfg_date'),
-                    'expiry_date' => Arr::get($item, 'expiry_date'),
-                    'pack_size' => Arr::get($item, 'pack_size'),
-                    'unit_purchase_price' => $purchasePrice,
-                    'unit_sale_price' => $salePrice,
-                    'unit_mrp' => $mrp,
-                    'quantity_purchased' => $qtyPurchased,
-                    'quantity_free' => $qtyFree,
-                    'quantity_received' => 0,
-                    'total_quantity' => $totalQty,
-                    'discount_percent' => 0,
-                    'tax_percent' => $taxPercent,
-                    'tax_amount' => $lineTax,
-                    'line_subtotal' => $lineSubtotal,
-                    'line_total' => $lineTotal,
+                $bill->items()->create([
+                    'medicine_id'        => (int) Arr::get($item, 'medicine_id'),
+                    'batch_no'           => '',
+                    'quantity_purchased'  => $qty,
+                    'quantity_free'       => 0,
+                    'quantity_received'   => 0,
+                    'total_quantity'      => $qty,
+                    'unit_purchase_price' => $estRate,
+                    'unit_sale_price'     => 0,
+                    'unit_mrp'            => 0,
+                    'tax_percent'         => 0,
+                    'tax_amount'          => 0,
+                    'line_subtotal'       => $lineEst,
+                    'line_total'          => $lineEst,
                 ]);
 
-                $batch = PharmacyStockBatch::create([
-                    'hospital_id' => $hospitalId,
-                    'medicine_id' => (int) Arr::get($item, 'medicine_id'),
-                    'purchase_item_id' => $purchaseItem->id,
-                    'batch_no' => (string) Arr::get($item, 'batch_no'),
-                    'mfg_date' => Arr::get($item, 'mfg_date'),
-                    'expiry_date' => Arr::get($item, 'expiry_date'),
-                    'unit_purchase_price' => $purchasePrice,
-                    'unit_sale_price' => $salePrice,
-                    'unit_mrp' => $mrp,
-                    'available_qty' => $totalQty,
-                    'status' => 'active',
-                    'received_at' => now(),
-                ]);
-
-                $this->createLedgerEntry([
-                    'hospital_id' => $hospitalId,
-                    'medicine_id' => (int) Arr::get($item, 'medicine_id'),
-                    'stock_batch_id' => $batch->id,
-                    'reference_type' => PharmacyPurchaseBill::class,
-                    'reference_id' => $bill->id,
-                    'entry_type' => 'in',
-                    'quantity' => $totalQty,
-                    'balance_after' => $batch->available_qty,
-                    'unit_purchase_price' => $purchasePrice,
-                    'unit_sale_price' => $salePrice,
-                    'remarks' => 'Purchase stock inward',
-                ]);
-
-                $subtotal += $lineSubtotal;
-                $taxTotal += $lineTax;
+                $estimatedTotal += $lineEst;
             }
-
-            $shipping = (float) Arr::get($payload, 'shipping_amount', 0);
-            $roundOff = (float) Arr::get($payload, 'round_off', 0);
-
-            // Bill-level discount: percent or fixed
-            $discountType = Arr::get($payload, 'discount_type', 'fixed');
-            $discountValue = (float) Arr::get($payload, 'discount_value', 0);
-            if ($discountType === 'percent') {
-                $billDiscount = round(($subtotal * $discountValue) / 100, 2);
-            } else {
-                $billDiscount = round($discountValue, 2);
-            }
-
-            $netTotal = round(max(0, $subtotal - $billDiscount + $taxTotal + $shipping + $roundOff), 2);
 
             $bill->update([
-                'subtotal' => round($subtotal, 2),
-                'discount_amount' => $billDiscount,
-                'discount_type' => $discountType,
-                'tax_amount' => round($taxTotal, 2),
-                'shipping_amount' => $shipping,
-                'round_off' => $roundOff,
-                'net_total' => $netTotal,
-                'paid_amount' => $netTotal,
-                'due_amount' => 0,
-                'payment_status' => 'paid',
-                'updated_by' => auth()->id(),
+                'subtotal'       => round($estimatedTotal, 2),
+                'net_total'      => round($estimatedTotal, 2),
+                'paid_amount'    => 0,
+                'due_amount'     => round($estimatedTotal, 2),
+                'payment_status' => 'pending',
+                'status'         => 'pending',
+                'updated_by'     => auth()->id(),
             ]);
 
             return $bill->fresh(['items']);
         });
+    }
+
+    /**
+     * Approve a pending PO — no stock inward here, that happens via GRN.
+     */
+    public function approvePurchaseBill(PharmacyPurchaseBill $bill): PharmacyPurchaseBill
+    {
+        if ($bill->status !== 'pending') {
+            throw new RuntimeException('Only pending purchase orders can be approved.');
+        }
+
+        $bill->update([
+            'status'      => 'approved',
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ]);
+
+        return $bill->fresh(['items']);
+    }
+
+    /**
+     * Create a GRN against an approved PO.
+     * Stock inward = accepted qty (received - rejected) per item.
+     */
+    public function createGRN(array $payload): PharmacyGrn
+    {
+        return DB::transaction(function () use ($payload) {
+            $hospitalId = (int) $payload['hospital_id'];
+            $bill = PharmacyPurchaseBill::with('items')->findOrFail($payload['purchase_bill_id']);
+
+            if (! in_array($bill->status, ['approved', 'partially_received'])) {
+                throw new RuntimeException('GRN can only be created against an approved purchase order.');
+            }
+            if ((int) $bill->hospital_id !== $hospitalId) {
+                throw new RuntimeException('PO does not belong to this hospital.');
+            }
+
+            $grn = PharmacyGrn::create([
+                'hospital_id'      => $hospitalId,
+                'grn_no'           => $this->billNumberService->nextGrnNo($hospitalId),
+                'purchase_bill_id' => $bill->id,
+                'supplier_id'      => $bill->supplier_id,
+                'invoice_no'       => Arr::get($payload, 'invoice_no'),
+                'invoice_date'     => Arr::get($payload, 'invoice_date'),
+                'vehicle_no'       => Arr::get($payload, 'vehicle_no'),
+                'temperature_status' => Arr::get($payload, 'temperature_status'),
+                'notes'            => Arr::get($payload, 'notes'),
+                'received_by'      => auth()->id(),
+                'received_at'      => now(),
+                'created_by'       => auth()->id(),
+            ]);
+
+            $grnItems = Arr::get($payload, 'items', []);
+            if (empty($grnItems)) {
+                throw new RuntimeException('At least one GRN item is required.');
+            }
+
+            $totalValue = 0.0;
+
+            foreach ($grnItems as $grnItem) {
+                $purchaseItemId = (int) Arr::get($grnItem, 'purchase_item_id');
+                $purchaseItem   = $bill->items->firstWhere('id', $purchaseItemId);
+                if (! $purchaseItem) {
+                    throw new RuntimeException('Invalid purchase item reference.');
+                }
+
+                $qtyReceived = (float) Arr::get($grnItem, 'quantity_received', 0);
+                $qtyFree     = (float) Arr::get($grnItem, 'quantity_free', 0);
+                $qtyRejected = (float) Arr::get($grnItem, 'quantity_rejected', 0);
+                $qtyAccepted = max(0, $qtyReceived - $qtyRejected);
+
+                if ($qtyReceived <= 0) {
+                    continue;
+                }
+
+                // Ensure we don't over-receive beyond ordered qty
+                $alreadyReceived = (float) $purchaseItem->quantity_received;
+                $orderedTotal    = (float) $purchaseItem->total_quantity;
+                $maxReceivable   = $orderedTotal - $alreadyReceived;
+                if ($qtyReceived > $maxReceivable) {
+                    throw new RuntimeException(
+                        'Cannot receive more than remaining ordered qty for ' .
+                        ($purchaseItem->medicine?->name ?? 'item #' . $purchaseItem->id) .
+                        '. Remaining: ' . $maxReceivable
+                    );
+                }
+
+                $batchNo       = (string) Arr::get($grnItem, 'batch_no', '');
+                $expiryDate    = Arr::get($grnItem, 'expiry_date');
+                $purchasePrice = (float) Arr::get($grnItem, 'unit_purchase_price', 0);
+                $salePrice     = (float) Arr::get($grnItem, 'unit_sale_price', 0);
+                $mrp           = (float) Arr::get($grnItem, 'unit_mrp', $salePrice);
+                $taxPercent    = (float) Arr::get($grnItem, 'tax_percent', 0);
+
+                $lineSubtotal = round($qtyAccepted * $purchasePrice, 2);
+                $lineTax      = round(($lineSubtotal * $taxPercent) / 100, 2);
+                $lineTotal    = round($lineSubtotal + $lineTax, 2);
+
+                $grn->items()->create([
+                    'purchase_item_id'    => $purchaseItem->id,
+                    'medicine_id'         => $purchaseItem->medicine_id,
+                    'batch_no'            => $batchNo,
+                    'expiry_date'         => $expiryDate,
+                    'quantity_ordered'    => $purchaseItem->total_quantity,
+                    'quantity_received'   => $qtyReceived,
+                    'quantity_free'       => $qtyFree,
+                    'quantity_rejected'   => $qtyRejected,
+                    'quantity_accepted'   => $qtyAccepted,
+                    'rejection_reason'    => Arr::get($grnItem, 'rejection_reason'),
+                    'unit_purchase_price' => $purchasePrice,
+                    'unit_sale_price'     => $salePrice,
+                    'unit_mrp'            => $mrp,
+                    'tax_percent'         => $taxPercent,
+                    'tax_amount'          => $lineTax,
+                    'line_total'          => $lineTotal,
+                ]);
+
+                // Update PO item received qty
+                $purchaseItem->update([
+                    'quantity_received' => $alreadyReceived + $qtyReceived,
+                ]);
+
+                // Stock inward for accepted qty (+ free qty) only
+                $stockQty = $qtyAccepted + $qtyFree;
+                if ($stockQty > 0) {
+                    $batch = PharmacyStockBatch::create([
+                        'hospital_id'         => $hospitalId,
+                        'medicine_id'         => $purchaseItem->medicine_id,
+                        'purchase_item_id'    => $purchaseItem->id,
+                        'batch_no'            => $batchNo,
+                        'expiry_date'         => $expiryDate,
+                        'unit_purchase_price' => $purchasePrice,
+                        'unit_sale_price'     => $salePrice,
+                        'unit_mrp'            => $mrp,
+                        'available_qty'       => $stockQty,
+                        'status'              => 'active',
+                        'received_at'         => now(),
+                    ]);
+
+                    $this->createLedgerEntry([
+                        'hospital_id'         => $hospitalId,
+                        'medicine_id'         => $purchaseItem->medicine_id,
+                        'stock_batch_id'      => $batch->id,
+                        'reference_type'      => PharmacyGrn::class,
+                        'reference_id'        => $grn->id,
+                        'entry_type'          => 'in',
+                        'quantity'            => $stockQty,
+                        'balance_after'       => $batch->available_qty,
+                        'unit_purchase_price' => $purchasePrice,
+                        'unit_sale_price'     => $salePrice,
+                        'remarks'             => 'GRN stock inward (' . $grn->grn_no . ')',
+                    ]);
+                }
+
+                // Record rejected qty as damaged if any
+                if ($qtyRejected > 0 && isset($batch)) {
+                    $batch->update([
+                        'damaged_qty' => $qtyRejected,
+                    ]);
+                }
+
+                $totalValue += $lineTotal;
+            }
+
+            $grn->update(['total_value' => round($totalValue, 2)]);
+
+            // Update PO fulfilment status
+            $bill->refresh();
+            $bill->load('items');
+            $allReceived = $bill->items->every(fn ($item) =>
+                (float) $item->quantity_received >= (float) $item->total_quantity
+            );
+            $anyReceived = $bill->items->contains(fn ($item) =>
+                (float) $item->quantity_received > 0
+            );
+
+            if ($allReceived) {
+                $bill->update([
+                    'status'         => 'received',
+                    'paid_amount'    => $bill->net_total,
+                    'due_amount'     => 0,
+                    'payment_status' => 'paid',
+                ]);
+            } elseif ($anyReceived) {
+                $bill->update(['status' => 'partially_received']);
+            }
+
+            return $grn->fresh(['items.medicine', 'purchaseBill']);
+        });
+    }
+
+    /**
+     * Reject a pending PO.
+     */
+    public function rejectPurchaseBill(PharmacyPurchaseBill $bill, string $reason = ''): PharmacyPurchaseBill
+    {
+        if ($bill->status !== 'pending') {
+            throw new RuntimeException('Only pending purchase orders can be rejected.');
+        }
+
+        $bill->update([
+            'status'        => 'rejected',
+            'approved_by'   => auth()->id(),
+            'approved_at'   => now(),
+            'reject_reason' => $reason,
+        ]);
+
+        return $bill->fresh();
     }
 
     /**

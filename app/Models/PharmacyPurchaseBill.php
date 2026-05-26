@@ -21,6 +21,7 @@ class PharmacyPurchaseBill extends Model
         'net_total' => 'decimal:2',
         'paid_amount' => 'decimal:2',
         'due_amount' => 'decimal:2',
+        'approved_at' => 'datetime',
     ];
 
     protected static function booted()
@@ -46,5 +47,15 @@ class PharmacyPurchaseBill extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function grns(): HasMany
+    {
+        return $this->hasMany(PharmacyGrn::class, 'purchase_bill_id');
     }
 }

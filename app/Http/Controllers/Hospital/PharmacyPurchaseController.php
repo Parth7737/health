@@ -28,6 +28,8 @@ class PharmacyPurchaseController extends BaseHospitalController
             'loadtable' => route('hospital.pharmacy.purchase-load'),
             'showform'  => route('hospital.pharmacy.purchase.showform'),
             'update'    => route('hospital.pharmacy.purchase.update', ['bill' => '__ID__']),
+            'approve'   => route('hospital.pharmacy.purchase.approve', ['bill' => '__ID__']),
+            'reject'    => route('hospital.pharmacy.purchase.reject', ['bill' => '__ID__']),
             'print'     => route('hospital.pharmacy.purchase.print', ['bill' => '__ID__']),
         ];
     }
@@ -46,7 +48,9 @@ class PharmacyPurchaseController extends BaseHospitalController
 
         return DataTables::of($data)
             ->editColumn('bill_date', fn ($row) => optional($row->bill_date)->format('d-m-Y'))
+            ->editColumn('status', fn ($row) => $row->status ?? 'pending')
             ->addColumn('supplier_name', fn ($row) => $row->supplier?->name ?? $row->supplier_name ?? '—')
+            ->addColumn('items_count', fn ($row) => $row->items_count)
             ->addColumn('created_by_name', fn ($row) => $row->createdBy?->name ?? '—')
             ->addColumn('actions', function ($row) {
                 return view('hospital.pharmacy.purchase.partials.actions', compact('row'))->render();
@@ -74,24 +78,13 @@ class PharmacyPurchaseController extends BaseHospitalController
     public function store(Request $request, PharmacyInventoryService $inventoryService)
     {
         $validator = Validator::make($request->all(), [
-            'bill_date'            => 'required|date',
-            'supplier_id'          => 'nullable|exists:pharmacy_suppliers,id',
-            'supplier_invoice_no'  => 'nullable|string|max:255',
-            'discount_type'        => 'nullable|in:percent,fixed',
-            'discount_value'       => 'nullable|numeric|min:0',
-            'shipping_amount'      => 'nullable|numeric|min:0',
-            'round_off'            => 'nullable|numeric',
-            'notes'                => 'nullable|string',
-            'items'                => 'required|array|min:1',
-            'items.*.medicine_id'  => 'required|exists:medicines,id',
-            'items.*.batch_no'     => 'required|string|max:100',
-            'items.*.expiry_date'  => 'nullable|date',
-            'items.*.unit_purchase_price' => 'required|numeric|min:0',
-            'items.*.unit_sale_price'     => 'required|numeric|min:0',
-            'items.*.unit_mrp'            => 'nullable|numeric|min:0',
+            'bill_date'                   => 'required|date',
+            'supplier_id'                 => 'nullable|exists:pharmacy_suppliers,id',
+            'notes'                       => 'nullable|string',
+            'items'                       => 'required|array|min:1',
+            'items.*.medicine_id'         => 'required|exists:medicines,id',
             'items.*.quantity_purchased'  => 'required|numeric|min:1',
-            'items.*.quantity_free'       => 'nullable|numeric|min:0',
-            'items.*.tax_percent'         => 'nullable|numeric|min:0|max:100',
+            'items.*.unit_purchase_price' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -100,16 +93,11 @@ class PharmacyPurchaseController extends BaseHospitalController
 
         try {
             $bill = $inventoryService->createPurchaseBill([
-                'hospital_id'         => $this->hospital_id,
-                'bill_date'           => $request->bill_date,
-                'supplier_id'         => $request->supplier_id,
-                'supplier_invoice_no' => $request->supplier_invoice_no,
-                'discount_type'       => $request->discount_type ?? 'fixed',
-                'discount_value'      => $request->discount_value ?? 0,
-                'shipping_amount'     => $request->shipping_amount ?? 0,
-                'round_off'           => $request->round_off ?? 0,
-                'notes'               => $request->notes,
-                'items'               => $request->items,
+                'hospital_id' => $this->hospital_id,
+                'bill_date'   => $request->bill_date,
+                'supplier_id' => $request->supplier_id,
+                'notes'       => $request->notes,
+                'items'       => $request->items,
             ]);
         } catch (Throwable $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()], 422);
@@ -152,6 +140,44 @@ class PharmacyPurchaseController extends BaseHospitalController
         return response()->json([
             'status'  => true,
             'message' => 'Purchase bill updated successfully.',
+            'bill_no' => $bill->bill_no,
+        ]);
+    }
+
+    public function approve(PharmacyPurchaseBill $bill, PharmacyInventoryService $inventoryService)
+    {
+        if ($bill->hospital_id !== $this->hospital_id) {
+            abort(403);
+        }
+
+        try {
+            $bill = $inventoryService->approvePurchaseBill($bill);
+        } catch (Throwable $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Purchase order approved. Stock inward completed.',
+            'bill_no' => $bill->bill_no,
+        ]);
+    }
+
+    public function reject(Request $request, PharmacyPurchaseBill $bill, PharmacyInventoryService $inventoryService)
+    {
+        if ($bill->hospital_id !== $this->hospital_id) {
+            abort(403);
+        }
+
+        try {
+            $bill = $inventoryService->rejectPurchaseBill($bill, $request->input('reject_reason', ''));
+        } catch (Throwable $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Purchase order rejected.',
             'bill_no' => $bill->bill_no,
         ]);
     }

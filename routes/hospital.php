@@ -349,7 +349,16 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::post('purchase/load', 'PharmacyPurchaseController@loaddata')->name('purchase-load');
             Route::post('purchase/show-form', 'PharmacyPurchaseController@showform')->name('purchase.showform');
             Route::post('purchase/{bill}/update', 'PharmacyPurchaseController@update')->name('purchase.update');
+            Route::post('purchase/{bill}/approve', 'PharmacyPurchaseController@approve')->name('purchase.approve');
+            Route::post('purchase/{bill}/reject', 'PharmacyPurchaseController@reject')->name('purchase.reject');
             Route::get('purchase/{bill}/print', 'PharmacyPurchaseController@printBill')->name('purchase.print');
+        });
+
+        // Pharmacy GRN
+        Route::middleware(['permission:view-pharmacy-purchase'])->group(function () {
+            Route::post('grn/store', 'PharmacyGrnController@store')->name('grn.store');
+            Route::post('grn/load', 'PharmacyGrnController@loaddata')->name('grn-load');
+            Route::get('grn/approved-pos', 'PharmacyGrnController@approvedPOs')->name('grn.approved-pos');
         });
 
         // Pharmacy Sale

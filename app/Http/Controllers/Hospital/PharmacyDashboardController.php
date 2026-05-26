@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Hospital;
 
 use App\Http\Controllers\BaseHospitalController;
+use App\Models\Medicine;
 use App\Models\MedicineCategory;
+use App\Models\PharmacySupplier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
@@ -26,21 +28,29 @@ class PharmacyDashboardController extends BaseHospitalController
             'expiryLoad' => route('hospital.pharmacy.expiry-load'),
             'expiryProcess' => route('hospital.pharmacy.expiry.process'),
             'purchaseLoad' => route('hospital.pharmacy.purchase-load'),
+            'purchaseStore' => route('hospital.pharmacy.purchase.store'),
+            'purchaseShowform' => route('hospital.pharmacy.purchase.showform'),
+            'purchaseApprove' => route('hospital.pharmacy.purchase.approve', ['bill' => '__ID__']),
+            'purchaseReject' => route('hospital.pharmacy.purchase.reject', ['bill' => '__ID__']),
             'purchasePrint' => route('hospital.pharmacy.purchase.print', ['bill' => '__ID__']),
+            'grnStore' => route('hospital.pharmacy.grn.store'),
+            'grnLoad' => route('hospital.pharmacy.grn-load'),
+            'grnApprovedPOs' => route('hospital.pharmacy.grn.approved-pos'),
         ];
     }
 
     public function index()
     {
-        $medicineCategories = MedicineCategory::query()
-            ->select('id', 'name')
-            ->orderBy('name')
-            ->get();
+        $medicineCategories = MedicineCategory::query()->select('id', 'name')->orderBy('name')->get();
+        $medicines = Medicine::query()->select('id', 'name', 'unit')->orderBy('name')->get();
+        $suppliers = PharmacySupplier::query()->select('id', 'name', 'phone')->orderBy('name')->get();
 
         return view('hospital.pharmacy.dashboard', [
             'pathurl' => 'pharmacy-dashboard',
             'routes'  => $this->routes,
             'medicineCategories' => $medicineCategories,
+            'medicines' => $medicines,
+            'suppliers' => $suppliers,
         ]);
     }
 

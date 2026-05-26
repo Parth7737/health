@@ -30,6 +30,26 @@
     window.openModal = window.openModal || fallbackOpenModal;
     window.closeModal = window.closeModal || fallbackCloseModal;
 
+    // Wrap the global openModal to hook into PO/GRN modal opens
+    var _origOpenModal = window.openModal;
+    window.openModal = function (id) {
+        _origOpenModal(id);
+        if (id === 'newPOModal') {
+            initNewPOModal();
+        }
+        if (id === 'grnModal') {
+            loadApprovedPOs();
+        }
+    };
+
+    function initNewPOModal() {
+        var body = document.getElementById('poItemBody');
+        if (body && body.children.length === 0) {
+            body.innerHTML = buildPORow();
+            recalcPOTotal();
+        }
+    }
+
     var dispenseTable = null;
     var inventoryTable = null;
     var expiryTable = null;
@@ -820,22 +840,57 @@
         }
     }
 
-    function loadGRNLog() {
-        var body = document.getElementById('grnBody');
-        if (!body) {
-            return;
+    function getGrnLoadUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('grnLoad'); } catch (e) { return ''; }
         }
-        var grns = [
-            { grn: 'GRN-2024-0458', supplier: 'Cipla Ltd.', inv: 'INV-C-8821', items: 24, value: '₹84,500', by: 'Pharmacist Suresh', date: 'Today', status: 'verified' },
-            { grn: 'GRN-2024-0457', supplier: 'Sun Pharma', inv: 'INV-SP-3392', items: 18, value: '₹62,000', by: 'Pharmacist Suresh', date: 'Yesterday', status: 'verified' },
-            { grn: 'GRN-2024-0456', supplier: 'Dr. Reddy\'s', inv: 'INV-DR-1123', items: 31, value: '₹1,15,800', by: 'Pharmacist Suresh', date: '3 days ago', status: 'partial' }
-        ];
+        return '';
+    }
 
-        body.innerHTML = grns
-            .map(function (g) {
-                return '<tr><td class="fw-700 text-primary">' + g.grn + '</td><td>' + g.supplier + '</td><td class="text-muted">' + g.inv + '</td><td>' + g.items + '</td><td class="fw-700">' + g.value + '</td><td class="text-muted">' + g.by + '</td><td class="text-muted">' + g.date + '</td><td><span class="badge badge-' + (g.status === 'verified' ? 'green' : 'orange') + '">' + g.status + '</span></td></tr>';
-            })
-            .join('');
+    function getGrnStoreUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('grnStore'); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getGrnApprovedPOsUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('grnApprovedPOs'); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    var grnLogTable = null;
+
+    function loadGRNLog() {
+        var tableNode = document.getElementById('grnLogTable');
+        if (!tableNode) return;
+        var url = getGrnLoadUrl();
+        if (!url || typeof window.$ === 'undefined' || typeof window.$.fn.DataTable === 'undefined') return;
+        if (grnLogTable) return;
+
+        grnLogTable = window.$('#grnLogTable').DataTable({
+            processing: true, serverSide: true, paging: true, info: true,
+            searching: true, ordering: true, responsive: true, autoWidth: false,
+            ajax: { url: url, type: 'POST', data: function (d) { d._token = getCsrfToken(); } },
+            columns: [
+                { data: null, orderable: false, searchable: false, render: function (d, t, r, m) { return m.row + m.settings._iDisplayStart + 1; } },
+                { data: 'grn_no', name: 'grn_no' },
+                { data: 'po_no', name: 'po_no', orderable: false },
+                { data: 'supplier_name', name: 'supplier_name', orderable: false },
+                { data: 'invoice_no', name: 'invoice_no', defaultContent: '—' },
+                { data: 'items_count', orderable: false, searchable: false },
+                { data: 'total_value', name: 'total_value', render: function (v) { return '<span class="fw-700">' + formatCurrency(v) + '</span>'; } },
+                { data: 'received_by_name', orderable: false },
+                { data: 'received_at', name: 'received_at' }
+            ],
+            columnDefs: [
+                { targets: 1, render: function (d, t) { return t !== 'display' ? d : '<span class="fw-700 text-primary">' + escapeHtml(d || '-') + '</span>'; } },
+                { targets: 2, render: function (d, t) { return t !== 'display' ? d : '<span class="text-muted">' + escapeHtml(d || '-') + '</span>'; } }
+            ],
+            language: { search: '', searchPlaceholder: 'Search GRN log...' }
+        });
     }
 
     function loadPOList() {
@@ -870,41 +925,25 @@
                 }
             },
             columns: [
+                { data: null, orderable: false, searchable: false, render: function (d, t, r, m) { return m.row + m.settings._iDisplayStart + 1; } },
                 { data: 'bill_no', name: 'bill_no' },
+                { data: 'bill_date', name: 'bill_date' },
                 { data: 'supplier_name', name: 'supplier_name', orderable: false },
                 { data: 'items_count', name: 'items_count', orderable: false, searchable: false },
                 { data: 'net_total', name: 'net_total' },
-                { data: 'created_by_name', name: 'created_by_name', orderable: false },
-                { data: 'bill_date', name: 'bill_date' },
-                { data: 'payment_status', name: 'payment_status', orderable: false },
+                { data: 'status', name: 'status', orderable: false },
                 { data: 'id', name: 'id', orderable: false, searchable: false }
             ],
             columnDefs: [
                 {
-                    targets: 0,
+                    targets: 1,
                     render: function (data, type) {
                         if (type !== 'display') { return data; }
                         return '<span class="fw-700 text-primary">' + escapeHtml(data || '-') + '</span>';
                     }
                 },
                 {
-                    targets: 1,
-                    render: function (data, type) {
-                        if (type !== 'display') { return data; }
-                        return '<span>' + escapeHtml(data || '—') + '</span>';
-                    }
-                },
-                {
-                    targets: 2,
-                    render: function (data, type) {
-                        var items = parseInt(data, 10);
-                        if (isNaN(items)) { items = 0; }
-                        if (type !== 'display') { return items; }
-                        return String(items);
-                    }
-                },
-                {
-                    targets: 3,
+                    targets: 5,
                     render: function (data, type) {
                         if (type !== 'display') {
                             var amount = parseFloat(data || 0);
@@ -914,55 +953,39 @@
                     }
                 },
                 {
-                    targets: 4,
-                    render: function (data, type) {
-                        if (type !== 'display') { return data; }
-                        return '<span class="text-muted">' + escapeHtml(data || '—') + '</span>';
-                    }
-                },
-                {
-                    targets: 5,
-                    render: function (data, type) {
-                        if (type !== 'display') { return data; }
-                        return '<span class="text-muted">' + escapeHtml(data || '-') + '</span>';
-                    }
-                },
-                {
                     targets: 6,
                     render: function (data, type) {
-                        var paymentStatus = String(data || 'pending').toLowerCase();
-                        if (type !== 'display') { return paymentStatus; }
-
-                        var statusText = paymentStatus === 'paid' ? 'delivered' : (paymentStatus === 'partial' ? 'approved' : 'pending approval');
-                        var statusClass = paymentStatus === 'paid' ? 'green' : (paymentStatus === 'partial' ? 'blue' : 'orange');
-
-                        return '<span class="badge badge-' + statusClass + '">' + statusText + '</span>';
+                        var st = String(data || 'pending').toLowerCase();
+                        if (type !== 'display') { return st; }
+                        var clsMap = { approved: 'green', rejected: 'red', received: 'blue', partially_received: 'indigo', pending: 'orange' };
+                        var cls = clsMap[st] || 'gray';
+                        var label = st.replace('_', ' ');
+                        return '<span class="badge badge-' + cls + '">' + escapeHtml(label) + '</span>';
                     }
                 },
                 {
                     targets: 7,
                     render: function (data, type, row) {
                         if (type !== 'display') { return data; }
-
-                        var billNo = escapeHtml(row.bill_no || 'PO');
-                        var paymentStatus = String(row.payment_status || 'pending').toLowerCase();
-                        if (paymentStatus === 'pending') {
-                            return '<button class="btn btn-success btn-xs po-approve-btn" data-po="' + billNo + '" data-id="' + row.id + '">✅ Approve</button>';
+                        var st = String(row.status || 'pending').toLowerCase();
+                        var html = '';
+                        if (st === 'pending') {
+                            html += '<button class="btn btn-success btn-xs po-approve-btn" data-id="' + row.id + '">✅ Approve</button> ';
+                            html += '<button class="btn btn-danger btn-xs po-reject-btn" data-id="' + row.id + '">❌ Reject</button>';
+                        } else if (st === 'approved' || st === 'partially_received') {
+                            html += '<button class="btn btn-success btn-xs po-create-grn-btn" data-id="' + row.id + '">📥 Create GRN</button> ';
                         }
-
                         var printUrl = row.id ? getPurchasePrintUrl(row.id) : '';
-                        return printUrl
-                            ? '<button class="btn btn-secondary btn-xs po-print-btn" data-url="' + escapeHtml(printUrl) + '">🖨️ Print</button>'
-                            : '<span class="text-muted fs-11">—</span>';
+                        if (printUrl && st !== 'pending') {
+                            html += '<button class="btn btn-secondary btn-xs po-print-btn" data-url="' + escapeHtml(printUrl) + '">🖨️</button>';
+                        }
+                        return html || '—';
                     }
                 }
             ],
             language: {
                 search: '',
                 searchPlaceholder: 'Search purchase orders...'
-            },
-            error: function () {
-                toast('Error', 'Unable to load purchase orders.', 'error');
             }
         });
     }
@@ -1009,20 +1032,7 @@
             .join('');
     }
 
-    function updateGRNTotal() {
-        var amountNodes = document.querySelectorAll('[id^="grnAmt"]');
-        var total = 0;
-        amountNodes.forEach(function (node) {
-            var value = parseFloat(String(node.textContent || '0').replace('₹', '').replace(/,/g, ''));
-            if (!isNaN(value)) {
-                total += value;
-            }
-        });
-        var totalNode = document.getElementById('grnTotal');
-        if (totalNode) {
-            totalNode.textContent = '₹' + total.toFixed(2);
-        }
-    }
+    // Old static updateGRNTotal removed — replaced by updateGRNAcceptedTotal
 
     window.filterDispenseQueue = function (q) {
         var searchEl = document.getElementById('dispenseSearch');
@@ -1138,21 +1148,153 @@
         });
     };
 
-    if (typeof window.$ !== 'undefined') {
-        window.$(document).on('click', '.po-approve-btn', function () {
-            var row = this.closest('tr');
-            if (!row) {
-                return;
-            }
+    function getPurchaseApproveUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('purchaseApprove').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
 
-            var po = this.getAttribute('data-po') || 'PO';
-            var statusBadge = row.querySelector('td:nth-child(7) .badge');
-            if (statusBadge) {
-                statusBadge.className = 'badge badge-blue';
-                statusBadge.textContent = 'approved';
+    function getPurchaseRejectUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('purchaseReject').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getPurchaseStoreUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('purchaseStore'); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    /* ─── New PO inline form logic ─── */
+    var poRowIdx = 0;
+    function poMedicineOptions() {
+        return (window.poMedicines || [])
+            .map(function (m) { return '<option value="' + m.id + '">' + escapeHtml(m.name) + (m.unit ? ' [' + m.unit + ']' : '') + '</option>'; })
+            .join('');
+    }
+
+    function buildPORow() {
+        var i = poRowIdx++;
+        return '<tr data-idx="' + i + '">' +
+            '<td><select class="form-control ph-grid-input po-medicine" name="items[' + i + '][medicine_id]"><option value="">Select</option>' + poMedicineOptions() + '</select></td>' +
+            '<td><input type="number" min="1" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][quantity_purchased]" value="1" placeholder="1"></td>' +
+            '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price po-price" name="items[' + i + '][unit_purchase_price]" value="0" placeholder="0"></td>' +
+            '<td><span class="po-line-amt fw-700 fs-12">₹0</span></td>' +
+            '<td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest(\'tr\').remove(); recalcPOTotal();">✕</button></td></tr>';
+    }
+
+    function recalcPOTotal() {
+        var total = 0;
+        window.$('#poItemBody tr').each(function () {
+            var qty = parseFloat(window.$(this).find('.po-qty').val()) || 0;
+            var price = parseFloat(window.$(this).find('.po-price').val()) || 0;
+            var lineAmt = qty * price;
+            window.$(this).find('.po-line-amt').text('₹' + lineAmt.toFixed(2));
+            total += lineAmt;
+        });
+        window.$('#poTotal').text('₹' + total.toFixed(2));
+    }
+
+    window.recalcPOTotal = recalcPOTotal;
+
+    if (typeof window.$ !== 'undefined') {
+        window.$(document).on('click', '#addPOItemRow', function () {
+            window.$('#poItemBody').append(buildPORow());
+            recalcPOTotal();
+        });
+
+        window.$(document).on('input', '.po-qty, .po-price', recalcPOTotal);
+
+        window.$(document).on('click', '#submitNewPO', function () {
+            var storeUrl = getPurchaseStoreUrl();
+            if (!storeUrl) { toast('Error', 'Store route not available.', 'error'); return; }
+
+            if (typeof window.loader === 'function') { window.loader(); }
+
+            var fd = new FormData(document.getElementById('newPOForm'));
+            fd.append('_token', getCsrfToken());
+
+
+            window.$.ajax({
+                url: storeUrl, type: 'POST', data: fd, contentType: false, processData: false,
+                success: function (response) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    if (response.status) {
+                        toast('PO Created', response.message + (response.bill_no ? ' (' + response.bill_no + ')' : ''), 'success');
+                        window.closeModal('newPOModal');
+                        document.getElementById('newPOForm').reset();
+                        window.$('#poItemBody').html('');
+                        poRowIdx = 0;
+                        recalcPOTotal();
+                        if (poTable) { poTable.ajax.reload(null, false); }
+                    } else {
+                        toast('Error', response.message || 'Failed to create PO.', 'error');
+                    }
+                },
+                error: function (xhr) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
+                        var msgs = xhr.responseJSON.errors.map(function (e) { return e.message; }).join('\n');
+                        toast('Validation Error', msgs, 'error');
+                    } else {
+                        toast('Error', 'Unable to create purchase order.', 'error');
+                    }
+                }
+            });
+        });
+
+        /* ─── PO Approve / Reject ─── */
+        window.$(document).on('click', '.po-approve-btn', function () {
+            var id = this.getAttribute('data-id');
+            var url = getPurchaseApproveUrl(id);
+            if (!url) { toast('Error', 'Route not found.', 'error'); return; }
+            var btn = this;
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ title: 'Approve PO?', text: 'This will add stock to inventory.', icon: 'question', showCancelButton: true, confirmButtonText: 'Yes, approve' })
+                    .then(function (r) { if (r.isConfirmed) { doApprove(url, btn); } });
+            } else if (confirm('Approve this PO? Stock will be added to inventory.')) {
+                doApprove(url, btn);
             }
-            this.outerHTML = '<button class="btn btn-secondary btn-xs po-print-btn" data-url="' + escapeHtml(getPurchasePrintUrl(this.getAttribute('data-id'))) + '">🖨️ Print</button>';
-            toast('PO Approved', po + ' approved', 'success');
+        });
+
+        function doApprove(url, btn) {
+            if (typeof window.loader === 'function') { window.loader(); }
+            window.$.ajax({
+                url: url, type: 'POST', data: { _token: getCsrfToken() },
+                success: function (res) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    toast('Approved', res.message || 'PO approved.', 'success');
+                    if (poTable) { poTable.ajax.reload(null, false); }
+                },
+                error: function (xhr) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    toast('Error', (xhr.responseJSON && xhr.responseJSON.message) || 'Approval failed.', 'error');
+                }
+            });
+        }
+
+        window.$(document).on('click', '.po-reject-btn', function () {
+            var id = this.getAttribute('data-id');
+            var url = getPurchaseRejectUrl(id);
+            if (!url) { toast('Error', 'Route not found.', 'error'); return; }
+            var reason = prompt('Rejection reason (optional):') || '';
+            if (typeof window.loader === 'function') { window.loader(); }
+            window.$.ajax({
+                url: url, type: 'POST', data: { _token: getCsrfToken(), reject_reason: reason },
+                success: function (res) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    toast('Rejected', res.message || 'PO rejected.', 'info');
+                    if (poTable) { poTable.ajax.reload(null, false); }
+                },
+                error: function (xhr) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    toast('Error', (xhr.responseJSON && xhr.responseJSON.message) || 'Rejection failed.', 'error');
+                }
+            });
         });
 
         window.$(document).on('click', '.po-print-btn', function () {
@@ -1160,6 +1302,72 @@
             if (url) {
                 window.open(url, '_blank');
             }
+        });
+
+        /* ─── PO table → Create GRN button ─── */
+        window.$(document).on('click', '.po-create-grn-btn', function () {
+            var poId = this.getAttribute('data-id');
+            window.openModal('grnModal');
+            setTimeout(function () {
+                window.$('#grn_po_select').val(poId).trigger('change');
+            }, 300);
+        });
+
+        /* ─── GRN: PO select change → populate items ─── */
+        window.$(document).on('change', '#grn_po_select', function () {
+            renderGrnItems(this.value);
+        });
+
+        window.$(document).on('input', '.grn-received, .grn-rejected, .grn-price, .grn-tax', updateGRNAcceptedTotal);
+
+        /* ─── GRN: Submit ─── */
+        window.$(document).on('click', '#submitGRNBtn', function () {
+            var storeUrl = getGrnStoreUrl();
+            if (!storeUrl) { toast('Error', 'GRN store route not available.', 'error'); return; }
+
+            var poId = window.$('#grn_po_select').val();
+            if (!poId) { toast('Error', 'Please select an approved PO first.', 'error'); return; }
+
+            if (typeof window.loader === 'function') { window.loader(); }
+            var fd = new FormData(document.getElementById('grnForm'));
+            fd.append('_token', getCsrfToken());
+
+            // Normalise month expiry fields to full date
+            document.querySelectorAll('#grnForm .grn-expiry').forEach(function (el) {
+                if (el.value && el.value.length === 7) { fd.set(el.name, el.value + '-28'); }
+            });
+
+            window.$.ajax({
+                url: storeUrl, type: 'POST', data: fd, contentType: false, processData: false,
+                success: function (response) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    if (response.status) {
+                        toast('GRN Created', response.message + (response.grn_no ? ' (' + response.grn_no + ')' : ''), 'success');
+                        window.closeModal('grnModal');
+                        document.getElementById('grnForm').reset();
+                        window.$('#grnItemBody').html('');
+                        document.getElementById('grnItemsWrap').style.display = 'none';
+                        document.getElementById('grnNoPoAlert').style.display = '';
+                        window.$('#grnTotal').text('₹0.00');
+                        if (grnLogTable) { grnLogTable.ajax.reload(null, false); }
+                        if (poTable) { poTable.ajax.reload(null, false); }
+                        if (inventoryTable) { inventoryTable.ajax.reload(null, false); }
+                        loadApprovedPOs();
+                    } else {
+                        toast('Error', response.message || 'Failed to create GRN.', 'error');
+                    }
+                },
+                error: function (xhr) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
+                        var msgs = xhr.responseJSON.errors.map(function (e) { return e.message; }).join('\n');
+                        toast('Validation Error', msgs, 'error');
+                    } else {
+                        var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Unable to create GRN.';
+                        toast('Error', msg, 'error');
+                    }
+                }
+            });
         });
 
         window.$(document).on('click', '.bad-stock-btn', function () {
@@ -1318,6 +1526,14 @@
             }
         }
 
+        if (paneId === 'grnListPane') {
+            var grnWasInit = !!grnLogTable;
+            loadGRNLog();
+            if (grnWasInit && grnLogTable) {
+                grnLogTable.ajax.reload();
+            }
+        }
+
         if (paneId === 'poPane') {
             var poWasInit = !!poTable;
             loadPOList();
@@ -1337,55 +1553,95 @@
         window.closeModal('dispenseModal');
     };
 
-    window.submitGRN = function () {
-        toast('GRN Submitted', 'GRN submitted. Stock levels updated.', 'success');
-        window.closeModal('grnModal');
-    };
+    /* ─── GRN: Dynamic PO-linked flow ─── */
+    var grnApprovedPOsCache = [];
+
+    function loadApprovedPOs() {
+        var url = getGrnApprovedPOsUrl();
+        if (!url) return;
+        window.$.getJSON(url, function (data) {
+            grnApprovedPOsCache = data || [];
+            var sel = document.getElementById('grn_po_select');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">— Select Approved PO —</option>';
+            grnApprovedPOsCache.forEach(function (po) {
+                sel.innerHTML += '<option value="' + po.id + '">' + escapeHtml(po.bill_no) + ' — ' + escapeHtml(po.supplier) + ' (' + escapeHtml(po.date) + ')</option>';
+            });
+        });
+    }
+
+    function renderGrnItems(poId) {
+        var body = document.getElementById('grnItemBody');
+        var wrap = document.getElementById('grnItemsWrap');
+        var alert = document.getElementById('grnNoPoAlert');
+        if (!body) return;
+
+        var po = grnApprovedPOsCache.find(function (p) { return p.id === parseInt(poId, 10); });
+        if (!po || !po.items || po.items.length === 0) {
+            body.innerHTML = '';
+            if (wrap) wrap.style.display = 'none';
+            if (alert) alert.style.display = '';
+            updateGRNAcceptedTotal();
+            return;
+        }
+
+        if (wrap) wrap.style.display = '';
+        if (alert) alert.style.display = 'none';
+
+        var supplierEl = document.getElementById('grn_supplier_display');
+        if (supplierEl) supplierEl.value = po.supplier;
+
+        body.innerHTML = po.items.map(function (item, idx) {
+            var estPrice = item.unit_purchase_price || 0;
+            return '<tr>' +
+                '<input type="hidden" name="items[' + idx + '][purchase_item_id]" value="' + item.purchase_item_id + '">' +
+                '<td class="fw-700 fs-12" style="min-width:120px">' + escapeHtml(item.medicine_name) + '</td>' +
+                '<td class="fw-700">' + item.ordered_qty + '</td>' +
+                '<td class="fw-700 text-primary">' + item.remaining_qty + '</td>' +
+                '<td><input class="form-control ph-grid-input ph-grid-input-batch" name="items[' + idx + '][batch_no]" placeholder="Batch" required></td>' +
+                '<td><input type="month" class="form-control ph-grid-input grn-expiry" name="items[' + idx + '][expiry_date]"></td>' +
+                '<td><input type="number" min="0" max="' + item.remaining_qty + '" step="1" class="form-control ph-grid-input ph-grid-input-qty grn-received" name="items[' + idx + '][quantity_received]" value="' + item.remaining_qty + '"></td>' +
+                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input ph-grid-input-free" name="items[' + idx + '][quantity_free]" value="0"></td>' +
+                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input ph-grid-input-qty grn-rejected" name="items[' + idx + '][quantity_rejected]" value="0"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price grn-price" name="items[' + idx + '][unit_purchase_price]" value="' + estPrice + '"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price" name="items[' + idx + '][unit_sale_price]" value="0"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price" name="items[' + idx + '][unit_mrp]" value="0"></td>' +
+                '<td><input type="number" step="0.01" min="0" max="100" class="form-control ph-grid-input grn-tax" name="items[' + idx + '][tax_percent]" value="0"></td>' +
+                '<td><span class="grn-accepted fw-700 text-success">' + item.remaining_qty + '</span></td>' +
+                '<td><input class="form-control ph-grid-input" name="items[' + idx + '][rejection_reason]" placeholder="If rejected..."></td>' +
+                '</tr>';
+        }).join('');
+
+        updateGRNAcceptedTotal();
+    }
+
+    function updateGRNAcceptedTotal() {
+        var total = 0;
+        window.$('#grnItemBody tr').each(function () {
+            var recv = parseFloat(window.$(this).find('.grn-received').val()) || 0;
+            var rej = parseFloat(window.$(this).find('.grn-rejected').val()) || 0;
+            var accepted = Math.max(0, recv - rej);
+            var price = parseFloat(window.$(this).find('.grn-price').val()) || 0;
+            var taxPct = parseFloat(window.$(this).find('.grn-tax').val()) || 0;
+            var lineAmt = accepted * price;
+            var lineTax = lineAmt * taxPct / 100;
+            window.$(this).find('.grn-accepted').text(accepted);
+            total += lineAmt + lineTax;
+        });
+        var el = document.getElementById('grnTotal');
+        if (el) el.textContent = '₹' + total.toFixed(2);
+    }
+
+    window.updateGRNTotal = updateGRNAcceptedTotal;
 
     window.loadRxPreview = function () {
         return;
     };
 
-    window.calcGRNRow = function (idx) {
-        var qty = parseFloat((document.getElementById('grnQty' + idx) || {}).value || 0);
-        var rate = parseFloat((document.getElementById('grnRate' + idx) || {}).value || 0);
-        var el = document.getElementById('grnAmt' + idx);
-        if (el) {
-            el.textContent = '₹' + (qty * rate).toFixed(2);
-        }
-        updateGRNTotal();
-    };
-
-    window.updateGRNTotal = updateGRNTotal;
-
-    window.addGRNRow = function () {
-        var idx = grnRowCount++;
-        var tr = document.createElement('tr');
-        tr.id = 'grnRow' + idx;
-        tr.innerHTML = '' +
-            '<td><input class="form-control ph-grid-input" placeholder="Drug name"></td>' +
-            '<td><input class="form-control ph-grid-input ph-grid-input-batch" placeholder="Batch"></td>' +
-            '<td><input type="date" class="form-control ph-grid-input"></td>' +
-            '<td><input type="date" class="form-control ph-grid-input"></td>' +
-            '<td><input type="number" class="form-control ph-grid-input ph-grid-input-qty" id="grnQty' + idx + '" oninput="calcGRNRow(' + idx + ')"></td>' +
-            '<td><input type="number" class="form-control ph-grid-input ph-grid-input-free"></td>' +
-            '<td><input type="number" class="form-control ph-grid-input ph-grid-input-price" id="grnMRP' + idx + '"></td>' +
-            '<td><input type="number" class="form-control ph-grid-input ph-grid-input-price" id="grnRate' + idx + '" oninput="calcGRNRow(' + idx + ')"></td>' +
-            '<td><span id="grnAmt' + idx + '" class="fw-700 fs-12">₹0</span></td>' +
-            '<td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest(\'tr\').remove(); updateGRNTotal();">✕</button></td>';
-
-        var body = document.getElementById('grnItemBody');
-        if (body) {
-            body.appendChild(tr);
-        }
-    };
-
     document.addEventListener('DOMContentLoaded', function () {
         loadDispenseQueue();
         loadRxValidation();
-        loadGRNLog();
         loadMARContent();
         loadRxPreviewBody();
-        updateGRNTotal();
     });
 })();
