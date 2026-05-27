@@ -42,13 +42,38 @@
         }
     };
 
+    function initBillDatePicker() {
+        var billDateInput = document.getElementById('bill_date');
+        if (!billDateInput) {
+            return;
+        }
+        if (typeof flatpickr !== 'function') {
+            setTimeout(initBillDatePicker, 50);
+            return;
+        }
+        if (billDateInput._flatpickr) {
+            return;
+        }
+        flatpickr(billDateInput, {
+            enableTime: false,
+            dateFormat: 'd-m-Y',
+            defaultDate: new Date(),
+            maxDate: new Date()
+        });
+    }
+
     function initNewPOModal() {
+        initBillDatePicker();
+
         var body = document.getElementById('poItemBody');
         if (body && body.children.length === 0) {
             body.innerHTML = buildPORow();
+            initPOMedicineSelect(body);
             recalcPOTotal();
         }
     }
+
+    document.addEventListener('DOMContentLoaded', initBillDatePicker);
 
     var dispenseTable = null;
     var inventoryTable = null;
@@ -174,7 +199,7 @@
                         var status = String(data || 'pending').toLowerCase().replace('_', ' ');
                         if (type !== 'display') { return status; }
                         var cls = status === 'pending' ? 'orange' : (status === 'on hold' ? 'gray' : 'green');
-                        return '<span class="badge badge-' + cls + '">' + escapeHtml(status.toUpperCase()) + '</span>';
+                        return '<span class="badge badge-' + cls + '">' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</span>';
                     }
                 },
                 {
@@ -418,6 +443,17 @@
         return '';
     }
 
+    function getPurchaseShowformUrl() {
+        if (typeof window.route === 'function') {
+            try {
+                return window.route('purchaseShowform');
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
+
     function escapeHtml(text) {
         return String(text || '')
             .replace(/&/g, '&amp;')
@@ -425,6 +461,63 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function clearGrnFormErrors() {
+        var form = document.getElementById('grnForm');
+        if (!form) { return; }
+
+        form.querySelectorAll('.is-invalid').forEach(function (el) {
+            el.classList.remove('is-invalid');
+            el.removeAttribute('aria-invalid');
+        });
+        form.querySelectorAll('.invalid-feedback, .err.text-danger').forEach(function (el) {
+            el.parentNode.removeChild(el);
+        });
+    }
+
+    function toBracketFieldName(name) {
+        if (!name) { return name; }
+        var parts = name.split('.');
+        var bracketed = parts[0];
+        for (var i = 1; i < parts.length; i++) {
+            bracketed += '[' + parts[i] + ']';
+        }
+        return bracketed;
+    }
+
+    function addGrnFieldError(name, message) {
+        if (!name || !message) { return; }
+        var selector = toBracketFieldName(name);
+        var field = document.querySelector('#grnForm [name="' + selector + '"]');
+        if (!field) {
+            field = document.querySelector('#grnForm [name="' + name + '"]');
+        }
+        if (!field) { return; }
+
+        field.classList.add('is-invalid');
+        field.setAttribute('aria-invalid', 'true');
+
+        var feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        feedback.style.display = 'block';
+        feedback.textContent = message;
+
+        if (field.nextSibling) {
+            field.parentNode.insertBefore(feedback, field.nextSibling);
+        } else {
+            field.parentNode.appendChild(feedback);
+        }
+    }
+
+    function formatGrnErrorMessages(errors) {
+        if (!Array.isArray(errors) || errors.length === 0) { return ''; }
+        var messages = errors.map(function (error) {
+            return error.message || String(error || 'Invalid input');
+        });
+        return '<div><strong>Please fix the following errors:</strong><ul class="mb-0 ps-3">' + messages.map(function (m) {
+            return '<li>' + escapeHtml(m) + '</li>';
+        }).join('') + '</ul></div>';
     }
 
     function formatCurrency(value) {
@@ -861,6 +954,20 @@
         return '';
     }
 
+    function getGrnViewUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('grnView').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getGrnPrintUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('grnPrint').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
     var grnLogTable = null;
 
     function loadGRNLog() {
@@ -883,11 +990,24 @@
                 { data: 'items_count', orderable: false, searchable: false },
                 { data: 'total_value', name: 'total_value', render: function (v) { return '<span class="fw-700">' + formatCurrency(v) + '</span>'; } },
                 { data: 'received_by_name', orderable: false },
-                { data: 'received_at', name: 'received_at' }
+                { data: 'received_at', name: 'received_at' },
+                { data: 'id', name: 'id', orderable: false, searchable: false }
             ],
             columnDefs: [
                 { targets: 1, render: function (d, t) { return t !== 'display' ? d : '<span class="fw-700 text-primary">' + escapeHtml(d || '-') + '</span>'; } },
-                { targets: 2, render: function (d, t) { return t !== 'display' ? d : '<span class="text-muted">' + escapeHtml(d || '-') + '</span>'; } }
+                { targets: 2, render: function (d, t) { return t !== 'display' ? d : '<span class="text-muted">' + escapeHtml(d || '-') + '</span>'; } },
+                {
+                    targets: 9,
+                    render: function (data, type, row) {
+                        if (type !== 'display') { return data; }
+                        var printUrl = row.id ? getGrnPrintUrl(row.id) : '';
+                        var html = '<button class="btn btn-secondary btn-xs grn-view-btn" data-id="' + row.id + '">👁️</button> ';
+                        if (printUrl) {
+                            html += '<button class="btn btn-secondary btn-xs grn-print-btn" data-url="' + escapeHtml(printUrl) + '">🖨️</button>';
+                        }
+                        return html;
+                    }
+                }
             ],
             language: { search: '', searchPlaceholder: 'Search GRN log...' }
         });
@@ -930,6 +1050,7 @@
                 { data: 'bill_date', name: 'bill_date' },
                 { data: 'supplier_name', name: 'supplier_name', orderable: false },
                 { data: 'items_count', name: 'items_count', orderable: false, searchable: false },
+                { data: 'created_by_name', name: 'created_by_name', orderable: false },
                 { data: 'net_total', name: 'net_total' },
                 { data: 'status', name: 'status', orderable: false },
                 { data: 'id', name: 'id', orderable: false, searchable: false }
@@ -943,7 +1064,7 @@
                     }
                 },
                 {
-                    targets: 5,
+                    targets: 6,
                     render: function (data, type) {
                         if (type !== 'display') {
                             var amount = parseFloat(data || 0);
@@ -953,25 +1074,25 @@
                     }
                 },
                 {
-                    targets: 6,
+                    targets: 7,
                     render: function (data, type) {
                         var st = String(data || 'pending').toLowerCase();
                         if (type !== 'display') { return st; }
                         var clsMap = { approved: 'green', rejected: 'red', received: 'blue', partially_received: 'indigo', pending: 'orange' };
                         var cls = clsMap[st] || 'gray';
                         var label = st.replace('_', ' ');
-                        return '<span class="badge badge-' + cls + '">' + escapeHtml(label) + '</span>';
+                        return '<span class="badge badge-' + cls + '">' + escapeHtml(label.charAt(0).toUpperCase() + label.slice(1)) + '</span>';
                     }
                 },
                 {
-                    targets: 7,
+                    targets: 8,
                     render: function (data, type, row) {
                         if (type !== 'display') { return data; }
                         var st = String(row.status || 'pending').toLowerCase();
-                        var html = '';
+                        var html = '<button class="btn btn-secondary btn-xs po-view-btn" data-id="' + row.id + '">👁️</button> ';
                         if (st === 'pending') {
-                            html += '<button class="btn btn-success btn-xs po-approve-btn" data-id="' + row.id + '">✅ Approve</button> ';
-                            html += '<button class="btn btn-danger btn-xs po-reject-btn" data-id="' + row.id + '">❌ Reject</button>';
+                            html += '<button class="btn btn-secondary btn-xs po-approve-btn" data-id="' + row.id + '">✅</button> ';
+                            html += '<button class="btn btn-secondary btn-xs po-reject-btn" data-id="' + row.id + '">❌ </button>';
                         } else if (st === 'approved' || st === 'partially_received') {
                             html += '<button class="btn btn-success btn-xs po-create-grn-btn" data-id="' + row.id + '">📥 Create GRN</button> ';
                         }
@@ -979,7 +1100,7 @@
                         if (printUrl && st !== 'pending') {
                             html += '<button class="btn btn-secondary btn-xs po-print-btn" data-url="' + escapeHtml(printUrl) + '">🖨️</button>';
                         }
-                        return html || '—';
+                        return html;
                     }
                 }
             ],
@@ -1169,6 +1290,50 @@
         return '';
     }
 
+    function openPOView(id) {
+        var url = getPurchaseShowformUrl();
+        if (!url || !id) {
+            toast('Error', 'PO view route not available.', 'error');
+            return;
+        }
+
+        if (typeof window.loader === 'function') { window.loader(); }
+
+        window.$.post(url, { _token: getCsrfToken(), id: id, view: 1 }, function (response) {
+            if (typeof window.loader === 'function') { window.loader('hide'); }
+            window.$('#ajaxdata').html(response);
+            window.$('.add-datamodal').modal('show');
+            window.$('.add-datamodal .modal-dialog')
+                .removeClass('modal-sm modal-lg modal-xl')
+                .addClass('modal-fullscreen');
+        }).fail(function () {
+            if (typeof window.loader === 'function') { window.loader('hide'); }
+            toast('Error', 'Unable to load purchase order details.', 'error');
+        });
+    }
+
+    function openGRNView(id) {
+        var url = getGrnViewUrl(id);
+        if (!url || !id) {
+            toast('Error', 'GRN view route not available.', 'error');
+            return;
+        }
+
+        if (typeof window.loader === 'function') { window.loader(); }
+
+        window.$.post(url, { _token: getCsrfToken() }, function (response) {
+            if (typeof window.loader === 'function') { window.loader('hide'); }
+            window.$('#ajaxdata').html(response);
+            window.$('.add-datamodal').modal('show');
+            window.$('.add-datamodal .modal-dialog')
+                .removeClass('modal-sm modal-lg modal-xl')
+                .addClass('modal-fullscreen');
+        }).fail(function () {
+            if (typeof window.loader === 'function') { window.loader('hide'); }
+            toast('Error', 'Unable to load GRN details.', 'error');
+        });
+    }
+
     /* ─── New PO inline form logic ─── */
     var poRowIdx = 0;
     function poMedicineOptions() {
@@ -1180,11 +1345,29 @@
     function buildPORow() {
         var i = poRowIdx++;
         return '<tr data-idx="' + i + '">' +
-            '<td><select class="form-control ph-grid-input po-medicine" name="items[' + i + '][medicine_id]"><option value="">Select</option>' + poMedicineOptions() + '</select></td>' +
+            '<td><select class="form-control select2 ph-grid-input po-medicine" name="items[' + i + '][medicine_id]"><option value="">Select</option>' + poMedicineOptions() + '</select></td>' +
             '<td><input type="number" min="1" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][quantity_purchased]" value="1" placeholder="1"></td>' +
             '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price po-price" name="items[' + i + '][unit_purchase_price]" value="0" placeholder="0"></td>' +
             '<td><span class="po-line-amt fw-700 fs-12">₹0</span></td>' +
             '<td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest(\'tr\').remove(); recalcPOTotal();">✕</button></td></tr>';
+    }
+
+    function initPOMedicineSelect(el) {
+        if (typeof window.$ === 'undefined' || !window.$.fn || !window.$.fn.select2) {
+            return;
+        }
+        var $select = window.$(el).find('select.po-medicine.select2');
+        if ($select.length) {
+            $select.each(function () {
+                if (!window.$(this).data('select2')) {
+                    window.$(this).select2({
+                        placeholder: 'Select medicine',
+                        allowClear: true,
+                        dropdownParent: window.$(this).closest('.modal').length ? window.$(this).closest('.modal') : window.$('body')
+                    });
+                }
+            });
+        }
     }
 
     function recalcPOTotal() {
@@ -1204,10 +1387,15 @@
     if (typeof window.$ !== 'undefined') {
         window.$(document).on('click', '#addPOItemRow', function () {
             window.$('#poItemBody').append(buildPORow());
+            initPOMedicineSelect(window.$('#poItemBody tr:last'));
             recalcPOTotal();
         });
 
         window.$(document).on('input', '.po-qty, .po-price', recalcPOTotal);
+
+        window.$(function () {
+            initPOMedicineSelect(window.$('#poItemBody'));
+        });
 
         window.$(document).on('click', '#submitNewPO', function () {
             var storeUrl = getPurchaseStoreUrl();
@@ -1247,6 +1435,10 @@
             });
         });
 
+        window.$(document).on('click', '.po-view-btn', function () {
+            openPOView(this.getAttribute('data-id'));
+        });
+
         /* ─── PO Approve / Reject ─── */
         window.$(document).on('click', '.po-approve-btn', function () {
             var id = this.getAttribute('data-id');
@@ -1281,23 +1473,63 @@
             var id = this.getAttribute('data-id');
             var url = getPurchaseRejectUrl(id);
             if (!url) { toast('Error', 'Route not found.', 'error'); return; }
-            var reason = prompt('Rejection reason (optional):') || '';
-            if (typeof window.loader === 'function') { window.loader(); }
-            window.$.ajax({
-                url: url, type: 'POST', data: { _token: getCsrfToken(), reject_reason: reason },
-                success: function (res) {
-                    if (typeof window.loader === 'function') { window.loader('hide'); }
-                    toast('Rejected', res.message || 'PO rejected.', 'info');
-                    if (poTable) { poTable.ajax.reload(null, false); }
-                },
-                error: function (xhr) {
-                    if (typeof window.loader === 'function') { window.loader('hide'); }
-                    toast('Error', (xhr.responseJSON && xhr.responseJSON.message) || 'Rejection failed.', 'error');
-                }
-            });
+
+            function submitReject(reason) {
+                if (typeof window.loader === 'function') { window.loader(); }
+                window.$.ajax({
+                    url: url, type: 'POST', data: { _token: getCsrfToken(), reject_reason: reason || '' },
+                    success: function (res) {
+                        if (typeof window.loader === 'function') { window.loader('hide'); }
+                        toast('Rejected', res.message || 'PO rejected.', 'info');
+                        if (poTable) { poTable.ajax.reload(null, false); }
+                    },
+                    error: function (xhr) {
+                        if (typeof window.loader === 'function') { window.loader('hide'); }
+                        toast('Error', (xhr.responseJSON && xhr.responseJSON.message) || 'Rejection failed.', 'error');
+                    }
+                });
+            }
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Reject PO',
+                    input: 'textarea',
+                    inputLabel: 'Rejection reason (optional)',
+                    inputPlaceholder: 'Enter rejection reason...',
+                    inputAttributes: {
+                        'aria-label': 'Rejection reason',
+                        maxlength: 500,
+                        rows: 4
+                    },
+                    showCancelButton: true,
+                    confirmButtonText: 'Reject PO',
+                    cancelButtonText: 'Cancel',
+                    preConfirm: function (value) {
+                        return value || '';
+                    }
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        submitReject(result.value);
+                    }
+                });
+            } else {
+                var reason = prompt('Rejection reason (optional):') || '';
+                submitReject(reason);
+            }
         });
 
         window.$(document).on('click', '.po-print-btn', function () {
+            var url = this.getAttribute('data-url');
+            if (url) {
+                window.open(url, '_blank');
+            }
+        });
+
+        window.$(document).on('click', '.grn-view-btn', function () {
+            openGRNView(this.getAttribute('data-id'));
+        });
+
+        window.$(document).on('click', '.grn-print-btn', function () {
             var url = this.getAttribute('data-url');
             if (url) {
                 window.open(url, '_blank');
@@ -1328,13 +1560,25 @@
             var poId = window.$('#grn_po_select').val();
             if (!poId) { toast('Error', 'Please select an approved PO first.', 'error'); return; }
 
+            clearGrnFormErrors();
+
             if (typeof window.loader === 'function') { window.loader(); }
             var fd = new FormData(document.getElementById('grnForm'));
             fd.append('_token', getCsrfToken());
 
             // Normalise month expiry fields to full date
             document.querySelectorAll('#grnForm .grn-expiry').forEach(function (el) {
-                if (el.value && el.value.length === 7) { fd.set(el.name, el.value + '-28'); }
+                if (el.value && el.value.length === 7) {
+                    var parts = el.value.split('-');
+                    var year = parseInt(parts[0], 10);
+                    var month = parseInt(parts[1], 10);
+                    if (!isNaN(year) && !isNaN(month)) {
+                        var lastDay = new Date(year, month, 0).getDate();
+                        fd.set(el.name, el.value + '-' + String(lastDay).padStart(2, '0'));
+                    } else {
+                        fd.set(el.name, el.value);
+                    }
+                }
             });
 
             window.$.ajax({
@@ -1348,6 +1592,8 @@
                         window.$('#grnItemBody').html('');
                         document.getElementById('grnItemsWrap').style.display = 'none';
                         document.getElementById('grnNoPoAlert').style.display = '';
+                        document.getElementById('grnSubtotal') && (document.getElementById('grnSubtotal').textContent = '₹0.00');
+                        document.getElementById('grnTaxTotal') && (document.getElementById('grnTaxTotal').textContent = '₹0.00');
                         window.$('#grnTotal').text('₹0.00');
                         if (grnLogTable) { grnLogTable.ajax.reload(null, false); }
                         if (poTable) { poTable.ajax.reload(null, false); }
@@ -1359,13 +1605,16 @@
                 },
                 error: function (xhr) {
                     if (typeof window.loader === 'function') { window.loader('hide'); }
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Unable to create GRN.';
+                    clearGrnFormErrors();
                     if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
-                        var msgs = xhr.responseJSON.errors.map(function (e) { return e.message; }).join('\n');
-                        toast('Validation Error', msgs, 'error');
-                    } else {
-                        var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Unable to create GRN.';
-                        toast('Error', msg, 'error');
+                        xhr.responseJSON.errors.forEach(function (error) {
+                            addGrnFieldError(error.code || error.field || error.name || '', error.message || error);
+                        });
+                        var markup = formatGrnErrorMessages(xhr.responseJSON.errors);
+                        msg = 'Validation failed. Please correct the highlighted errors.';
                     }
+                    toast('Error', msg, 'error');
                 }
             });
         });
@@ -1593,7 +1842,7 @@
 
         body.innerHTML = po.items.map(function (item, idx) {
             var estPrice = item.unit_purchase_price || 0;
-            return '<tr>' +
+            return '<tr data-remaining="' + item.remaining_qty + '">' +
                 '<input type="hidden" name="items[' + idx + '][purchase_item_id]" value="' + item.purchase_item_id + '">' +
                 '<td class="fw-700 fs-12" style="min-width:120px">' + escapeHtml(item.medicine_name) + '</td>' +
                 '<td class="fw-700">' + item.ordered_qty + '</td>' +
@@ -1607,6 +1856,8 @@
                 '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price" name="items[' + idx + '][unit_sale_price]" value="0"></td>' +
                 '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price" name="items[' + idx + '][unit_mrp]" value="0"></td>' +
                 '<td><input type="number" step="0.01" min="0" max="100" class="form-control ph-grid-input grn-tax" name="items[' + idx + '][tax_percent]" value="0"></td>' +
+                '<td><span class="grn-tax-amt fw-700 text-muted">₹0.00</span></td>' +
+                '<td><span class="grn-line-total fw-700 text-muted">₹0.00</span></td>' +
                 '<td><span class="grn-accepted fw-700 text-success">' + item.remaining_qty + '</span></td>' +
                 '<td><input class="form-control ph-grid-input" name="items[' + idx + '][rejection_reason]" placeholder="If rejected..."></td>' +
                 '</tr>';
@@ -1616,20 +1867,47 @@
     }
 
     function updateGRNAcceptedTotal() {
-        var total = 0;
+        var subTotal = 0;
+        var taxTotal = 0;
+        var finalTotal = 0;
+
         window.$('#grnItemBody tr').each(function () {
-            var recv = parseFloat(window.$(this).find('.grn-received').val()) || 0;
-            var rej = parseFloat(window.$(this).find('.grn-rejected').val()) || 0;
+            var $row = window.$(this);
+            var remaining = parseFloat(this.dataset.remaining) || 0;
+            var recv = parseFloat($row.find('.grn-received').val()) || 0;
+            var rej = parseFloat($row.find('.grn-rejected').val()) || 0;
+            var price = parseFloat($row.find('.grn-price').val()) || 0;
+            var taxPct = parseFloat($row.find('.grn-tax').val()) || 0;
+
+            if (recv > remaining) {
+                recv = remaining;
+                $row.find('.grn-received').val(remaining);
+            }
+            if (rej > recv) {
+                rej = recv;
+                $row.find('.grn-rejected').val(rej);
+            }
+
             var accepted = Math.max(0, recv - rej);
-            var price = parseFloat(window.$(this).find('.grn-price').val()) || 0;
-            var taxPct = parseFloat(window.$(this).find('.grn-tax').val()) || 0;
             var lineAmt = accepted * price;
             var lineTax = lineAmt * taxPct / 100;
-            window.$(this).find('.grn-accepted').text(accepted);
-            total += lineAmt + lineTax;
+            var lineTotal = lineAmt + lineTax;
+
+            $row.find('.grn-accepted').text(accepted);
+            $row.find('.grn-tax-amt').text('₹' + lineTax.toFixed(2));
+            $row.find('.grn-line-total').text('₹' + lineTotal.toFixed(2));
+
+            subTotal += lineAmt;
+            taxTotal += lineTax;
+            finalTotal += lineTotal;
         });
-        var el = document.getElementById('grnTotal');
-        if (el) el.textContent = '₹' + total.toFixed(2);
+
+        var subtotalEl = document.getElementById('grnSubtotal');
+        var taxEl = document.getElementById('grnTaxTotal');
+        var totalEl = document.getElementById('grnTotal');
+        if (subtotalEl) subtotalEl.textContent = '₹' + subTotal.toFixed(2);
+        if (taxEl) taxEl.textContent = '₹' + taxTotal.toFixed(2);
+        if (totalEl) totalEl.textContent = '₹' + finalTotal.toFixed(2);
     }
 
     window.updateGRNTotal = updateGRNAcceptedTotal;

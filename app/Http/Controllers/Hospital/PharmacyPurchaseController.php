@@ -61,6 +61,21 @@ class PharmacyPurchaseController extends BaseHospitalController
 
     public function showform(Request $request)
     {
+        if ($request->boolean('view')) {
+            $bill = PharmacyPurchaseBill::with([
+                'supplier',
+                'createdBy:id,name',
+                'approvedBy:id,name',
+                'items.medicine',
+            ])->findOrFail($request->id);
+
+            if ($bill->hospital_id !== $this->hospital_id) {
+                abort(403);
+            }
+
+            return view('hospital.pharmacy.purchase.view', compact('bill'));
+        }
+
         $bill      = null;
         $medicines = Medicine::query()->select('id', 'name', 'unit')->orderBy('name')->get();
         $suppliers = PharmacySupplier::query()->select('id', 'name', 'phone')->orderBy('name')->get();
@@ -195,4 +210,3 @@ class PharmacyPurchaseController extends BaseHospitalController
         return view('hospital.pharmacy.purchase.print', compact('bill', 'hospital', 'printTemplate'));
     }
 }
-

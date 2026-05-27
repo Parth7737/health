@@ -1,4 +1,5 @@
 <ul class="action">
+    <li><a href="javascript:;" data-id="{{ $row->id }}" class="view-purchase-btn" data-bs-toggle="tooltip" title="View"><i class="fa-regular fa-eye text-info"></i></a></li>
     @if($row->status === 'pending')
         @can('create-pharmacy-purchase')
             <li class="edit"><a href="javascript:;" data-id="{{ $row->id }}" class="editdata" data-bs-toggle="tooltip" title="Edit"><i class="fa-regular fa-pen-to-square"></i></a></li>

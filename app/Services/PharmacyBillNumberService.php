@@ -11,7 +11,7 @@ class PharmacyBillNumberService
     public function nextPurchaseBillNo(int $hospitalId, ?\DateTimeInterface $date = null): string
     {
         $date = $date ?: now();
-        $prefix = 'PB-' . $date->format('Ym') . '-';
+        $prefix = 'PO-' . $date->format('Ym') . '-';
 
         $latest = PharmacyPurchaseBill::withoutGlobalScopes()
             ->where('hospital_id', $hospitalId)

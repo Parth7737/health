@@ -11,6 +11,7 @@
 @push('styles')
 <link rel="stylesheet" href="{{ asset('public/css/hospital/pharmacy-dashboard.css') }}">
 @include('layouts.partials.datatable-css')
+@include('layouts.partials.flatpickr-css')
 @endpush
 
 @section('content')
@@ -176,7 +177,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="hims-table display table-striped" id="grnLogTable">
-                        <thead><tr><th>#</th><th>GRN No.</th><th>PO Ref</th><th>Supplier</th><th>Invoice No.</th><th>Items</th><th>Total Value</th><th>Received By</th><th>Date</th></tr></thead>
+                        <thead><tr><th>#</th><th>GRN No.</th><th>PO Ref</th><th>Supplier</th><th>Invoice No.</th><th>Items</th><th>Total Value</th><th>Received By</th><th>Date</th><th>Action</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -189,7 +190,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="hims-table display table-striped" id="purchaseOrdersTable">
-                        <thead><tr><th>#</th><th>PO No.</th><th>Date</th><th>Supplier</th><th>Items</th><th>Net Total</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead><tr><th>#</th><th>PO No.</th><th>Date</th><th>Supplier</th><th>Items</th><th>Created By</th><th>Net Total</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -264,7 +265,7 @@
 
 {{-- ─── GRN Modal (PO-linked dynamic) ─── --}}
 <div class="modal-overlay hidden" id="grnModal" onclick="if(event.target===this) closeModal('grnModal')">
-    <div class="modal modal-lg">
+    <div class="modal modal-fullscreen">
         <div class="modal-header">
             <div class="modal-title">📥 Goods Receipt Note (GRN)</div>
             <button class="modal-close" type="button" onclick="closeModal('grnModal')">✕</button>
@@ -334,6 +335,8 @@
                                 <th>Sale Price ₹</th>
                                 <th>MRP ₹</th>
                                 <th>Tax%</th>
+                                <th>Tax Amt.</th>
+                                <th>Line Total</th>
                                 <th>Accepted</th>
                                 <th>Reason</th>
                             </tr>
@@ -342,7 +345,9 @@
                     </table>
                 </div>
                 <div class="ph-total-wrap">
-                    <span class="fw-700 fs-14">Accepted Stock Value: <span id="grnTotal" class="text-primary">₹0.00</span></span>
+                    <span class="fw-700 fs-14">Subtotal: <span id="grnSubtotal" class="text-primary">₹0.00</span></span>
+                    <span class="fw-700 fs-14 ms-4">Tax: <span id="grnTaxTotal" class="text-primary">₹0.00</span></span>
+                    <span class="fw-700 fs-14 ms-4">Final Total: <span id="grnTotal" class="text-primary">₹0.00</span></span>
                 </div>
             </form>
         </div>
@@ -390,7 +395,7 @@
                 <div class="form-row cols-3">
                     <div class="form-group">
                         <label class="form-label">Supplier <span class="req">*</span></label>
-                        <select class="form-control" name="supplier_id" id="po_supplier_id">
+                        <select class="form-control select2" name="supplier_id" id="po_supplier_id">
                             <option value="">— Select —</option>
                             @foreach($suppliers as $s)
                                 <option value="{{ $s->id }}">{{ $s->name }}{{ $s->phone ? ' ('.$s->phone.')' : '' }}</option>
@@ -399,7 +404,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Order Date <span class="req">*</span></label>
-                        <input type="date" class="form-control" name="bill_date" value="{{ date('Y-m-d') }}">
+                        <input type="text" class="form-control" id="bill_date" name="bill_date">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Notes</label>
@@ -431,6 +436,7 @@
 
 @push('scripts')
 @include('layouts.partials.datatable-js')
+@include('layouts.partials.flatpickr-js')
 <script>
 window.poMedicines = @json($medicines);
 </script>

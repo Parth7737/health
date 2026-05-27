@@ -38,6 +38,38 @@ class PharmacyGrnController extends BaseHospitalController
             ->make(true);
     }
 
+    public function view(PharmacyGrn $grn)
+    {
+        if ((int) $grn->hospital_id !== (int) $this->hospital_id) {
+            abort(403);
+        }
+
+        $grn->load([
+            'supplier',
+            'purchaseBill:id,bill_no,bill_date',
+            'receivedByUser:id,name',
+            'items.medicine:id,name,unit',
+        ]);
+
+        return view('hospital.pharmacy.grn.view', compact('grn'));
+    }
+
+    public function print(PharmacyGrn $grn)
+    {
+        if ((int) $grn->hospital_id !== (int) $this->hospital_id) {
+            abort(403);
+        }
+
+        $grn->load([
+            'supplier',
+            'purchaseBill:id,bill_no,bill_date',
+            'receivedByUser:id,name',
+            'items.medicine:id,name,unit',
+        ]);
+
+        return view('hospital.pharmacy.grn.print', compact('grn'));
+    }
+
     /**
      * Return approved POs with their items for the GRN modal dropdown.
      */
@@ -80,8 +112,8 @@ class PharmacyGrnController extends BaseHospitalController
     {
         $validator = Validator::make($request->all(), [
             'purchase_bill_id'            => 'required|exists:pharmacy_purchase_bills,id',
-            'invoice_no'                  => 'nullable|string|max:255',
-            'invoice_date'                => 'nullable|date',
+            'invoice_no'                  => 'required|string|max:255',
+            'invoice_date'                => 'required|date',
             'vehicle_no'                  => 'nullable|string|max:100',
             'temperature_status'          => 'nullable|string|max:100',
             'notes'                       => 'nullable|string',
@@ -89,12 +121,12 @@ class PharmacyGrnController extends BaseHospitalController
             'items.*.purchase_item_id'    => 'required|integer',
             'items.*.batch_no'            => 'required|string|max:100',
             'items.*.expiry_date'         => 'nullable|date',
-            'items.*.quantity_received'   => 'required|numeric|min:0',
+            'items.*.quantity_received'   => 'required|numeric|min:1',
             'items.*.quantity_free'       => 'nullable|numeric|min:0',
             'items.*.quantity_rejected'   => 'nullable|numeric|min:0',
-            'items.*.unit_purchase_price' => 'required|numeric|min:0',
-            'items.*.unit_sale_price'     => 'nullable|numeric|min:0',
-            'items.*.unit_mrp'            => 'nullable|numeric|min:0',
+            'items.*.unit_purchase_price' => 'required|numeric|min:1',
+            'items.*.unit_sale_price'     => 'nullable|numeric|min:1',
+            'items.*.unit_mrp'            => 'nullable|numeric|min:1',
             'items.*.tax_percent'         => 'nullable|numeric|min:0|max:100',
             'items.*.rejection_reason'    => 'nullable|string|max:255',
         ]);

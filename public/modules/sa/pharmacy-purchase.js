@@ -118,6 +118,27 @@ $(document).ready(function () {
     $(document).on('click', '.adddata', () => openForm(null));
     $(document).on('click', '.editdata', function () { openForm($(this).data('id')); });
 
+    /* ─── View PO details ─── */
+    async function openView(id) {
+        loader();
+        const token = await csrftoken();
+        $.post(route('showform'), { _token: token, id: id, view: 1 }, function (response) {
+            loader('hide');
+            $('#ajaxdata').html(response);
+            $('.add-datamodal').modal('show');
+            $('.add-datamodal .modal-dialog')
+                .removeClass('modal-sm modal-lg modal-xl')
+                .addClass('modal-fullscreen');
+        }).fail(function () {
+            loader('hide');
+            sendmsg('error', 'Unable to load purchase order details.');
+        });
+    }
+
+    $(document).on('click', '.view-purchase-btn', function () {
+        openView($(this).data('id'));
+    });
+
     /* ─── Add / Remove item rows ─── */
     $(document).on('click', '#add-purchase-item', function () {
         $('#purchase-items-body').append(buildRow());

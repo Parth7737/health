@@ -7,6 +7,7 @@ use App\Models\PharmacyPurchaseBill;
 use App\Models\PharmacySaleBill;
 use App\Models\PharmacyStockBatch;
 use App\Models\PharmacyStockLedger;
+use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -139,7 +140,9 @@ class PharmacyInventoryService
                 throw new RuntimeException('At least one GRN item is required.');
             }
 
-            $totalValue = 0.0;
+            $totalAmount = 0.0;
+            $totalTaxAmount = 0.0;
+            $taxableAmount = 0.0;
 
             foreach ($grnItems as $grnItem) {
                 $purchaseItemId = (int) Arr::get($grnItem, 'purchase_item_id');
@@ -171,6 +174,9 @@ class PharmacyInventoryService
 
                 $batchNo       = (string) Arr::get($grnItem, 'batch_no', '');
                 $expiryDate    = Arr::get($grnItem, 'expiry_date');
+                if (is_string($expiryDate) && preg_match('/^\d{4}-\d{2}$/', $expiryDate)) {
+                    $expiryDate = Carbon::parse($expiryDate . '-01')->endOfMonth()->format('Y-m-d');
+                }
                 $purchasePrice = (float) Arr::get($grnItem, 'unit_purchase_price', 0);
                 $salePrice     = (float) Arr::get($grnItem, 'unit_sale_price', 0);
                 $mrp           = (float) Arr::get($grnItem, 'unit_mrp', $salePrice);
@@ -196,6 +202,7 @@ class PharmacyInventoryService
                     'unit_mrp'            => $mrp,
                     'tax_percent'         => $taxPercent,
                     'tax_amount'          => $lineTax,
+                    'taxable_amount'      => $lineSubtotal,
                     'line_total'          => $lineTotal,
                 ]);
 
@@ -243,10 +250,12 @@ class PharmacyInventoryService
                     ]);
                 }
 
-                $totalValue += $lineTotal;
+                $totalAmount += $lineTotal;
+                $totalTaxAmount += $lineTax;
+                $taxableAmount += $lineSubtotal;
             }
 
-            $grn->update(['total_value' => round($totalValue, 2)]);
+            $grn->update(['total_amount' => round($totalAmount, 2),'total_tax' => round($totalTaxAmount, 2),'taxable_amount' => round($taxableAmount, 2)]);
 
             // Update PO fulfilment status
             $bill->refresh();

@@ -36,6 +36,8 @@ class PharmacyDashboardController extends BaseHospitalController
             'grnStore' => route('hospital.pharmacy.grn.store'),
             'grnLoad' => route('hospital.pharmacy.grn-load'),
             'grnApprovedPOs' => route('hospital.pharmacy.grn.approved-pos'),
+            'grnView' => route('hospital.pharmacy.grn.view', ['grn' => '__ID__']),
+            'grnPrint' => route('hospital.pharmacy.grn.print', ['grn' => '__ID__']),
         ];
     }
 
@@ -187,4 +189,3 @@ class PharmacyDashboardController extends BaseHospitalController
     }
 
 }
-

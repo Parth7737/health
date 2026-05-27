@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Pharmacy Purchase Bill</title>
+    <title>Pharmacy Purchase Order</title>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: #111827; background: #fff; font-size: 11px; line-height: 1.25; }
@@ -157,10 +157,9 @@
                 </div>
             </div>
             <div class="bill-tag">
-                <div class="title">PHARMACY PURCHASE BILL</div>
-                <div><strong>Bill No:</strong> {{ $bill->bill_no }}</div>
-                <div><strong>Bill Date:</strong> {{ optional($bill->bill_date)->format('d-m-Y') ?? '-' }}</div>
-                <div><strong>Printed At:</strong> {{ now()->format('d-m-Y h:i A') }}</div>
+                <div class="title">PURCHASE ORDER</div>
+                <div><strong>PO No:</strong> {{ $bill->bill_no }}</div>
+                <div><strong>PO Date:</strong> {{ optional($bill->bill_date)->format('d-m-Y') ?? '-' }}</div>
             </div>
         </div>
 
@@ -169,18 +168,14 @@
                 <tr>
                     <th>Supplier</th>
                     <td>{{ $supplier?->name ?? $bill->supplier_name ?? '-' }}</td>
-                    <th>Invoice No</th>
-                    <td>{{ $bill->supplier_invoice_no ?? '-' }}</td>
-                    <th>Payment</th>
-                    <td>Paid</td>
-                </tr>
-                <tr>
                     <th>Phone</th>
                     <td>{{ $supplier?->phone ?? '-' }}</td>
+                </tr>
+                <tr>
                     <th>GSTIN</th>
                     <td>{{ $supplier?->gstin ?? '-' }}</td>
                     <th>Created By</th>
-                    <td>{{ $bill->created_by ?? '-' }}</td>
+                    <td>{{ $bill->createdBy?->name ?? '-' }}</td>
                 </tr>
                 <tr>
                     <th>Address</th>
@@ -196,15 +191,8 @@
             <tr>
                 <th style="width:4%;">SN</th>
                 <th style="width:18%;">Medicine</th>
-                <th style="width:8%;">Pack</th>
-                <th style="width:10%;">Batch</th>
-                <th style="width:8%;">Expiry</th>
                 <th style="width:7%;" class="text-end">Qty</th>
-                <th style="width:7%;" class="text-end">Free</th>
-                <th style="width:8%;" class="text-end">Pur. Price</th>
-                <th style="width:8%;" class="text-end">Sale Price</th>
-                <th style="width:7%;" class="text-end">MRP</th>
-                <th style="width:6%;" class="text-end">Tax%</th>
+                <th style="width:8%;" class="text-end">Est. Price</th>
                 <th style="width:9%;" class="text-end">Amount</th>
             </tr>
         </thead>
@@ -213,15 +201,8 @@
                 <tr>
                     <td>{{ $loop->iteration }}</td>
                     <td>{{ $item->medicine?->name ?? '-' }}</td>
-                    <td>{{ $item->pack_size ?: '-' }}</td>
-                    <td>{{ $item->batch_no }}</td>
-                    <td>{{ $item->expiry_date ? $item->expiry_date->format('M-Y') : '-' }}</td>
                     <td class="text-end">{{ rtrim(rtrim(number_format((float) $item->quantity_purchased, 2), '0'), '.') }}</td>
-                    <td class="text-end">{{ rtrim(rtrim(number_format((float) $item->quantity_free, 2), '0'), '.') }}</td>
                     <td class="text-end">{{ number_format((float) $item->unit_purchase_price, 2) }}</td>
-                    <td class="text-end">{{ number_format((float) $item->unit_sale_price, 2) }}</td>
-                    <td class="text-end">{{ number_format((float) $item->unit_mrp, 2) }}</td>
-                    <td class="text-end">{{ number_format((float) $item->tax_percent, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->line_subtotal, 2) }}</td>
                 </tr>
             @empty
@@ -241,11 +222,6 @@
 
         <table class="totals-table">
             <tbody>
-                <tr><td>Subtotal</td><td class="text-end">{{ number_format((float) $bill->subtotal, 2) }}</td></tr>
-                <tr><td>Discount</td><td class="text-end">{{ number_format((float) $bill->discount_amount, 2) }}</td></tr>
-                <tr><td>Tax</td><td class="text-end">{{ number_format((float) $bill->tax_amount, 2) }}</td></tr>
-                <tr><td>Shipping</td><td class="text-end">{{ number_format((float) $bill->shipping_amount, 2) }}</td></tr>
-                <tr><td>Round Off</td><td class="text-end">{{ number_format((float) $bill->round_off, 2) }}</td></tr>
                 <tr><td>Net Total</td><td class="text-end">{{ number_format((float) $bill->net_total, 2) }}</td></tr>
             </tbody>
         </table>
