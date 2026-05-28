@@ -393,6 +393,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::post('expiry/process', 'PharmacyExpiryController@processExpired')
                 ->middleware('permission:edit-pharmacy-expiry')
                 ->name('expiry.process');
+            Route::post('expiry/{batch}/quarantine', 'PharmacyExpiryController@quarantine')
+                ->middleware('permission:edit-pharmacy-expiry')
+                ->name('expiry.quarantine');
         });
     });
 

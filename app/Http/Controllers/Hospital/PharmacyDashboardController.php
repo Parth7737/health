@@ -27,6 +27,7 @@ class PharmacyDashboardController extends BaseHospitalController
             'adjustBadStock' => route('hospital.pharmacy.stock.adjust-bad-stock'),
             'expiryLoad' => route('hospital.pharmacy.expiry-load'),
             'expiryProcess' => route('hospital.pharmacy.expiry.process'),
+            'expiryQuarantine' => route('hospital.pharmacy.expiry.quarantine', ['batch' => '__ID__']),
             'purchaseLoad' => route('hospital.pharmacy.purchase-load'),
             'purchaseStore' => route('hospital.pharmacy.purchase.store'),
             'purchaseShowform' => route('hospital.pharmacy.purchase.showform'),

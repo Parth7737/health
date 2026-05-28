@@ -17,7 +17,11 @@ class PharmacyExpiryController extends BaseHospitalController
         parent::__construct();
         $this->routes = [
             'loadtable' => route('hospital.pharmacy.expiry-load'),
+            'expiryLoad' => route('hospital.pharmacy.expiry-load'),
             'process' => route('hospital.pharmacy.expiry.process'),
+            'expiryProcess' => route('hospital.pharmacy.expiry.process'),
+            'quarantine' => route('hospital.pharmacy.expiry.quarantine', ['batch' => '__ID__']),
+            'expiryQuarantine' => route('hospital.pharmacy.expiry.quarantine', ['batch' => '__ID__']),
         ];
     }
 
@@ -34,7 +38,7 @@ class PharmacyExpiryController extends BaseHospitalController
         $search       = is_array($request->input('search')) ? ($request->input('search.value') ?? '') : (string) $request->input('search', '');
         $expiryFilter = (string) $request->input('expiry_filter', 'all_alerts');
 
-        $data = PharmacyStockBatch::query()
+        $data = PharmacyStockBatch::select('pharmacy_stock_batches.*')
             ->with('medicine:id,name')
             ->whereNotNull('expiry_date')
             ->where('available_qty', '>', 0);
@@ -88,6 +92,7 @@ class PharmacyExpiryController extends BaseHospitalController
                 }
                 return 'Watch';
             })
+            ->addColumn('id', fn ($row) => $row->id)
             ->editColumn('expiry_date', fn ($row) => $row->expiry_date ? $row->expiry_date->format('d-m-Y') : '-')
             ->rawColumns([])
             ->make(true);
@@ -100,6 +105,16 @@ class PharmacyExpiryController extends BaseHospitalController
         return response()->json([
             'status' => true,
             'message' => $affected . ' expired batch processed successfully.',
+        ]);
+    }
+
+    public function quarantine(PharmacyStockBatch $batch, PharmacyInventoryService $inventoryService)
+    {
+        $inventoryService->quarantineStockBatch($batch->id);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Batch #' . $batch->id . ' quarantined successfully.',
         ]);
     }
 }

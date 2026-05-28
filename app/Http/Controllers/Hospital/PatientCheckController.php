@@ -46,7 +46,7 @@ class PatientCheckController extends Controller
     public function upload(Request $request)
     {
         $request->validate([
-            'zip_file' => 'required|file|mimes:zip|max:51200',
+            'zip_file' => 'required|file|mimes:zip|max:512000',
         ]);
 
         if (!File::exists($this->zipDirectory)) {

@@ -421,6 +421,17 @@
         return '';
     }
 
+    function getExpiryQuarantineUrl(id) {
+        if (typeof window.route === 'function') {
+            try {
+                try { return window.route('expiryQuarantine').replace('__ID__', String(id)); } catch (e) { return ''; }
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
+
     function getPurchaseLoadUrl() {
         if (typeof window.route === 'function') {
             try {
@@ -857,8 +868,8 @@
                         var days = parseInt(data, 10);
                         if (type !== 'display') { return isNaN(days) ? 9999 : days; }
                         if (isNaN(days)) { return '-'; }
-                        var cls = days < 20 ? 'red' : 'orange';
-                        var label = days < 0 ? Math.abs(days) + ' days ago' : days + ' days';
+                        var cls = days < 0 ? 'red' : (days < 20 ? 'red' : 'orange');
+                        var label = days < 0 ? 'Expired' : days + ' days';
                         return '<span class="badge badge-' + cls + '">' + label + '</span>';
                     }
                 },
@@ -988,7 +999,7 @@
                 { data: 'supplier_name', name: 'supplier_name', orderable: false },
                 { data: 'invoice_no', name: 'invoice_no', defaultContent: '—' },
                 { data: 'items_count', orderable: false, searchable: false },
-                { data: 'total_value', name: 'total_value', render: function (v) { return '<span class="fw-700">' + formatCurrency(v) + '</span>'; } },
+                { data: 'total_amount', name: 'total_amount', render: function (v) { return '<span class="fw-700">' + formatCurrency(v) + '</span>'; } },
                 { data: 'received_by_name', orderable: false },
                 { data: 'received_at', name: 'received_at' },
                 { data: 'id', name: 'id', orderable: false, searchable: false }
@@ -1235,11 +1246,95 @@
     };
 
     window.expiryQuarantine = function (id, btn) {
-        if (btn) { btn.disabled = true; }
-        toast('Quarantine', 'Batch #' + id + ' marked for quarantine.', 'warning');
+        var message = 'This will hold the batch stock and mark it as quarantined.';
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Quarantine This Medicine Batch ?',
+                text: message,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, Quarantine it',
+                cancelButtonText: 'Cancel'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    doExpiryQuarantine(id, btn);
+                }
+            });
+            return;
+        }
+
+        if (!confirm(message)) {
+            return;
+        }
+
+        doExpiryQuarantine(id, btn);
     };
 
+    function doExpiryQuarantine(id, btn) {
+        var url = getExpiryQuarantineUrl(id);
+        if (!url || typeof window.$ === 'undefined') {
+            toast('Error', 'Quarantine route not available.', 'error');
+            if (btn) { btn.disabled = false; }
+            return;
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Quarantining...';
+        }
+        if (typeof window.loader === 'function') { window.loader(); }
+
+        window.$.ajax({
+            url: url,
+            type: 'POST',
+            data: { _token: getCsrfToken() },
+            success: function (response) {
+                if (typeof window.loader === 'function') { window.loader('hide'); }
+                toast('Quarantined', response.message || 'Batch stock is now on hold.', 'warning');
+                if (btn) {
+                    btn.textContent = 'Quarantined';
+                }
+                if (expiryTable) { expiryTable.ajax.reload(null, false); }
+            },
+            error: function () {
+                if (typeof window.loader === 'function') { window.loader('hide'); }
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '🔒 Quarantine';
+                }
+                toast('Error', 'Failed to quarantine batch stock.', 'error');
+            }
+        });
+    }
+
     window.expiryReturn = function (id, btn) {
+        var message = 'Return batch #' + id + '? This will initiate the return process for the batch.';
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Return This medicine batch?',
+                text: message,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, return it',
+                cancelButtonText: 'Cancel'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    doExpiryReturn(id, btn);
+                }
+            });
+            return;
+        }
+
+        if (!confirm(message)) {
+            return;
+        }
+
+        doExpiryReturn(id, btn);
+    };
+
+    function doExpiryReturn(id, btn) {
         if (btn) { btn.disabled = true; }
         toast('Return', 'Return process initiated for batch #' + id + '.', 'info');
     };
@@ -1251,6 +1346,34 @@
             return;
         }
 
+        var message = 'Expired stock will be deducted from current inventory. Do you want to proceed?';
+        var proceed = false;
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Process Expired Stock?',
+                text: message,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, process it',
+                cancelButtonText: 'No, cancel'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    doProcessExpiredBatches(url);
+                }
+            });
+            return;
+        }
+
+        proceed = confirm(message);
+        if (!proceed) {
+            return;
+        }
+
+        doProcessExpiredBatches(url);
+    };
+
+    function doProcessExpiredBatches(url) {
         if (typeof window.loader === 'function') { window.loader(); }
 
         window.$.ajax({

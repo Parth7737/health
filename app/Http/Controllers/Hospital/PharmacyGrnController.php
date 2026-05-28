@@ -34,7 +34,7 @@ class PharmacyGrnController extends BaseHospitalController
             ->addColumn('po_no', fn ($row) => $row->purchaseBill?->bill_no ?? '—')
             ->addColumn('received_by_name', fn ($row) => $row->receivedByUser?->name ?? '—')
             ->editColumn('received_at', fn ($row) => optional($row->received_at)->format('d-m-Y H:i'))
-            ->editColumn('total_value', fn ($row) => $row->total_value)
+            ->editColumn('total_amount', fn ($row) => $row->total_amount)
             ->make(true);
     }
 

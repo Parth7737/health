@@ -566,6 +566,39 @@ class PharmacyInventoryService
         });
     }
 
+    public function quarantineStockBatch(int $stockBatchId): PharmacyStockBatch
+    {
+        return DB::transaction(function () use ($stockBatchId) {
+            $batch = PharmacyStockBatch::query()->lockForUpdate()->findOrFail($stockBatchId);
+            $quantity = (float) $batch->available_qty;
+
+            if ($quantity <= 0) {
+                throw new RuntimeException('No available stock found for quarantine.');
+            }
+
+            $batch->available_qty = 0;
+            $batch->reserved_qty = (float) $batch->reserved_qty + $quantity;
+            $batch->status = 'quarantined';
+            $batch->save();
+
+            $this->createLedgerEntry([
+                'hospital_id' => $batch->hospital_id,
+                'medicine_id' => $batch->medicine_id,
+                'stock_batch_id' => $batch->id,
+                'reference_type' => PharmacyStockBatch::class,
+                'reference_id' => $batch->id,
+                'entry_type' => 'adjustment_quarantine',
+                'quantity' => $quantity,
+                'balance_after' => $batch->available_qty,
+                'unit_purchase_price' => $batch->unit_purchase_price,
+                'unit_sale_price' => $batch->unit_sale_price,
+                'remarks' => 'Batch quarantined and held from inventory',
+            ]);
+
+            return $batch->fresh();
+        });
+    }
+
     public function adjustBadStock(int $stockBatchId, float $quantity, string $reason = 'damaged'): PharmacyStockBatch
     {
         if ($quantity <= 0) {
