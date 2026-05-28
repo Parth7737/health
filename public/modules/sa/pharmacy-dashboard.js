@@ -255,6 +255,63 @@
         return '';
     }
 
+    function getDashboardCountsUrl() {
+        if (typeof window.route === 'function') {
+            try {
+                return window.route('dashboardCounts');
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
+
+    function formatCount(value) {
+        var number = parseInt(value, 10);
+        if (isNaN(number)) {
+            number = 0;
+        }
+        return number.toLocaleString('en-IN');
+    }
+
+    function setCountText(id, value) {
+        var el = document.getElementById(id);
+        if (el) {
+            el.textContent = formatCount(value);
+        }
+    }
+
+    function applyDashboardCounts(counts) {
+        counts = counts || {};
+        setCountText('phQueuePendingCount', counts.queue_pending);
+        setCountText('phQueuePendingTabCount', counts.queue_pending);
+        setCountText('phStatOrdersSubCount', counts.stat_orders);
+        setCountText('phStatOrdersTabCount', counts.stat_orders);
+        setCountText('phExpiryAlertsCount', counts.expiry_alerts);
+        setCountText('phExpiryAlertsTabCount', counts.expiry_alerts);
+        setCountText('phLowStockItemsCount', counts.low_stock_items);
+        setCountText('phDrugItemsCount', counts.drug_items);
+    }
+
+    function loadDashboardCounts() {
+        var url = getDashboardCountsUrl();
+        if (!url || typeof window.fetch !== 'function') {
+            return;
+        }
+
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken() || ''
+            }
+        })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
+            .then(applyDashboardCounts)
+            .catch(function () {});
+    }
+
     function renderStatOrders(listEl, stats) {
         listEl.innerHTML = (stats || [])
             .map(function (s) {
@@ -681,19 +738,25 @@
                     targets: 5,
                     render: function (data, type, row) {
                         var stock = toNumber(data);
+                        var medicineStock = toNumber(row.medicine_available_qty);
                         if (type !== 'display') {
                             return stock;
                         }
 
-                        var minLevel = toNumber(row.min_level);
+                        var minLevel = toNumber(row.reorder_level || row.min_level);
                         var style = '';
-                        if (stock < minLevel * 0.5) {
+                        if (medicineStock <= 0) {
                             style = 'color:var(--danger);font-weight:700';
-                        } else if (stock < minLevel) {
+                        } else if (minLevel > 0 && medicineStock <= minLevel) {
                             style = 'color:var(--warning);font-weight:600';
                         }
 
-                        return '<span style="' + style + '">' + stock + '</span>';
+                        var totalHint = '';
+                        if (medicineStock !== stock) {
+                            totalHint = '<div class="fs-10 text-muted">Total usable: ' + medicineStock + '</div>';
+                        }
+
+                        return '<span style="' + style + '">' + stock + '</span>' + totalHint;
                     }
                 },
                 {
@@ -726,17 +789,18 @@
                             return data;
                         }
                         var stock = toNumber(row.available_qty);
-                        var minLevel = toNumber(row.min_level);
+                        var medicineStock = toNumber(row.medicine_available_qty);
+                        var reorderLevel = toNumber(row.reorder_level || row.min_level);
                         var label = 'In Stock';
                         var cls = 'green';
 
-                        if (String(data || '').toLowerCase() === 'expired') {
+                        if (medicineStock > 0 && (stock <= 0 || String(data || '').toLowerCase() === 'expired')) {
+                            label = 'Alt Batch Available';
+                            cls = 'indigo';
+                        } else if (medicineStock <= 0) {
                             label = 'Critical';
                             cls = 'red';
-                        } else if (stock < minLevel * 0.5) {
-                            label = 'Critical';
-                            cls = 'red';
-                        } else if (stock < minLevel || String(data || '').toLowerCase() === 'out_of_stock') {
+                        } else if (reorderLevel > 0 && medicineStock <= reorderLevel) {
                             label = 'Low';
                             cls = 'orange';
                         }
@@ -1197,15 +1261,19 @@
 
     window.refreshQueue = function () {
         if (dispenseTable) {
-            dispenseTable.ajax.reload();
+            dispenseTable.ajax.reload(function () {
+                loadDashboardCounts();
+            });
         } else {
             loadDispenseQueue();
+            loadDashboardCounts();
         }
         toast('Refreshed', 'Queue refreshed', 'success', 2000);
     };
 
     window.refreshStatOrders = function () {
         loadStatOrders();
+        loadDashboardCounts();
         statOrdersLoaded = true;
         toast('Refreshed', 'STAT orders refreshed', 'success', 2000);
     };
@@ -1296,6 +1364,7 @@
                     btn.textContent = 'Quarantined';
                 }
                 if (expiryTable) { expiryTable.ajax.reload(null, false); }
+                loadDashboardCounts();
             },
             error: function () {
                 if (typeof window.loader === 'function') { window.loader('hide'); }
@@ -1384,6 +1453,8 @@
                 if (typeof window.loader === 'function') { window.loader('hide'); }
                 toast('Done', response.message || 'Expired batches processed.', 'success');
                 if (expiryTable) { expiryTable.ajax.reload(null, false); }
+                if (inventoryTable) { inventoryTable.ajax.reload(null, false); }
+                loadDashboardCounts();
             },
             error: function () {
                 if (typeof window.loader === 'function') { window.loader('hide'); }
@@ -1663,9 +1734,9 @@
         window.$(document).on('click', '.po-create-grn-btn', function () {
             var poId = this.getAttribute('data-id');
             window.openModal('grnModal');
-            setTimeout(function () {
+            loadApprovedPOs(function () {
                 window.$('#grn_po_select').val(poId).trigger('change');
-            }, 300);
+            });
         });
 
         /* ─── GRN: PO select change → populate items ─── */
@@ -1721,6 +1792,7 @@
                         if (grnLogTable) { grnLogTable.ajax.reload(null, false); }
                         if (poTable) { poTable.ajax.reload(null, false); }
                         if (inventoryTable) { inventoryTable.ajax.reload(null, false); }
+                        loadDashboardCounts();
                         loadApprovedPOs();
                     } else {
                         toast('Error', response.message || 'Failed to create GRN.', 'error');
@@ -1797,6 +1869,7 @@
                     if (inventoryTable) {
                         inventoryTable.ajax.reload(null, false);
                     }
+                    loadDashboardCounts();
                     toast('Success', response.message || 'Bad stock adjusted successfully.', 'success');
                 },
                 error: function (xhr) {
@@ -1928,17 +2001,34 @@
     /* ─── GRN: Dynamic PO-linked flow ─── */
     var grnApprovedPOsCache = [];
 
-    function loadApprovedPOs() {
+    function loadApprovedPOs(callback) {
         var url = getGrnApprovedPOsUrl();
-        if (!url) return;
+        if (!url) {
+            if (typeof callback === 'function') {
+                callback();
+            }
+            return;
+        }
         window.$.getJSON(url, function (data) {
             grnApprovedPOsCache = data || [];
             var sel = document.getElementById('grn_po_select');
-            if (!sel) return;
+            if (!sel) {
+                if (typeof callback === 'function') {
+                    callback();
+                }
+                return;
+            }
             sel.innerHTML = '<option value="">— Select Approved PO —</option>';
             grnApprovedPOsCache.forEach(function (po) {
                 sel.innerHTML += '<option value="' + po.id + '">' + escapeHtml(po.bill_no) + ' — ' + escapeHtml(po.supplier) + ' (' + escapeHtml(po.date) + ')</option>';
             });
+            if (typeof callback === 'function') {
+                callback();
+            }
+        }).fail(function () {
+            if (typeof callback === 'function') {
+                callback();
+            }
         });
     }
 
@@ -2040,6 +2130,7 @@
     };
 
     document.addEventListener('DOMContentLoaded', function () {
+        loadDashboardCounts();
         loadDispenseQueue();
         loadRxValidation();
         loadMARContent();

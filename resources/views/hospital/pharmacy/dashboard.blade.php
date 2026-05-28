@@ -21,9 +21,9 @@
         <div class="stat-card stat-blue">
             <div class="stat-icon">📋</div>
             <div class="stat-info">
-                <div class="stat-value">12</div>
+                <div class="stat-value" id="phQueuePendingCount">0</div>
                 <div class="stat-label">Queue Pending</div>
-                <div class="stat-change neutral">3 STAT orders</div>
+                <div class="stat-change neutral"><span id="phStatOrdersSubCount">0</span> STAT orders</div>
             </div>
         </div>
         <div class="stat-card stat-green">
@@ -37,15 +37,15 @@
         <div class="stat-card stat-orange">
             <div class="stat-icon">⚠️</div>
             <div class="stat-info">
-                <div class="stat-value">7</div>
+                <div class="stat-value" id="phExpiryAlertsCount">0</div>
                 <div class="stat-label">Expiry Alerts</div>
-                <div class="stat-change neutral">Within 30 days</div>
+                <div class="stat-change neutral">Within 90 days</div>
             </div>
         </div>
         <div class="stat-card stat-red">
             <div class="stat-icon">📉</div>
             <div class="stat-info">
-                <div class="stat-value">14</div>
+                <div class="stat-value" id="phLowStockItemsCount">0</div>
                 <div class="stat-label">Low Stock Items</div>
                 <div class="stat-change neutral">Reorder needed</div>
             </div>
@@ -61,7 +61,7 @@
         <div class="stat-card stat-teal">
             <div class="stat-icon">📦</div>
             <div class="stat-info">
-                <div class="stat-value">1,842</div>
+                <div class="stat-value" id="phDrugItemsCount">0</div>
                 <div class="stat-label">Drug Items</div>
                 <div class="stat-change neutral">In inventory</div>
             </div>
@@ -71,11 +71,11 @@
     <div class="card">
         <div class="card-body p-0">
             <div class="tabs-bar pharmacy-tabs-bar">
-                <button class="tab-btn active" type="button" onclick="switchPhTab('dispenseQueuePane', this)">💊 Dispense Queue <span class="tab-count">12</span></button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('statPane', this)">🚨 STAT Orders <span class="tab-count">3</span></button>
+                <button class="tab-btn active" type="button" onclick="switchPhTab('dispenseQueuePane', this)">💊 Dispense Queue <span class="tab-count" id="phQueuePendingTabCount">0</span></button>
+                <button class="tab-btn" type="button" onclick="switchPhTab('statPane', this)">🚨 STAT Orders <span class="tab-count" id="phStatOrdersTabCount">0</span></button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('rxValidatePane', this)">✅ Rx Validation</button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('inventoryPane', this)">📦 Drug Inventory</button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('expiryPane', this)">⚠️ Expiry Alerts <span class="tab-count tab-count-danger">7</span></button>
+                <button class="tab-btn" type="button" onclick="switchPhTab('expiryPane', this)">⚠️ Expiry Alerts <span class="tab-count tab-count-danger" id="phExpiryAlertsTabCount">0</span></button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('grnListPane', this)">📥 GRN Log</button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('poPane', this)">📤 Purchase Orders</button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('marPane', this)">📋 MAR</button>

@@ -343,6 +343,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
     Route::group(['prefix' => 'pharmacy', 'as' => 'pharmacy.'], function () {
         
         Route::get('/', 'PharmacyDashboardController@index')->name('index');
+        Route::get('dashboard-counts', 'PharmacyDashboardController@counts')->name('dashboard-counts');
         // Pharmacy Purchase
         Route::middleware(['permission:view-pharmacy-purchase'])->group(function () {
             Route::resource('purchase', 'PharmacyPurchaseController')->only(['index', 'store']);

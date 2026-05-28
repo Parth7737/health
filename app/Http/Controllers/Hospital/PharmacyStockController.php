@@ -8,6 +8,7 @@ use App\Models\PharmacyStockBatch;
 use App\Services\PharmacyInventoryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\Validator;
 use Yajra\DataTables\Facades\DataTables;
@@ -43,6 +44,8 @@ class PharmacyStockController extends BaseHospitalController
             ->addColumn('category_name', fn ($row) => $row->medicine?->category?->name ?? '-')
             ->addColumn('form_name', fn ($row) => $row->medicine?->unit ?? '-')
             ->addColumn('min_level', fn ($row) => $row->medicine?->min_level ?? 0)
+            ->addColumn('reorder_level', fn ($row) => $row->medicine?->reorder_level ?? 0)
+            ->addColumn('medicine_available_qty', fn ($row) => (float) ($row->medicine_available_qty ?? 0))
             ->addColumn('expiry_iso', function ($row) {
                 if (!$row->expiry_date) {
                     return null;
@@ -128,8 +131,14 @@ class PharmacyStockController extends BaseHospitalController
 
     private function stockQuery(Request $request)
     {
+        $usableStock = $this->usableStockByMedicineSubQuery();
+
         $query = PharmacyStockBatch::query()
             ->select('pharmacy_stock_batches.*')
+            ->selectRaw('COALESCE(usable_stock.available_qty, 0) as medicine_available_qty')
+            ->leftJoinSub($usableStock, 'usable_stock', function ($join) {
+                $join->on('usable_stock.medicine_id', '=', 'pharmacy_stock_batches.medicine_id');
+            })
             ->with('medicine:id,name,unit,min_level,reorder_level,medicine_category_id')
             ->with('medicine.category:id,name')
             ->latest('pharmacy_stock_batches.id');
@@ -160,29 +169,59 @@ class PharmacyStockController extends BaseHospitalController
         }
 
         $stockFilter = (string) $request->input('stock_filter', 'all');
+        $expiryFilter = (string) $request->input('expiry_filter', 'all');
         if ($stockFilter === 'in_stock') {
-            $query->where('available_qty', '>', 0);
+            $query->whereRaw('COALESCE(usable_stock.available_qty, 0) > 0');
         } elseif ($stockFilter === 'out_of_stock') {
-            $query->where('available_qty', '<=', 0);
+            $query->whereRaw('COALESCE(usable_stock.available_qty, 0) <= 0');
         } elseif ($stockFilter === 'low_stock') {
-            $query->whereHas('medicine', function ($q) {
-                $q->whereColumn('pharmacy_stock_batches.available_qty', '<=', 'medicines.reorder_level')
-                    ->where('medicines.reorder_level', '>', 0);
-            });
+            $query->whereRaw('COALESCE(usable_stock.available_qty, 0) > 0')
+                ->whereHas('medicine', function ($q) {
+                    $q->where('medicines.reorder_level', '>', 0);
+                })
+                ->whereRaw('COALESCE(usable_stock.available_qty, 0) <= (select m.reorder_level from medicines as m where m.id = pharmacy_stock_batches.medicine_id limit 1)');
         } elseif ($stockFilter === 'expired') {
             $query->whereDate('expiry_date', '<', now()->toDateString());
+            $query->whereRaw('COALESCE(usable_stock.available_qty, 0) <= 0');
+        } elseif ($stockFilter === 'all' && $expiryFilter === 'all') {
+            $query->where(function ($q) {
+                $q->whereRaw('COALESCE(usable_stock.available_qty, 0) <= 0')
+                    ->orWhere(function ($activeBatch) {
+                        $activeBatch->where('pharmacy_stock_batches.available_qty', '>', 0)
+                            ->where('pharmacy_stock_batches.status', 'active')
+                            ->where(function ($expiry) {
+                                $expiry->whereNull('pharmacy_stock_batches.expiry_date')
+                                    ->orWhereDate('pharmacy_stock_batches.expiry_date', '>=', now()->toDateString());
+                            });
+                    });
+            });
         }
 
-        $expiryFilter = (string) $request->input('expiry_filter', 'all');
         if ($expiryFilter === 'exp_30') {
             $query->whereBetween('expiry_date', [now()->toDateString(), now()->addDays(30)->toDateString()]);
         } elseif ($expiryFilter === 'exp_90') {
             $query->whereBetween('expiry_date', [now()->toDateString(), now()->addDays(90)->toDateString()]);
         } elseif ($expiryFilter === 'expired') {
             $query->whereDate('expiry_date', '<', now()->toDateString());
+            $query->whereRaw('COALESCE(usable_stock.available_qty, 0) <= 0');
         }
 
         return $query;
+    }
+
+    private function usableStockByMedicineSubQuery()
+    {
+        return DB::table('pharmacy_stock_batches')
+            ->select('medicine_id')
+            ->selectRaw('SUM(available_qty) as available_qty')
+            ->where('hospital_id', $this->hospital_id)
+            ->where('status', 'active')
+            ->where('available_qty', '>', 0)
+            ->where(function ($q) {
+                $q->whereNull('expiry_date')
+                    ->orWhereDate('expiry_date', '>=', now()->toDateString());
+            })
+            ->groupBy('medicine_id');
     }
 
     public function showBadStockForm(Request $request)

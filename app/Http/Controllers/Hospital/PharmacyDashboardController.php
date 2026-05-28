@@ -6,6 +6,7 @@ use App\Http\Controllers\BaseHospitalController;
 use App\Models\Medicine;
 use App\Models\MedicineCategory;
 use App\Models\PharmacySupplier;
+use App\Models\PharmacyStockBatch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
@@ -19,6 +20,7 @@ class PharmacyDashboardController extends BaseHospitalController
     {
         parent::__construct();
         $this->routes = [
+            'dashboardCounts' => route('hospital.pharmacy.dashboard-counts'),
             'dispenseQueueLoad' => route('hospital.pharmacy.dispense-queue-load'),
             'statOrdersLoad' => route('hospital.pharmacy.stat-orders-load'),
             'stockLoad' => route('hospital.pharmacy.stock-load'),
@@ -54,6 +56,65 @@ class PharmacyDashboardController extends BaseHospitalController
             'medicineCategories' => $medicineCategories,
             'medicines' => $medicines,
             'suppliers' => $suppliers,
+        ]);
+    }
+
+    public function counts()
+    {
+        $today = now()->toDateString();
+
+        $pendingOpdCount = $this->pendingOpdPrescriptionQuery($today)->count('rx.id');
+        $pendingIpdCount = $this->pendingIpdPrescriptionQuery($today)->count('rx.id');
+        $statOrdersCount = $this->pendingIpdPrescriptionQuery($today)
+            ->where('rx.dispense_type', 'Emergency')
+            ->count('rx.id');
+
+        $expiryAlertsCount = PharmacyStockBatch::query()
+            ->whereNotNull('expiry_date')
+            ->where('available_qty', '>', 0)
+            ->where(function ($q) {
+                $q->whereDate('expiry_date', '<', now()->toDateString())
+                    ->orWhereBetween('expiry_date', [now()->toDateString(), now()->addDays(90)->toDateString()]);
+            })
+            ->count();
+
+        $lowStockSubQuery = DB::table('medicines as m')
+            ->leftJoin('pharmacy_stock_batches as psb', function ($join) {
+                $join->on('psb.medicine_id', '=', 'm.id')
+                    ->where('psb.hospital_id', '=', $this->hospital_id)
+                    ->where('psb.status', '=', 'active')
+                    ->where('psb.available_qty', '>', 0)
+                    ->where(function ($q) {
+                        $q->whereNull('psb.expiry_date')
+                            ->orWhereDate('psb.expiry_date', '>=', now()->toDateString());
+                    });
+            })
+            ->where('m.hospital_id', $this->hospital_id)
+            ->where('m.reorder_level', '>', 0)
+            ->select('m.id')
+            ->groupBy('m.id', 'm.reorder_level')
+            ->havingRaw('COALESCE(SUM(psb.available_qty), 0) <= m.reorder_level');
+
+        $lowStockItemsCount = DB::query()
+            ->fromSub($lowStockSubQuery, 'low_stock_items')
+            ->count();
+
+        $drugItemsCount = PharmacyStockBatch::query()
+            ->where('status', 'active')
+            ->where('available_qty', '>', 0)
+            ->where(function ($q) {
+                $q->whereNull('expiry_date')
+                    ->orWhereDate('expiry_date', '>=', now()->toDateString());
+            })
+            ->distinct('medicine_id')
+            ->count('medicine_id');
+
+        return response()->json([
+            'queue_pending' => (int) ($pendingOpdCount + $pendingIpdCount),
+            'stat_orders' => (int) $statOrdersCount,
+            'expiry_alerts' => (int) $expiryAlertsCount,
+            'low_stock_items' => (int) $lowStockItemsCount,
+            'drug_items' => (int) $drugItemsCount,
         ]);
     }
 
@@ -187,6 +248,28 @@ class PharmacyDashboardController extends BaseHospitalController
         });
 
         return response()->json($payload);
+    }
+
+    private function pendingOpdPrescriptionQuery(string $today)
+    {
+        return DB::table('opd_prescriptions as rx')
+            ->leftJoin('pharmacy_sale_bills as sb', 'sb.opd_prescription_id', '=', 'rx.id')
+            ->where('rx.hospital_id', $this->hospital_id)
+            ->whereNull('sb.id')
+            ->where(function ($q) use ($today) {
+                $q->whereNull('rx.valid_till')->orWhereDate('rx.valid_till', '>=', $today);
+            });
+    }
+
+    private function pendingIpdPrescriptionQuery(string $today)
+    {
+        return DB::table('ipd_prescriptions as rx')
+            ->leftJoin('pharmacy_sale_bills as sb', 'sb.ipd_prescription_id', '=', 'rx.id')
+            ->where('rx.hospital_id', $this->hospital_id)
+            ->whereNull('sb.id')
+            ->where(function ($q) use ($today) {
+                $q->whereNull('rx.valid_till')->orWhereDate('rx.valid_till', '>=', $today);
+            });
     }
 
 }
