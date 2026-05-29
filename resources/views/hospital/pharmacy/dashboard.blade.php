@@ -75,6 +75,7 @@
                 <button class="tab-btn" type="button" onclick="switchPhTab('statPane', this)">🚨 STAT Orders <span class="tab-count" id="phStatOrdersTabCount">0</span></button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('rxValidatePane', this)">✅ Rx Validation</button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('inventoryPane', this)">📦 Drug Inventory</button>
+                <button class="tab-btn" type="button" onclick="switchPhTab('quarantinePane', this)">📦 Quarantine Inventory</button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('expiryPane', this)">⚠️ Expiry Alerts <span class="tab-count tab-count-danger" id="phExpiryAlertsTabCount">0</span></button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('grnListPane', this)">📥 GRN Log</button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('poPane', this)">📤 Purchase Orders</button>
@@ -142,6 +143,34 @@
                     <table class="hims-table display table-striped" id="drugInventoryTable">
                         <thead><tr><th>Drug Name</th><th>Category</th><th>Form</th><th>Batch</th><th>Expiry</th><th>Stock</th><th>Min Level</th><th>MRP ₹</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody id="drugInventoryBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="quarantinePane" class="ph-pane ph-hidden">
+                <div class="ph-toolbar inventory-toolbar">
+                    <div class="inventory-filter-row">
+                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="quarantineDrugSearch" placeholder="Drug name / category..."></div>
+                        <select class="form-control ph-small-select" id="quarantineDrugCategoryFilter">
+                            <option value="">All Categories</option>
+                            @foreach($medicineCategories as $category)
+                                <option value="{{ $category->id }}">{{ $category->name }}</option>
+                            @endforeach
+                        </select>
+                        <select class="form-control ph-small-select" id="quarantineDrugExpiryFilter">
+                            <option value="all">All Expiry</option>
+                            <option value="exp_30">Expiring in 30 Days</option>
+                            <option value="exp_90">Expiring in 90 Days</option>
+                            <option value="expired">Already Expired</option>
+                        </select>
+                    </div>
+                    <div class="inventory-action-row">
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="exportQuarantineDrugInventory()">🖨️ Export</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="hims-table display table-striped" id="quarantineDrugInventoryTable">
+                        <thead><tr><th>Drug Name</th><th>Category</th><th>Form</th><th>Batch</th><th>Expiry</th><th>Quarantine Stock</th><th>Min Level</th><th>MRP ₹</th><th>Action</th></tr></thead>
+                        <tbody id="quarantineDrugInventoryBody"></tbody>
                     </table>
                 </div>
             </div>

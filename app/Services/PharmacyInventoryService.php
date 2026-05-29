@@ -599,24 +599,35 @@ class PharmacyInventoryService
         });
     }
 
-    public function adjustBadStock(int $stockBatchId, float $quantity, string $reason = 'damaged'): PharmacyStockBatch
+    public function adjustBadStock(int $stockBatchId, float $quantity, string $reason = 'damaged',string $type = 'damage'): PharmacyStockBatch
     {
         if ($quantity <= 0) {
             throw new RuntimeException('Adjustment quantity must be greater than zero.');
         }
 
-        return DB::transaction(function () use ($stockBatchId, $quantity, $reason) {
+        return DB::transaction(function () use ($stockBatchId, $quantity, $reason, $type) {
             $batch = PharmacyStockBatch::query()->lockForUpdate()->findOrFail($stockBatchId);
 
-            if ((float) $batch->available_qty < $quantity) {
-                throw new RuntimeException('Bad stock quantity exceeds available stock.');
+            if($type === 'damage') {
+                if ((float) $batch->available_qty < $quantity) {
+                    throw new RuntimeException('Bad stock quantity exceeds available stock.');
+                }
+                $batch->available_qty = (float) $batch->available_qty - $quantity;
+                if ((float) $batch->available_qty <= 0) {
+                    $batch->status = 'out_of_stock';
+                }
+            }else{
+                if ((float) $batch->reserved_qty < $quantity) {
+                    throw new RuntimeException('Bad stock quantity exceeds quarantined stock.');
+                }
+                $batch->reserved_qty = (float) $batch->reserved_qty - $quantity;
+                if ((float) $batch->reserved_qty <= 0) {
+                    $batch->status = 'out_of_stock';
+                }
             }
 
-            $batch->available_qty = (float) $batch->available_qty - $quantity;
+            
             $batch->damaged_qty = (float) $batch->damaged_qty + $quantity;
-            if ((float) $batch->available_qty <= 0) {
-                $batch->status = 'out_of_stock';
-            }
             $batch->save();
 
             $this->createLedgerEntry([

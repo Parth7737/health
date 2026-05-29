@@ -386,6 +386,17 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
                 ->middleware('permission:edit-pharmacy-bad-stock')
                 ->name('stock.adjust-bad-stock');
         });
+        
+        // Pharmacy Quarantine Stock
+        Route::middleware(['permission:view-pharmacy-stock'])->group(function () {
+            Route::get('quarantine-stock', 'PharmacyQuarantineStockController@index')->name('quarantine-stock.index');
+            Route::get('quarantine-stock/export', 'PharmacyQuarantineStockController@export')->name('quarantine-stock-export');
+            Route::post('quarantine-stock/load', 'PharmacyQuarantineStockController@loaddata')->name('quarantine-stock-load');
+            Route::post('quarantine-stock/show-bad-stock-form', 'PharmacyQuarantineStockController@showBadStockForm')->name('quarantine-stock.show-bad-stock-form');
+            Route::post('quarantine-stock/adjust-bad-stock', 'PharmacyQuarantineStockController@adjustBadStock')
+                ->middleware('permission:edit-pharmacy-bad-stock')
+                ->name('quarantine-stock.adjust-bad-stock');
+        });
 
         // Pharmacy Expiry
         Route::middleware(['permission:view-pharmacy-expiry'])->group(function () {

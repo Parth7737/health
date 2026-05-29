@@ -2,10 +2,6 @@
     'use strict';
 
     function toast(title, message, type, duration) {
-        if (typeof window.showToast === 'function') {
-            window.showToast(title, message, type, duration);
-            return;
-        }
         if (typeof window.sendmsg === 'function') {
             window.sendmsg(type || 'info', message || title);
             return;
@@ -77,6 +73,7 @@
 
     var dispenseTable = null;
     var inventoryTable = null;
+    var quarantineInventoryTable = null;
     var expiryTable = null;
     var poTable = null;
     var statOrdersLoaded = false;
@@ -422,6 +419,17 @@
         }
         return '';
     }
+    
+    function getQuarantineStockLoadUrl() {
+        if (typeof window.route === 'function') {
+            try {
+                return window.route('quarantineStockLoad');
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
 
     function getStockExportUrl() {
         if (typeof window.route === 'function') {
@@ -449,6 +457,39 @@
         if (typeof window.route === 'function') {
             try {
                 return window.route('adjustBadStock');
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
+    
+    function getQuarantineStockExportUrl() {
+        if (typeof window.route === 'function') {
+            try {
+                return window.route('quarantineStockExport');
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
+
+    function getShowBadQuarantineStockFormUrl() {
+        if (typeof window.route === 'function') {
+            try {
+                return window.route('showBadQuarantineStockForm');
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
+
+    function getAdjustBadQuarantineStockUrl() {
+        if (typeof window.route === 'function') {
+            try {
+                return window.route('adjustBadQuarantineStock');
             } catch (e) {
                 return '';
             }
@@ -619,6 +660,17 @@
             search: searchEl ? String(searchEl.value || '').trim() : '',
             category_id: categoryEl ? String(categoryEl.value || '') : '',
             stock_filter: stockEl ? String(stockEl.value || 'all') : 'all',
+            expiry_filter: expiryEl ? String(expiryEl.value || 'all') : 'all'
+        };
+    }
+    function currentQuarantineInventoryFilters() {
+        var searchEl = document.getElementById('quarantineDrugSearch');
+        var categoryEl = document.getElementById('quarantineDrugCategoryFilter');
+        var expiryEl = document.getElementById('quarantineDrugExpiryFilter');
+
+        return {
+            search: searchEl ? String(searchEl.value || '').trim() : '',
+            category_id: categoryEl ? String(categoryEl.value || '') : '',
             expiry_filter: expiryEl ? String(expiryEl.value || 'all') : 'all'
         };
     }
@@ -849,6 +901,207 @@
         }
 
         ['drugCategoryFilter', 'drugStockFilter', 'drugExpiryFilter'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', reload);
+            }
+        });
+    }
+
+    function loadQuarantineInventory() {
+        var tableNode = document.getElementById('quarantineDrugInventoryTable');
+        if (!tableNode) {
+            return;
+        }
+
+        var quarantineStockLoadUrl = getQuarantineStockLoadUrl();
+        if (!quarantineStockLoadUrl || typeof window.$ === 'undefined' || typeof window.$.fn.DataTable === 'undefined') {
+            return;
+        }
+
+        if (quarantineInventoryTable) {
+            return;
+        }
+
+        quarantineInventoryTable = window.$('#quarantineDrugInventoryTable').DataTable({
+            processing: true,
+            serverSide: true,
+            paging: true,
+            info: true,
+            searching: true,
+            ordering: true,
+            responsive: true,
+            autoWidth: false,
+            ajax: {
+                url: quarantineStockLoadUrl,
+                type: 'POST',
+                data: function (d) {
+                    var filters = currentQuarantineInventoryFilters();
+                    d._token = getCsrfToken();
+                    d.category_id = filters.category_id;
+                    d.stock_filter = filters.stock_filter;
+                    d.expiry_filter = filters.expiry_filter;
+                    d.search.value = filters.search;
+                }
+            },
+            columns: [
+                { data: 'medicine_name', name: 'medicine.name' },
+                { data: 'category_name', name: 'medicine.category.name', orderable: false },
+                { data: 'form_name', name: 'medicine.unit', orderable: false },
+                { data: 'batch_no', name: 'batch_no' },
+                { data: 'expiry_date', name: 'expiry_date' },
+                { data: 'reserved_qty', name: 'reserved_qty' },
+                { data: 'min_level', name: 'medicine.min_level', orderable: false },
+                { data: 'unit_mrp', name: 'unit_mrp' },
+                { data: 'actions', orderable: false, searchable: false }
+            ],
+            columnDefs: [
+                {
+                    targets: 0,
+                    render: function (data, type) {
+                        if (type !== 'display') {
+                            return data;
+                        }
+                        return '<span class="fw-700 fs-12">' + (data || '-') + '</span>';
+                    }
+                },
+                {
+                    targets: 1,
+                    render: function (data, type) {
+                        if (type !== 'display') {
+                            return data;
+                        }
+                        return '<span class="badge badge-indigo fs-10">' + (data || '-') + '</span>';
+                    }
+                },
+                {
+                    targets: 2,
+                    render: function (data, type) {
+                        if (type !== 'display') {
+                            return data;
+                        }
+                        return '<span class="fs-11">' + (data || '-') + '</span>';
+                    }
+                },
+                {
+                    targets: 3,
+                    render: function (data, type) {
+                        if (type !== 'display') {
+                            return data;
+                        }
+                        return '<span class="fs-11 text-muted">' + (data || '-') + '</span>';
+                    }
+                },
+                {
+                    targets: 4,
+                    render: function (data, type, row) {
+                        if (type !== 'display') {
+                            return data;
+                        }
+                        if (!data || data === '-') {
+                            return '-';
+                        }
+
+                        var expiryDate = parseIsoDate(row.expiry_iso || '');
+                        var style = '';
+                        if (expiryDate) {
+                            var today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            var diff = Math.floor((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                            if (diff < 30) {
+                                style = 'color:var(--danger);font-weight:700';
+                            } else if (diff < 90) {
+                                style = 'color:var(--warning)';
+                            }
+                        }
+
+                        return '<span style="white-space:nowrap;display:inline-block;' + style + '">' + data + '</span>';
+                    }
+                },
+                {
+                    targets: 5,
+                    render: function (data, type, row) {
+                        var stock = toNumber(data);
+                        var medicineStock = toNumber(row.medicine_available_qty);
+                        if (type !== 'display') {
+                            return stock;
+                        }
+
+                        var minLevel = toNumber(row.reorder_level || row.min_level);
+                        var style = '';
+                        if (medicineStock <= 0) {
+                            style = 'color:var(--danger);font-weight:700';
+                        } else if (minLevel > 0 && medicineStock <= minLevel) {
+                            style = 'color:var(--warning);font-weight:600';
+                        }
+
+                        return '<span style="' + style + '">' + stock + '</span>';
+                    }
+                },
+                {
+                    targets: 6,
+                    render: function (data, type) {
+                        var minLevel = toNumber(data);
+                        if (type !== 'display') {
+                            return minLevel;
+                        }
+                        return '<span class="text-muted">' + minLevel + '</span>';
+                    }
+                },
+                {
+                    targets: 7,
+                    render: function (data, type) {
+                        var amount = parseFloat(data || 0);
+                        if (type !== 'display') {
+                            return isNaN(amount) ? 0 : amount;
+                        }
+                        if (isNaN(amount)) {
+                            return '₹0.00';
+                        }
+                        return '₹' + amount.toFixed(2);
+                    }
+                },
+                {
+                    targets: 8,
+                    render: function (data, type, row) {
+                        if (type !== 'display') {
+                            return data;
+                        }
+
+                        var badStockBtn = '';
+                        if (row.actions && row.actions !== '-') {
+                            badStockBtn = '<button class="btn btn-secondary btn-xs bad-quarantine-stock-btn" data-id="' + row.id + '">✏️</button>';
+                        }
+
+                        return '<div style="display:flex;gap:3px">' +
+                            '' +
+                            badStockBtn +
+                            '</div>';
+                    }
+                }
+            ],
+            language: {
+                search: '',
+                searchPlaceholder: 'Search inventory...'
+            }
+        });
+
+        var reload = function () {
+            if (quarantineInventoryTable) {
+                quarantineInventoryTable.ajax.reload();
+            }
+        };
+
+        var debounceTimer = null;
+        var searchBox = document.getElementById('quarantineDrugSearch');
+        if (searchBox) {
+            searchBox.addEventListener('input', function () {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(reload, 300);
+            });
+        }
+
+        ['quarantineDrugCategoryFilter', 'quarantineDrugExpiryFilter'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', reload);
@@ -1887,6 +2140,80 @@
                 }
             });
         });
+        
+        window.$(document).on('click', '.bad-quarantine-stock-btn', function () {
+            var rowId = window.$(this).data('id');
+            var showFormUrl = getShowBadQuarantineStockFormUrl();
+            if (!showFormUrl || !rowId) {
+                return;
+            }
+
+            if (typeof window.loader === 'function') {
+                window.loader();
+            }
+
+            window.$.post(showFormUrl, { _token: getCsrfToken(), id: rowId }, function (response) {
+                if (typeof window.loader === 'function') {
+                    window.loader('hide');
+                }
+                window.$('#ajaxdata').html(response);
+                window.$('.add-datamodal').modal('show');
+                window.$('.add-datamodal .modal-dialog').removeClass('modal-xl');
+            }).fail(function () {
+                if (typeof window.loader === 'function') {
+                    window.loader('hide');
+                }
+                toast('Error', 'Unable to load form.', 'error');
+            });
+        });
+
+        window.$(document).on('submit', '#bad-quarantine-stock-form', function (e) {
+            e.preventDefault();
+
+            var adjustUrl = getAdjustBadQuarantineStockUrl();
+            if (!adjustUrl) {
+                return;
+            }
+
+            if (typeof window.loader === 'function') {
+                window.loader();
+            }
+
+            var fd = new FormData(this);
+            fd.append('_token', getCsrfToken());
+
+            window.$.ajax({
+                url: adjustUrl,
+                type: 'POST',
+                data: fd,
+                contentType: false,
+                processData: false,
+                success: function (response) {
+                    if (typeof window.loader === 'function') {
+                        window.loader('hide');
+                    }
+                    window.$('.add-datamodal').modal('hide');
+                    if (quarantineInventoryTable) {
+                        quarantineInventoryTable.ajax.reload(null, false);
+                    }
+                    loadDashboardCounts();
+                    toast('Success', response.message || 'Bad quarantine stock adjusted successfully.', 'success');
+                },
+                error: function (xhr) {
+                    if (typeof window.loader === 'function') {
+                        window.loader('hide');
+                    }
+                    if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
+                        var messages = xhr.responseJSON.errors.map(function (err) {
+                            return err.message;
+                        }).join('\n');
+                        toast('Error', messages, 'error');
+                    } else {
+                        toast('Error', 'Unable to adjust bad quarantine stock.', 'error');
+                    }
+                }
+            });
+        });
     }
 
     window.exportDrugInventory = function () {
@@ -1897,6 +2224,33 @@
         }
 
         var filters = currentInventoryFilters();
+        var params = [];
+
+        if (filters.search) {
+            params.push('search=' + encodeURIComponent(filters.search));
+        }
+        if (filters.category_id) {
+            params.push('category_id=' + encodeURIComponent(filters.category_id));
+        }
+        if (filters.stock_filter && filters.stock_filter !== 'all') {
+            params.push('stock_filter=' + encodeURIComponent(filters.stock_filter));
+        }
+        if (filters.expiry_filter && filters.expiry_filter !== 'all') {
+            params.push('expiry_filter=' + encodeURIComponent(filters.expiry_filter));
+        }
+
+        var finalUrl = exportUrl + (params.length ? ('?' + params.join('&')) : '');
+        window.location.href = finalUrl;
+    };
+    
+    window.exportQuarantineDrugInventory = function () {
+        var exportUrl = getQuarantineStockExportUrl();
+        if (!exportUrl) {
+            toast('Export', 'Export route is not available.', 'error');
+            return;
+        }
+
+        var filters = currentQuarantineInventoryFilters();
         var params = [];
 
         if (filters.search) {
@@ -1929,6 +2283,7 @@
             'statPane',
             'rxValidatePane',
             'inventoryPane',
+            'quarantinePane',
             'expiryPane',
             'grnListPane',
             'poPane',
@@ -1945,6 +2300,14 @@
             loadDrugInventory();
             if (wasInitialized && inventoryTable) {
                 inventoryTable.ajax.reload();
+            }
+        }
+        
+        if (paneId === 'quarantinePane') {
+            var wasInitialized = !!quarantineInventoryTable;
+            loadQuarantineInventory();
+            if (wasInitialized && quarantineInventoryTable) {
+                quarantineInventoryTable.ajax.reload();
             }
         }
 
