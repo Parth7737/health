@@ -367,6 +367,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         // Pharmacy Sale
         Route::middleware(['permission:view-pharmacy-sale'])->group(function () {
             Route::post('dispense-queue/load', 'PharmacyDashboardController@loadDispenseQueue')->name('dispense-queue-load');
+            Route::post('dispense/prescription-preview', 'PharmacyDashboardController@prescriptionPreview')->name('dispense.prescription-preview');
+            Route::get('dispense/medicine-search', 'PharmacyDashboardController@medicineSearch')->name('dispense.medicine-search');
+            Route::post('dispense/store', 'PharmacyDashboardController@storeDispense')->name('dispense.store');
             Route::get('stat-orders/load', 'PharmacyDashboardController@loadStatOrders')->name('stat-orders-load');
             Route::resource('sale', 'PharmacySaleController')->only(['index', 'store']);
             Route::post('sale/load', 'PharmacySaleController@loaddata')->name('sale-load');

@@ -4,7 +4,7 @@
 
 @section('page_header_actions')
 <button class="btn btn-warning btn-sm" type="button" onclick="openModal('statOrderModal')">🚨 STAT Order</button>
-<button class="btn btn-primary btn-sm" type="button" onclick="openModal('dispenseModal')">💊 Dispense</button>
+<button class="btn btn-primary btn-sm" type="button" onclick="openWalkInDispense()">💊 Dispense</button>
 <button class="btn btn-success btn-sm" type="button" onclick="openModal('grnModal')">📥 GRN / Receive</button>
 @endsection
 
@@ -234,60 +234,107 @@
 </div>
 
 <div class="modal-overlay hidden" id="dispenseModal" onclick="if(event.target===this) closeModal('dispenseModal')">
-    <div class="modal modal-lg">
+    <div class="modal modal-fullscreen">
         <div class="modal-header">
-            <div class="modal-title">💊 Dispense Prescription</div>
+            <div class="modal-title" id="dispenseModalTitle">💊 Dispense Medicine</div>
             <button class="modal-close" type="button" onclick="closeModal('dispenseModal')">✕</button>
         </div>
         <div class="modal-body">
-            <div class="form-row cols-2">
-                <div>
-                    <div class="form-group"><label class="form-label">Prescription / Patient Search</label>
-                        <div class="input-group"><span class="input-addon">🔍</span><input class="form-control" placeholder="Rx No / Patient MRN / Name..." oninput="loadRxPreview()"></div>
-                    </div>
-                    <div class="ph-panel" id="rxPreviewCard">
-                        <div class="fw-700 fs-12 mb-8">📋 Prescription Preview</div>
-                        <div class="patient-chip mb-8">
-                            <div class="patient-chip-avatar">R</div>
-                            <div class="patient-chip-info">
-                                <div class="patient-chip-name">Ramesh Kumar Singh</div>
-                                <div class="patient-chip-meta">MRN-10021 | 45M | B+ | OPD — Gen. Medicine</div>
+            <form id="dispenseForm">
+                <input type="hidden" id="dispensePrescriptionType" name="prescription_type">
+                <input type="hidden" id="dispensePrescriptionId" name="prescription_id">
+                <input type="hidden" id="dispensePatientId" name="patient_id">
+
+                <div class="form-row cols-2">
+                    <div class="ph-panel">
+                        <div class="d-flex justify-content-between align-center mb-8">
+                            <div class="fw-700 fs-13">Patient / Rx</div>
+                            <span class="badge badge-gray" id="dispenseModeBadge">Walk-in</span>
+                        </div>
+                        <div id="dispensePatientCard">
+                            <div class="patient-chip">
+                                <div class="patient-chip-avatar">W</div>
+                                <div class="patient-chip-info">
+                                    <div class="patient-chip-name">Walk-in Customer</div>
+                                    <div class="patient-chip-meta">No prescription selected</div>
+                                </div>
                             </div>
                         </div>
-                        <div class="alert alert-red mb-8" style="padding:8px 12px">
-                            <span class="alert-icon">⚠️</span><div><b>Drug Allergy Alert:</b> Patient allergic to Penicillin. Verify current Rx for interactions.</div>
+                        <div class="alert alert-orange mt-8 mb-0" id="dispenseAllergyAlert" style="display:none;padding:8px 12px">
+                            <span class="alert-icon">⚠️</span><div></div>
                         </div>
-                        <table class="hims-table ph-table-small">
-                            <thead><tr><th>Drug</th><th>Dose</th><th>Freq</th><th>Days</th><th>Qty</th><th>✓</th></tr></thead>
-                            <tbody id="rxPreviewBody"></tbody>
-                        </table>
+                    </div>
+
+                    <div class="ph-panel">
+                        <div class="form-row cols-2">
+                            <div class="form-group">
+                                <input class="form-control" id="walkInMedicineSearch" list="walkInMedicineOptions" placeholder="Type medicine name...">
+                                <datalist id="walkInMedicineOptions"></datalist>
+                            </div>
+                            <div class="form-group d-flex align-end">
+                                <button class="btn btn-outline-primary btn-sm w-100" type="button" onclick="addWalkInMedicine()">+ Add Medicine</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <div class="form-group"><label class="form-label">Dispense Remarks</label><textarea class="form-control" rows="2" placeholder="Any dispensing notes..."></textarea></div>
-                    <div class="form-group"><label class="form-label">Substitution</label>
-                        <select class="form-control"><option>No Substitution</option><option>Generic Substitution (with consent)</option><option>Formulary Item Used</option></select>
-                    </div>
-                    <div class="form-group"><label class="form-label">Counselling Given</label>
-                        <div class="d-flex gap-12">
-                            <label class="form-check"><input type="checkbox" checked><span class="form-check-label">Dosage instructions</span></label>
-                            <label class="form-check"><input type="checkbox" checked><span class="form-check-label">Side effects</span></label>
-                            <label class="form-check"><input type="checkbox"><span class="form-check-label">Storage</span></label>
+
+                <div class="ph-toolbar mb-8 mt-12">
+                    <div class="fw-700 fs-13">Dispense Items</div>
+                    <div class="text-muted fs-11" id="dispenseStockHint">FEFO batch selection is applied by default. Reduce quantity to create a partial dispense.</div>
+                </div>
+                <div class="table-wrap">
+                    <table class="hims-table ph-table-small" id="dispenseItemsTable">
+                        <thead>
+                            <tr>
+                                <th>Medicine</th>
+                                <th>Rx Detail</th>
+                                <th>Prescribed</th>
+                                <th>Available</th>
+                                <th>Batch</th>
+                                <th>Dispense Qty</th>
+                                <th>Rate ₹</th>
+                                <th>Tax%</th>
+                                <th>Total</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="dispenseItemsBody">
+                            <tr><td colspan="10" class="text-muted text-center">Select a prescription or add medicine for walk-in dispense.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="form-row cols-2 mt-12">
+                    <div>
+                        <div class="form-group">
+                            <label class="form-label">Dispense Remarks</label>
+                            <textarea class="form-control" rows="2" name="notes" id="dispenseNotes" placeholder="Any dispensing notes..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Counselling Given</label>
+                            <div class="d-flex gap-12">
+                                <label class="form-check"><input type="checkbox" checked><span class="form-check-label">Dosage instructions</span></label>
+                                <label class="form-check"><input type="checkbox" checked><span class="form-check-label">Side effects</span></label>
+                                <label class="form-check"><input type="checkbox"><span class="form-check-label">Storage</span></label>
+                            </div>
                         </div>
                     </div>
                     <div class="ph-bill-preview">
                         <div class="fw-700 fs-12 mb-8 text-primary">💳 Pharmacy Bill</div>
-                        <div class="ph-bill-row"><span>Drugs Total:</span><span class="fw-700">₹485.00</span></div>
-                        <div class="ph-bill-row mt-4"><span>GST (12%):</span><span>₹58.20</span></div>
-                        <div class="ph-bill-total"><span>Net Payable:</span><span class="fw-700 text-primary">₹543.20</span></div>
+                        <div class="ph-bill-row"><span>Drugs Total:</span><span class="fw-700" id="dispenseSubtotal">₹0.00</span></div>
+                        <div class="ph-bill-row mt-4"><span>GST / Tax:</span><span id="dispenseTax">₹0.00</span></div>
+                        <div class="ph-bill-row mt-4"><span>Discount:</span><input class="form-control ph-grid-input ph-grid-input-price" type="number" min="0" step="0.01" name="discount_amount" id="dispenseDiscount" value="0"></div>
+                        <div class="ph-bill-total"><span>Net Payable:</span><span class="fw-700 text-primary" id="dispenseNet">₹0.00</span></div>
+                        <div class="ph-bill-row mt-8"><span>Paid:</span><input class="form-control ph-grid-input ph-grid-input-price" type="number" min="0" step="0.01" name="paid_amount" id="dispensePaid" value="0"></div>
+                        <div class="ph-bill-row mt-4"><span>Due:</span><span class="fw-700" id="dispenseDue">₹0.00</span></div>
                     </div>
                 </div>
-            </div>
+            </form>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" type="button" onclick="closeModal('dispenseModal')">Cancel</button>
             <button class="btn btn-warning" type="button" onclick="holdDispense()">⏸ Hold</button>
-            <button class="btn btn-success" type="button" onclick="confirmDispense()">✅ Dispense & Print Label</button>
+            <button class="btn btn-success" type="button" onclick="confirmDispense()">✅ Dispense & Create Bill</button>
         </div>
     </div>
 </div>

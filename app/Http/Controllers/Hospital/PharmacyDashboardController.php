@@ -2,15 +2,23 @@
 
 namespace App\Http\Controllers\Hospital;
 
+use App\CentralLogics\Helpers;
 use App\Http\Controllers\BaseHospitalController;
+use App\Models\IpdPrescription;
 use App\Models\Medicine;
 use App\Models\MedicineCategory;
+use App\Models\OpdPrescription;
+use App\Models\Patient;
+use App\Models\PharmacySaleBill;
 use App\Models\PharmacySupplier;
 use App\Models\PharmacyStockBatch;
+use App\Services\PharmacyInventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Yajra\DataTables\Facades\DataTables;
 use Carbon\Carbon;
+use Throwable;
 
 class PharmacyDashboardController extends BaseHospitalController
 {
@@ -22,6 +30,9 @@ class PharmacyDashboardController extends BaseHospitalController
         $this->routes = [
             'dashboardCounts' => route('hospital.pharmacy.dashboard-counts'),
             'dispenseQueueLoad' => route('hospital.pharmacy.dispense-queue-load'),
+            'dispensePreview' => route('hospital.pharmacy.dispense.prescription-preview'),
+            'dispenseMedicineSearch' => route('hospital.pharmacy.dispense.medicine-search'),
+            'dispenseStore' => route('hospital.pharmacy.dispense.store'),
             'statOrdersLoad' => route('hospital.pharmacy.stat-orders-load'),
             'stockLoad' => route('hospital.pharmacy.stock-load'),
             'stockExport' => route('hospital.pharmacy.stock-export'),
@@ -254,6 +265,268 @@ class PharmacyDashboardController extends BaseHospitalController
         return response()->json($payload);
     }
 
+    public function prescriptionPreview(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'prescription_type' => 'required|in:opd,ipd',
+            'prescription_id' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        $type = strtolower((string) $request->input('prescription_type'));
+        $id = (int) $request->input('prescription_id');
+
+        if ($this->isPrescriptionAlreadyBilled($type, $id)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'This prescription is already billed in pharmacy sale.',
+            ], 422);
+        }
+
+        $with = [
+            'patient:id,patient_id,mrn,name,gender,age_years,age_months,blood_group,known_allergies',
+            'doctor:id,first_name,last_name',
+            'items.medicine:id,name,unit',
+            'items.dosage:id,dosage',
+            'items.frequency:id,frequency',
+            'items.route:id,route',
+            'items.instruction:id,instruction',
+        ];
+
+        $prescription = $type === 'opd'
+            ? OpdPrescription::query()->where('hospital_id', $this->hospital_id)->where(function ($query) {
+                $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
+            })->with($with)->findOrFail($id)
+            : IpdPrescription::query()->where('hospital_id', $this->hospital_id)->where(function ($query) {
+                $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
+            })->with($with)->findOrFail($id);
+
+        $items = $prescription->items
+            ->filter(fn ($item) => !empty($item->medicine_id))
+            ->values()
+            ->map(function ($item) {
+                $batches = $this->availableBatchesForMedicine((int) $item->medicine_id);
+                $availableQty = (float) $batches->sum('available_qty');
+                $prescribedQty = max(1, (float) ($item->no_of_day ?? 1));
+                $firstBatch = $batches->first();
+
+                return [
+                    'medicine_id' => (int) $item->medicine_id,
+                    'medicine_name' => $item->medicine?->name ?? '-',
+                    'unit' => $item->medicine?->unit,
+                    'dosage' => $item->dosage?->dosage ?? '-',
+                    'frequency' => $item->frequency?->frequency ?? '-',
+                    'route' => $item->route?->route ?? '-',
+                    'instruction' => $item->instruction?->instruction ?? '-',
+                    'days' => (int) ($item->no_of_day ?? 1),
+                    'prescribed_qty' => $prescribedQty,
+                    'available_qty' => $availableQty,
+                    'dispense_qty' => min($prescribedQty, $availableQty),
+                    'stock_status' => $availableQty <= 0 ? 'out' : ($availableQty < $prescribedQty ? 'partial' : 'available'),
+                    'batch_id' => $firstBatch?->id,
+                    'unit_price' => (float) ($firstBatch?->unit_sale_price ?? 0),
+                    'unit_mrp' => (float) ($firstBatch?->unit_mrp ?? 0),
+                    'tax_percent' => (float) ($firstBatch?->purchaseItem?->tax_percent ?? 0),
+                    'batches' => $batches->map(fn ($batch) => [
+                        'id' => $batch->id,
+                        'batch_no' => $batch->batch_no,
+                        'expiry_date' => optional($batch->expiry_date)->format('m/y'),
+                        'available_qty' => (float) $batch->available_qty,
+                        'unit_sale_price' => (float) $batch->unit_sale_price,
+                        'unit_mrp' => (float) $batch->unit_mrp,
+                        'tax_percent' => (float) ($batch->purchaseItem?->tax_percent ?? 0),
+                    ])->values(),
+                ];
+            });
+
+        $patient = $prescription->patient;
+        $doctorName = trim(($prescription->doctor?->first_name ?? '') . ' ' . ($prescription->doctor?->last_name ?? ''));
+        $rxNo = $prescription->prescription_no ?: (strtoupper($type) . '-RX-' . optional($prescription->created_at)->format('ym') . '-' . str_pad((string) $prescription->id, 5, '0', STR_PAD_LEFT));
+
+        return response()->json([
+            'status' => true,
+            'prescription' => [
+                'type' => $type,
+                'id' => $prescription->id,
+                'rx_no' => $rxNo,
+                'valid_till' => optional($prescription->valid_till)->format('d-m-Y'),
+                'doctor_name' => $doctorName ?: '-',
+                'created_at' => optional($prescription->created_at)->format('d-m-Y H:i'),
+            ],
+            'patient' => [
+                'id' => $patient?->id,
+                'name' => $patient?->name ?? '-',
+                'mrn' => $patient?->mrn ?: ($patient?->patient_id ?? '-'),
+                'gender' => $patient?->gender ?? '-',
+                'age' => trim(($patient?->age_years ? $patient->age_years . 'Y' : '') . ($patient?->age_months ? ' ' . $patient->age_months . 'M' : '')) ?: '-',
+                'blood_group' => $patient?->blood_group ?? '-',
+                'known_allergies' => $patient?->known_allergies,
+            ],
+            'items' => $items,
+        ]);
+    }
+
+    public function medicineSearch(Request $request)
+    {
+        $term = trim((string) $request->input('q', ''));
+
+        $medicines = Medicine::query()
+            ->select('id', 'name', 'unit')
+            ->when($term !== '', fn ($q) => $q->where('name', 'like', '%' . $term . '%'))
+            ->orderBy('name')
+            ->limit(30)
+            ->get()
+            ->map(function ($medicine) {
+                $batches = $this->availableBatchesForMedicine((int) $medicine->id);
+                $firstBatch = $batches->first();
+
+                return [
+                    'id' => $medicine->id,
+                    'name' => $medicine->name,
+                    'unit' => $medicine->unit,
+                    'available_qty' => (float) $batches->sum('available_qty'),
+                    'batch_id' => $firstBatch?->id,
+                    'unit_price' => (float) ($firstBatch?->unit_sale_price ?? 0),
+                    'unit_mrp' => (float) ($firstBatch?->unit_mrp ?? 0),
+                    'tax_percent' => (float) ($firstBatch?->purchaseItem?->tax_percent ?? 0),
+                    'batches' => $batches->map(fn ($batch) => [
+                        'id' => $batch->id,
+                        'batch_no' => $batch->batch_no,
+                        'expiry_date' => optional($batch->expiry_date)->format('m/y'),
+                        'available_qty' => (float) $batch->available_qty,
+                        'unit_sale_price' => (float) $batch->unit_sale_price,
+                        'unit_mrp' => (float) $batch->unit_mrp,
+                        'tax_percent' => (float) ($batch->purchaseItem?->tax_percent ?? 0),
+                    ])->values(),
+                ];
+            });
+
+        return response()->json(['status' => true, 'items' => $medicines]);
+    }
+
+    public function storeDispense(Request $request, PharmacyInventoryService $inventoryService)
+    {
+        $validator = Validator::make($request->all(), [
+            'patient_id' => 'nullable|exists:patients,id',
+            'prescription_type' => 'nullable|in:opd,ipd',
+            'prescription_id' => 'nullable|integer',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'paid_amount' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.medicine_id' => 'required|exists:medicines,id',
+            'items.*.stock_batch_id' => 'nullable|exists:pharmacy_stock_batches,id',
+            'items.*.quantity' => 'required|numeric|min:0.01',
+            'items.*.unit_price' => 'nullable|numeric|min:0',
+            'items.*.unit_mrp' => 'nullable|numeric|min:0',
+            'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
+            'items.*.tax_percent' => 'nullable|numeric|min:0|max:100',
+            'items.*.is_substituted' => 'nullable|boolean',
+            'items.*.substitution_note' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        $prescriptionType = $request->input('prescription_type');
+        $prescriptionId = (int) $request->input('prescription_id');
+
+        if ($prescriptionType && $prescriptionId && $this->isPrescriptionAlreadyBilled($prescriptionType, $prescriptionId)) {
+            return response()->json([
+                'errors' => [[
+                    'code' => 'prescription_id',
+                    'message' => 'This prescription is already billed in pharmacy sale.',
+                ]],
+            ], 422);
+        }
+
+        $sourcePrescription = null;
+        if ($prescriptionType === 'opd' && $prescriptionId) {
+            $sourcePrescription = OpdPrescription::query()
+                ->where('hospital_id', $this->hospital_id)
+                ->where(function ($query) {
+                    $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
+                })
+                ->findOrFail($prescriptionId);
+        }
+
+        if ($prescriptionType === 'ipd' && $prescriptionId) {
+            $sourcePrescription = IpdPrescription::query()
+                ->where('hospital_id', $this->hospital_id)
+                ->where(function ($query) {
+                    $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
+                })
+                ->findOrFail($prescriptionId);
+        }
+
+        $payload = [
+            'hospital_id' => $this->hospital_id,
+            'patient_id' => $sourcePrescription?->patient_id ?: ($request->input('patient_id') ?: null),
+            'bill_date' => now()->toDateString(),
+            'discount_amount' => (float) $request->input('discount_amount', 0),
+            'paid_amount' => (float) $request->input('paid_amount', 0),
+            'notes' => $request->input('notes'),
+            'items' => collect($request->input('items', []))->filter(fn ($item) => (float) ($item['quantity'] ?? 0) > 0)->values()->all(),
+            'is_from_prescription' => !empty($prescriptionType) && !empty($prescriptionId),
+        ];
+
+        if (empty($payload['items'])) {
+            return response()->json(['status' => false, 'message' => 'Please enter at least one dispense quantity.'], 422);
+        }
+
+        $payable = collect($payload['items'])->reduce(function ($total, $item) {
+            $qty = (float) ($item['quantity'] ?? 0);
+            $price = (float) ($item['unit_price'] ?? 0);
+            $discountPercent = (float) ($item['discount_percent'] ?? 0);
+            $taxPercent = (float) ($item['tax_percent'] ?? 0);
+            $lineSubtotal = $qty * $price;
+            $lineDiscount = $lineSubtotal * $discountPercent / 100;
+            $taxable = max(0, $lineSubtotal - $lineDiscount);
+
+            return $total + $taxable + ($taxable * $taxPercent / 100);
+        }, 0.0);
+        $payable = max(0, $payable - (float) $payload['discount_amount']);
+
+        if ((float) $payload['paid_amount'] > $payable + 0.0001) {
+            return response()->json([
+                'errors' => [[
+                    'code' => 'paid_amount',
+                    'message' => 'Paid amount cannot be greater than net payable.',
+                ]],
+            ], 422);
+        }
+
+        if ($prescriptionType === 'opd' && $prescriptionId) {
+            $payload['opd_prescription_id'] = $prescriptionId;
+            $payload['source_type'] = OpdPrescription::class;
+            $payload['source_id'] = $prescriptionId;
+        }
+
+        if ($prescriptionType === 'ipd' && $prescriptionId) {
+            $payload['ipd_prescription_id'] = $prescriptionId;
+            $payload['source_type'] = IpdPrescription::class;
+            $payload['source_id'] = $prescriptionId;
+        }
+
+        try {
+            $bill = $inventoryService->createSaleBill($payload);
+        } catch (Throwable $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Medicine dispensed and bill created successfully.',
+            'bill_id' => $bill->id,
+            'bill_no' => $bill->bill_no,
+            'print_url' => route('hospital.pharmacy.sale.print', ['bill' => $bill->id]),
+        ]);
+    }
+
     private function pendingOpdPrescriptionQuery(string $today)
     {
         return DB::table('opd_prescriptions as rx')
@@ -274,6 +547,41 @@ class PharmacyDashboardController extends BaseHospitalController
             ->where(function ($q) use ($today) {
                 $q->whereNull('rx.valid_till')->orWhereDate('rx.valid_till', '>=', $today);
             });
+    }
+
+    private function availableBatchesForMedicine(int $medicineId)
+    {
+        return PharmacyStockBatch::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('medicine_id', $medicineId)
+            ->where('status', 'active')
+            ->where('available_qty', '>', 0)
+            ->where(function ($query) {
+                $query->whereNull('expiry_date')->orWhere('expiry_date', '>=', now()->toDateString());
+            })
+            ->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('expiry_date')
+            ->orderBy('id')
+            ->with('purchaseItem:id,tax_percent')
+            ->get(['id', 'purchase_item_id', 'batch_no', 'expiry_date', 'available_qty', 'unit_sale_price', 'unit_mrp']);
+    }
+
+    private function isPrescriptionAlreadyBilled(string $type, int $id): bool
+    {
+        if ($id <= 0) {
+            return false;
+        }
+
+        $query = PharmacySaleBill::query();
+        if (strtolower($type) === 'opd') {
+            $query->where('opd_prescription_id', $id);
+        } elseif (strtolower($type) === 'ipd') {
+            $query->where('ipd_prescription_id', $id);
+        } else {
+            return false;
+        }
+
+        return $query->exists();
     }
 
 }

@@ -36,6 +36,9 @@
         if (id === 'grnModal') {
             loadApprovedPOs();
         }
+        if (id === 'dispenseModal') {
+            initDispenseModal();
+        }
     };
 
     function initBillDatePicker() {
@@ -86,6 +89,27 @@
             } catch (e) {
                 return '';
             }
+        }
+        return '';
+    }
+
+    function getDispensePreviewUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('dispensePreview'); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getDispenseMedicineSearchUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('dispenseMedicineSearch'); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getDispenseStoreUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('dispenseStore'); } catch (e) { return ''; }
         }
         return '';
     }
@@ -204,11 +228,12 @@
                     render: function (data, type, row) {
                         if (type !== 'display') { return data; }
 
-                        var rx = escapeHtml(row.rx_no || '-');
+                        var sourceType = escapeJs(row.source_type || '');
+                        var sourceId = parseInt(row.source_id, 10) || 0;
                         var priority = String(row.priority || '').toLowerCase();
                         return '<div style="display:flex;gap:3px">' +
-                            '<button class="btn btn-success btn-xs" onclick="dispenseRx(\'' + rx + '\', this)">✅ Dispense</button>' +
-                            '<button class="btn btn-secondary btn-xs" onclick="openModal(\'dispenseModal\')">👁️ View</button>' +
+                            '<button class="btn btn-success btn-xs" onclick="openPrescriptionDispense(\'' + sourceType + '\',' + sourceId + ')">✅ Dispense</button>' +
+                            '<button class="btn btn-secondary btn-xs" onclick="openPrescriptionDispense(\'' + sourceType + '\',' + sourceId + ')">👁️ View</button>' +
                             (priority !== 'stat' ? '<button class="btn btn-warning btn-xs" onclick="holdRx(this)">⏸</button>' : '') +
                             '</div>';
                     }
@@ -570,6 +595,10 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function escapeJs(text) {
+        return String(text || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     }
 
     function clearGrnFormErrors() {
@@ -1463,22 +1492,225 @@
             '</tbody></table></div>';
     }
 
-    function loadRxPreviewBody() {
-        var body = document.getElementById('rxPreviewBody');
-        if (!body) {
+    var dispenseState = {
+        mode: 'walkin',
+        patient: null,
+        prescription: null,
+        items: [],
+        medicineSearchResults: []
+    };
+
+    function initDispenseModal() {
+        var search = document.getElementById('walkInMedicineSearch');
+        if (search && !search.dataset.bound) {
+            search.dataset.bound = '1';
+            var timer = null;
+            search.addEventListener('input', function () {
+                clearTimeout(timer);
+                timer = setTimeout(loadWalkInMedicineOptions, 250);
+            });
+        }
+
+        ['dispenseDiscount', 'dispensePaid'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && !el.dataset.bound) {
+                el.dataset.bound = '1';
+                el.addEventListener('input', recalcDispenseTotals);
+            }
+        });
+    }
+
+    function resetDispenseState(mode) {
+        dispenseState = {
+            mode: mode || 'walkin',
+            patient: null,
+            prescription: null,
+            items: [],
+            medicineSearchResults: dispenseState.medicineSearchResults || []
+        };
+
+        var form = document.getElementById('dispenseForm');
+        if (form) {
+            form.reset();
+        }
+        setValue('dispensePrescriptionType', '');
+        setValue('dispensePrescriptionId', '');
+        setValue('dispensePatientId', '');
+        setText('dispenseModeBadge', mode === 'prescription' ? 'Prescription' : 'Walk-in');
+        setText('dispenseModalTitle', mode === 'prescription' ? '💊 Dispense Prescription' : '💊 Walk-in Dispense');
+        renderDispensePatient(null);
+        renderDispenseItems();
+        recalcDispenseTotals();
+    }
+
+    function setValue(id, value) {
+        var el = document.getElementById(id);
+        if (el) { el.value = value == null ? '' : String(value); }
+    }
+
+    function setText(id, value) {
+        var el = document.getElementById(id);
+        if (el) { el.textContent = value == null ? '' : String(value); }
+    }
+
+    function renderDispensePatient(payload) {
+        var card = document.getElementById('dispensePatientCard');
+        var allergy = document.getElementById('dispenseAllergyAlert');
+        if (!card) { return; }
+
+        if (!payload || !payload.patient) {
+            card.innerHTML = '<div class="patient-chip"><div class="patient-chip-avatar">W</div><div class="patient-chip-info">' +
+                '<div class="patient-chip-name">Walk-in Customer</div><div class="patient-chip-meta">No prescription selected</div></div></div>';
+            if (allergy) { allergy.style.display = 'none'; }
             return;
         }
-        var items = [
-            { drug: 'Tab. Amlodipine 5mg', dose: '1 tab', freq: '1-0-0', days: 30, qty: '30 tabs' },
-            { drug: 'Tab. Metformin 500mg', dose: '1 tab', freq: '1-0-1', days: 30, qty: '60 tabs' },
-            { drug: 'Tab. Aspirin 75mg', dose: '1 tab', freq: '0-1-0', days: 30, qty: '30 tabs' }
-        ];
 
-        body.innerHTML = items
-            .map(function (i) {
-                return '<tr><td>' + i.drug + '</td><td>' + i.dose + '</td><td>' + i.freq + '</td><td>' + i.days + 'd</td><td>' + i.qty + '</td><td><input type="checkbox" checked style="accent-color:var(--success)"></td></tr>';
+        var p = payload.patient;
+        var rx = payload.prescription || {};
+        var avatar = String(p.name || 'P').charAt(0).toUpperCase();
+        card.innerHTML = '<div class="patient-chip"><div class="patient-chip-avatar">' + escapeHtml(avatar) + '</div><div class="patient-chip-info">' +
+            '<div class="patient-chip-name">' + escapeHtml(p.name || '-') + '</div>' +
+            '<div class="patient-chip-meta">' + escapeHtml(p.mrn || '-') + ' | ' + escapeHtml(p.age || '-') + ' | ' + escapeHtml(p.gender || '-') + ' | ' + escapeHtml(p.blood_group || '-') + '</div>' +
+            '<div class="patient-chip-meta">Rx: ' + escapeHtml(rx.rx_no || '-') + ' | Doctor: ' + escapeHtml(rx.doctor_name || '-') + ' | Valid: ' + escapeHtml(rx.valid_till || 'NA') + '</div>' +
+            '</div></div>';
+
+        if (allergy) {
+            if (p.known_allergies) {
+                allergy.style.display = '';
+                allergy.querySelector('div').innerHTML = '<b>Allergy Alert:</b> ' + escapeHtml(p.known_allergies);
+            } else {
+                allergy.style.display = 'none';
+            }
+        }
+    }
+
+    function batchOptions(item) {
+        var batches = item.batches || [];
+        if (!batches.length) {
+            return '<option value="">No stock</option>';
+        }
+        return batches.map(function (batch) {
+            var selected = String(batch.id) === String(item.batch_id) ? ' selected' : '';
+            return '<option value="' + batch.id + '"' + selected +
+                ' data-price="' + batch.unit_sale_price + '" data-mrp="' + batch.unit_mrp + '" data-tax="' + batch.tax_percent + '" data-available="' + batch.available_qty + '">' +
+                escapeHtml(batch.batch_no || '-') + ' | Exp ' + escapeHtml(batch.expiry_date || 'NA') + ' | ' + batch.available_qty +
+                '</option>';
+        }).join('');
+    }
+
+    function stockBadge(status) {
+        if (status === 'out') { return '<span class="badge badge-red">Out</span>'; }
+        if (status === 'partial') { return '<span class="badge badge-orange">Partial</span>'; }
+        return '<span class="badge badge-green">Available</span>';
+    }
+
+    function renderDispenseItems() {
+        var body = document.getElementById('dispenseItemsBody');
+        if (!body) { return; }
+
+        if (!dispenseState.items.length) {
+            body.innerHTML = '<tr><td colspan="10" class="text-muted text-center">Select a prescription or add medicine for walk-in dispense.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = dispenseState.items.map(function (item, idx) {
+            var detail = [item.dosage, item.frequency, item.route, item.instruction].filter(function (v) { return v && v !== '-'; }).join(' / ') || '-';
+            var prescribed = item.prescribed_qty || 0;
+            return '<tr data-index="' + idx + '">' +
+                '<td><input type="hidden" class="disp-medicine-id" value="' + item.medicine_id + '"><div class="fw-700 fs-12">' + escapeHtml(item.medicine_name || '-') + '</div><div class="text-muted fs-10">' + escapeHtml(item.unit || '') + '</div></td>' +
+                '<td class="fs-11">' + escapeHtml(detail) + '</td>' +
+                '<td class="fw-700">' + prescribed + '</td>' +
+                '<td>' + stockBadge(item.stock_status) + '<div class="fs-10 text-muted">' + (item.available_qty || 0) + '</div></td>' +
+                '<td><select class="form-control ph-grid-input disp-batch">' + batchOptions(item) + '</select></td>' +
+                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input ph-grid-input-qty disp-qty" value="' + (item.dispense_qty || 0) + '"></td>' +
+                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input ph-grid-input-price disp-price" value="' + (item.unit_price || 0) + '"></td>' +
+                '<td><input type="number" min="0" max="100" step="0.01" class="form-control ph-grid-input disp-tax" value="' + (item.tax_percent || 0) + '"></td>' +
+                '<td><span class="disp-line-total fw-700">' + formatCurrency(lineTotal(item)) + '</span></td>' +
+                '<td><button class="btn btn-danger btn-xs" type="button" onclick="removeDispenseItem(' + idx + ')">✕</button></td>' +
+                '</tr>';
+        }).join('');
+        recalcDispenseTotals();
+    }
+
+    function lineTotal(item) {
+        var qty = toNumber(item.dispense_qty);
+        var price = toNumber(item.unit_price);
+        var tax = toNumber(item.tax_percent);
+        var subtotal = qty * price;
+        return subtotal + (subtotal * tax / 100);
+    }
+
+    function syncDispenseRowsToState() {
+        var body = document.getElementById('dispenseItemsBody');
+        if (!body) { return; }
+        body.querySelectorAll('tr[data-index]').forEach(function (row) {
+            var idx = parseInt(row.dataset.index, 10);
+            var item = dispenseState.items[idx];
+            if (!item) { return; }
+            var batchSel = row.querySelector('.disp-batch');
+            var selected = batchSel ? batchSel.options[batchSel.selectedIndex] : null;
+            if (selected && selected.value) {
+                item.batch_id = selected.value;
+                item.unit_price = toNumber(selected.dataset.price);
+                item.unit_mrp = toNumber(selected.dataset.mrp);
+                item.tax_percent = toNumber(selected.dataset.tax);
+                item.available_qty = toNumber(selected.dataset.available);
+                row.querySelector('.disp-price').value = item.unit_price;
+                row.querySelector('.disp-tax').value = item.tax_percent;
+            }
+            item.dispense_qty = toNumber(row.querySelector('.disp-qty') && row.querySelector('.disp-qty').value);
+            item.unit_price = toNumber(row.querySelector('.disp-price') && row.querySelector('.disp-price').value);
+            item.tax_percent = toNumber(row.querySelector('.disp-tax') && row.querySelector('.disp-tax').value);
+            var line = row.querySelector('.disp-line-total');
+            if (line) { line.textContent = formatCurrency(lineTotal(item)); }
+        });
+    }
+
+    function recalcDispenseTotals() {
+        syncDispenseRowsToState();
+        var subtotal = 0;
+        var taxTotal = 0;
+
+        dispenseState.items.forEach(function (item) {
+            var qty = toNumber(item.dispense_qty);
+            var price = toNumber(item.unit_price);
+            var tax = toNumber(item.tax_percent);
+            var lineSubtotal = qty * price;
+            subtotal += lineSubtotal;
+            taxTotal += lineSubtotal * tax / 100;
+        });
+
+        var discount = toNumber(document.getElementById('dispenseDiscount') && document.getElementById('dispenseDiscount').value);
+        var paid = toNumber(document.getElementById('dispensePaid') && document.getElementById('dispensePaid').value);
+        var net = Math.max(0, subtotal + taxTotal - discount);
+        setText('dispenseSubtotal', formatCurrency(subtotal));
+        setText('dispenseTax', formatCurrency(taxTotal));
+        setText('dispenseNet', formatCurrency(net));
+        setText('dispenseDue', formatCurrency(Math.max(0, net - paid)));
+    }
+
+    function loadWalkInMedicineOptions() {
+        var url = getDispenseMedicineSearchUrl();
+        var search = document.getElementById('walkInMedicineSearch');
+        var list = document.getElementById('walkInMedicineOptions');
+        if (!url || !search || !list) { return; }
+        var q = String(search.value || '').trim();
+        if (q.length < 2) {
+            list.innerHTML = '';
+            return;
+        }
+        fetch(url + '?q=' + encodeURIComponent(q), {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
+            .then(function (data) {
+                dispenseState.medicineSearchResults = data.items || [];
+                list.innerHTML = dispenseState.medicineSearchResults.map(function (m) {
+                    return '<option value="' + escapeHtml(m.name) + '" label="' + escapeHtml(m.name + ' | Stock ' + m.available_qty) + '"></option>';
+                }).join('');
             })
-            .join('');
+            .catch(function () {});
     }
 
     // Old static updateGRNTotal removed — replaced by updateGRNAcceptedTotal
@@ -1493,14 +1725,92 @@
         }
     };
 
-    window.dispenseRx = function (rx, btn) {
-        var row = btn.closest('tr');
-        if (row) {
-            row.style.opacity = '0.6';
-        }
-        btn.outerHTML = '<span class="badge badge-green">✅ Dispensed</span>';
-        toast('Dispensed', rx + ' - Dispensed successfully. Label printed.', 'success');
+    window.openWalkInDispense = function () {
+        resetDispenseState('walkin');
+        window.openModal('dispenseModal');
     };
+
+    window.openPrescriptionDispense = function (type, id) {
+        resetDispenseState('prescription');
+        window.openModal('dispenseModal');
+
+        var url = getDispensePreviewUrl();
+        if (!url || !type || !id) {
+            toast('Error', 'Prescription preview route is not available.', 'error');
+            return;
+        }
+
+        if (typeof window.loader === 'function') { window.loader(); }
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken() || ''
+            },
+            body: JSON.stringify({ prescription_type: type, prescription_id: id })
+        })
+            .then(function (res) { return res.ok ? res.json() : res.json().then(function (data) { return Promise.reject(data); }); })
+            .then(function (data) {
+                if (typeof window.loader === 'function') { window.loader('hide'); }
+                dispenseState.mode = 'prescription';
+                dispenseState.patient = data.patient;
+                dispenseState.prescription = data.prescription;
+                dispenseState.items = data.items || [];
+                setValue('dispensePrescriptionType', data.prescription && data.prescription.type);
+                setValue('dispensePrescriptionId', data.prescription && data.prescription.id);
+                setValue('dispensePatientId', data.patient && data.patient.id);
+                renderDispensePatient(data);
+                renderDispenseItems();
+            })
+            .catch(function (err) {
+                if (typeof window.loader === 'function') { window.loader('hide'); }
+                toast('Error', err.message || 'Unable to load prescription.', 'error');
+            });
+    };
+
+    window.addWalkInMedicine = function () {
+        var input = document.getElementById('walkInMedicineSearch');
+        if (!input) { return; }
+        var value = String(input.value || '').trim().toLowerCase();
+        var item = dispenseState.medicineSearchResults.find(function (m) {
+            return String(m.name || '').trim().toLowerCase() === value;
+        });
+        if (!item) {
+            toast('Select Medicine', 'Please choose a medicine from search suggestions.', 'warning');
+            return;
+        }
+        dispenseState.items.push({
+            medicine_id: item.id,
+            medicine_name: item.name,
+            unit: item.unit,
+            dosage: '-',
+            frequency: '-',
+            route: '-',
+            instruction: '-',
+            prescribed_qty: 0,
+            available_qty: item.available_qty,
+            dispense_qty: item.available_qty > 0 ? 1 : 0,
+            stock_status: item.available_qty <= 0 ? 'out' : 'available',
+            batch_id: item.batch_id,
+            unit_price: item.unit_price,
+            unit_mrp: item.unit_mrp,
+            tax_percent: item.tax_percent,
+            batches: item.batches || []
+        });
+        input.value = '';
+        renderDispenseItems();
+    };
+
+    window.removeDispenseItem = function (idx) {
+        dispenseState.items.splice(idx, 1);
+        renderDispenseItems();
+    };
+
+    if (typeof window.$ !== 'undefined') {
+        window.$(document).on('input change', '#dispenseItemsBody .disp-qty, #dispenseItemsBody .disp-price, #dispenseItemsBody .disp-tax, #dispenseItemsBody .disp-batch', recalcDispenseTotals);
+    }
 
     window.holdRx = function (btn) {
         var row = btn.closest('tr');
@@ -2352,12 +2662,76 @@
     };
 
     window.confirmDispense = function () {
-        toast('Dispensed', 'Prescription dispensed. Drug label printed.', 'success');
-        window.closeModal('dispenseModal');
+        var url = getDispenseStoreUrl();
+        if (!url) {
+            toast('Error', 'Dispense store route is not available.', 'error');
+            return;
+        }
+
+        syncDispenseRowsToState();
+        var items = dispenseState.items
+            .filter(function (item) { return toNumber(item.dispense_qty) > 0; })
+            .map(function (item) {
+                return {
+                    medicine_id: item.medicine_id,
+                    stock_batch_id: item.batch_id || null,
+                    quantity: toNumber(item.dispense_qty),
+                    unit_price: toNumber(item.unit_price),
+                    unit_mrp: toNumber(item.unit_mrp),
+                    discount_percent: 0,
+                    tax_percent: toNumber(item.tax_percent),
+                    is_substituted: false,
+                    substitution_note: ''
+                };
+            });
+
+        if (!items.length) {
+            toast('No Items', 'Please enter dispense quantity for at least one medicine.', 'warning');
+            return;
+        }
+
+        var payload = {
+            patient_id: document.getElementById('dispensePatientId') ? document.getElementById('dispensePatientId').value : '',
+            prescription_type: document.getElementById('dispensePrescriptionType') ? document.getElementById('dispensePrescriptionType').value : '',
+            prescription_id: document.getElementById('dispensePrescriptionId') ? document.getElementById('dispensePrescriptionId').value : '',
+            notes: document.getElementById('dispenseNotes') ? document.getElementById('dispenseNotes').value : '',
+            discount_amount: toNumber(document.getElementById('dispenseDiscount') && document.getElementById('dispenseDiscount').value),
+            paid_amount: toNumber(document.getElementById('dispensePaid') && document.getElementById('dispensePaid').value),
+            items: items
+        };
+
+        if (typeof window.loader === 'function') { window.loader(); }
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken() || ''
+            },
+            body: JSON.stringify(payload)
+        })
+            .then(function (res) { return res.ok ? res.json() : res.json().then(function (data) { return Promise.reject(data); }); })
+            .then(function (data) {
+                if (typeof window.loader === 'function') { window.loader('hide'); }
+                toast('Dispensed', (data.bill_no || 'Bill') + ' created successfully.', 'success');
+                window.closeModal('dispenseModal');
+                if (dispenseTable) { dispenseTable.ajax.reload(null, false); }
+                if (inventoryTable) { inventoryTable.ajax.reload(null, false); }
+                loadDashboardCounts();
+            })
+            .catch(function (err) {
+                if (typeof window.loader === 'function') { window.loader('hide'); }
+                var msg = err.message || 'Unable to dispense medicine.';
+                if (err.errors && err.errors.length) {
+                    msg = err.errors.map(function (e) { return e.message || e; }).join('\n');
+                }
+                toast('Error', msg, 'error');
+            });
     };
 
     window.holdDispense = function () {
-        toast('On Hold', 'Prescription placed on hold', 'warning');
+        toast('On Hold', 'Prescription retained in queue. No stock changed.', 'warning');
         window.closeModal('dispenseModal');
     };
 
@@ -2497,6 +2871,5 @@
         loadDispenseQueue();
         loadRxValidation();
         loadMARContent();
-        loadRxPreviewBody();
     });
 })();
