@@ -27,6 +27,7 @@ $(document).ready(function() {
                 }
             },
             { data: 'frequency', name: 'frequency' },
+            { data: 'no_of_medicine', name: 'no_of_medicine' },
             { data: 'actions', name: 'actions', orderable: false, searchable: false }
         ],
         dom: "fBrtip",

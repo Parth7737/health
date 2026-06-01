@@ -10,6 +10,10 @@
             <label class="form-label">Frequency</label>
             <input type="text" name="frequency" id="frequency" value="{{ @$data->frequency }}" class="form-control">
         </div>  
+        <div class="col-md-12">
+            <label class="form-label">Number of Medicines</label>
+            <input type="number" name="no_of_medicine" id="no_of_medicine" value="{{ @$data->no_of_medicine }}" class="form-control" placeholder="3 times daily e.g. 1, 2, 3...">
+        </div>  
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

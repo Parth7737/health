@@ -291,7 +291,7 @@ class PharmacyDashboardController extends BaseHospitalController
             'doctor:id,first_name,last_name',
             'items.medicine:id,name,unit',
             'items.dosage:id,dosage',
-            'items.frequency:id,frequency',
+            'items.frequency:id,frequency,no_of_medicine',
             'items.route:id,route',
             'items.instruction:id,instruction',
         ];
@@ -311,6 +311,7 @@ class PharmacyDashboardController extends BaseHospitalController
                 $batches = $this->availableBatchesForMedicine((int) $item->medicine_id);
                 $availableQty = (float) $batches->sum('available_qty');
                 $prescribedQty = max(1, (float) ($item->no_of_day ?? 1));
+                $frequencyQty = max(1, (float) ($item->frequency?->no_of_medicine ?? 1));
                 $firstBatch = $batches->first();
 
                 return [
@@ -322,9 +323,9 @@ class PharmacyDashboardController extends BaseHospitalController
                     'route' => $item->route?->route ?? '-',
                     'instruction' => $item->instruction?->instruction ?? '-',
                     'days' => (int) ($item->no_of_day ?? 1),
-                    'prescribed_qty' => $prescribedQty,
+                    'prescribed_qty' => $prescribedQty * $frequencyQty,
                     'available_qty' => $availableQty,
-                    'dispense_qty' => min($prescribedQty, $availableQty),
+                    'dispense_qty' => min($prescribedQty * $frequencyQty, $availableQty),
                     'stock_status' => $availableQty <= 0 ? 'out' : ($availableQty < $prescribedQty ? 'partial' : 'available'),
                     'batch_id' => $firstBatch?->id,
                     'unit_price' => (float) ($firstBatch?->unit_sale_price ?? 0),

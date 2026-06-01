@@ -23,6 +23,7 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Frequency</th>
+                                    <th>Number of Medicines</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>

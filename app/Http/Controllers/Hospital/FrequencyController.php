@@ -60,6 +60,7 @@ class FrequencyController extends BaseHospitalController
     {
         $validator = Validator::make($request->all(), [
             'frequency' => 'required|string|max:255|unique:medicine_frequencies,frequency,' . $request->id . ',id,hospital_id,' . $this->hospital_id,
+            'no_of_medicine' => 'required|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -71,6 +72,7 @@ class FrequencyController extends BaseHospitalController
             [
                 'hospital_id' => $this->hospital_id,
                 'frequency' => $request->frequency,
+                'no_of_medicine' => $request->no_of_medicine,
             ]
         );
 
