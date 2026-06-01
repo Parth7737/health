@@ -238,7 +238,7 @@
                                 <select class="form-select select2-modal" id="prescription_entry_medicine" tabindex="1">
                                     <option value="">Select</option>
                                     @foreach($medicines as $medicine)
-                                        <option value="{{ $medicine->id }}" data-category-id="{{ $medicine->medicine_category_id }}">{{ $medicine->name }}</option>
+                                        <option value="{{ $medicine->id }}" data-medicine-unit-id="{{ $medicine->medicine_category_id }}" data-unit-id="{{ $medicine->medicine_unit_id }}">{{ $medicine->name }}</option>
                                     @endforeach
                                 </select>
                             </div>

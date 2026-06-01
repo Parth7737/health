@@ -143,6 +143,10 @@ class PharmacyInventoryService
             $totalAmount = 0.0;
             $totalTaxAmount = 0.0;
             $taxableAmount = 0.0;
+            $totalCgst = 0.0;
+            $totalSgst = 0.0;
+            $totalIgst = 0.0;
+            $gstType = Arr::get($payload, 'gst_type', 'local');
 
             foreach ($grnItems as $grnItem) {
                 $purchaseItemId = (int) Arr::get($grnItem, 'purchase_item_id');
@@ -151,9 +155,20 @@ class PharmacyInventoryService
                     throw new RuntimeException('Invalid purchase item reference.');
                 }
 
-                $qtyReceived = (float) Arr::get($grnItem, 'quantity_received', 0);
-                $qtyFree     = (float) Arr::get($grnItem, 'quantity_free', 0);
-                $qtyRejected = (float) Arr::get($grnItem, 'quantity_rejected', 0);
+                $packSize = (int) Arr::get($grnItem, 'pack_size', 1);
+                if ($packSize < 1) {
+                    $packSize = 1;
+                }
+
+                // Inputs are pack based!
+                $packQty = (float) Arr::get($grnItem, 'quantity_received', 0);
+                $packFreeQty = (float) Arr::get($grnItem, 'quantity_free', 0);
+                $packRejectedQty = (float) Arr::get($grnItem, 'quantity_rejected', 0);
+
+                // Convert to units for internal database compatibility
+                $qtyReceived = $packQty * $packSize;
+                $qtyFree     = $packFreeQty * $packSize;
+                $qtyRejected = $packRejectedQty * $packSize;
                 $qtyAccepted = max(0, $qtyReceived - $qtyRejected);
 
                 if ($qtyReceived <= 0) {
@@ -177,14 +192,55 @@ class PharmacyInventoryService
                 if (is_string($expiryDate) && preg_match('/^\d{4}-\d{2}$/', $expiryDate)) {
                     $expiryDate = Carbon::parse($expiryDate . '-01')->endOfMonth()->format('Y-m-d');
                 }
-                $purchasePrice = (float) Arr::get($grnItem, 'unit_purchase_price', 0);
-                $salePrice     = (float) Arr::get($grnItem, 'unit_sale_price', 0);
-                $mrp           = (float) Arr::get($grnItem, 'unit_mrp', $salePrice);
-                $taxPercent    = (float) Arr::get($grnItem, 'tax_percent', 0);
 
-                $lineSubtotal = round($qtyAccepted * $purchasePrice, 2);
-                $lineTax      = round(($lineSubtotal * $taxPercent) / 100, 2);
-                $lineTotal    = round($lineSubtotal + $lineTax, 2);
+                $packPurchasePrice = (float) Arr::get($grnItem, 'unit_purchase_price', 0); // named unit_purchase_price in frontend but represents pack price
+                $packSalePrice     = (float) Arr::get($grnItem, 'unit_sale_price', 0);     // represents pack sale price
+                $packMrp           = (float) Arr::get($grnItem, 'unit_mrp', $packSalePrice); // represents pack MRP
+                $taxPercent        = (float) Arr::get($grnItem, 'tax_percent', 0);
+
+                $purchaseTaxType = Arr::get($grnItem, 'purchase_tax_type', 'exclusive');
+                $saleTaxType     = Arr::get($grnItem, 'sale_tax_type', 'exclusive');
+
+                // Compute Unit Purchase price and taxable amount
+                if ($purchaseTaxType === 'inclusive') {
+                    $totalUnitPurchasePrice = $packPurchasePrice / $packSize;
+                    $unitPurchasePrice = $totalUnitPurchasePrice / (1 + $taxPercent / 100);
+                    $unitTaxAmount = $totalUnitPurchasePrice - $unitPurchasePrice;
+                    $lineSubtotal = round($qtyAccepted * $unitPurchasePrice, 2);
+                    $lineTax = round($qtyAccepted * $unitTaxAmount, 2);
+                    $lineTotal = round($qtyAccepted * $totalUnitPurchasePrice, 2);
+                } else {
+                    $unitPurchasePrice = $packPurchasePrice / $packSize;
+                    $unitTaxAmount = $unitPurchasePrice * ($taxPercent / 100);
+                    $lineSubtotal = round($qtyAccepted * $unitPurchasePrice, 2);
+                    $lineTax = round($qtyAccepted * $unitTaxAmount, 2);
+                    $lineTotal = round($lineSubtotal + $lineTax, 2);
+                }
+
+                // Compute Unit Sale price and Unit MRP
+                if ($saleTaxType === 'inclusive') {
+                    $unitSalePrice = ($packSalePrice / $packSize) / (1 + $taxPercent / 100);
+                } else {
+                    $unitSalePrice = $packSalePrice / $packSize;
+                }
+                $unitMrp = $packMrp / $packSize;
+
+                // Split Tax
+                if ($gstType === 'interstate') {
+                    $cgstPercent = 0.0;
+                    $cgstAmount  = 0.0;
+                    $sgstPercent = 0.0;
+                    $sgstAmount  = 0.0;
+                    $igstPercent = $taxPercent;
+                    $igstAmount  = $lineTax;
+                } else {
+                    $cgstPercent = $taxPercent / 2;
+                    $cgstAmount  = $lineTax / 2;
+                    $sgstPercent = $taxPercent / 2;
+                    $sgstAmount  = $lineTax / 2;
+                    $igstPercent = 0.0;
+                    $igstAmount  = 0.0;
+                }
 
                 $grn->items()->create([
                     'purchase_item_id'    => $purchaseItem->id,
@@ -197,13 +253,27 @@ class PharmacyInventoryService
                     'quantity_rejected'   => $qtyRejected,
                     'quantity_accepted'   => $qtyAccepted,
                     'rejection_reason'    => Arr::get($grnItem, 'rejection_reason'),
-                    'unit_purchase_price' => $purchasePrice,
-                    'unit_sale_price'     => $salePrice,
-                    'unit_mrp'            => $mrp,
+                    'pack_size'           => $packSize,
+                    'pack_qty'            => $packQty,
+                    'pack_mrp'            => $packMrp,
+                    'pack_purchase_price' => $packPurchasePrice,
+                    'pack_sale_price'     => $packSalePrice,
+                    'purchase_tax_type'   => $purchaseTaxType,
+                    'sale_tax_type'       => $saleTaxType,
+                    'unit_purchase_price' => $unitPurchasePrice,
+                    'unit_sale_price'     => $unitSalePrice,
+                    'unit_mrp'            => $unitMrp,
                     'tax_percent'         => $taxPercent,
                     'tax_amount'          => $lineTax,
                     'taxable_amount'      => $lineSubtotal,
                     'line_total'          => $lineTotal,
+                    'cgst_percent'        => $cgstPercent,
+                    'cgst_amount'         => $cgstAmount,
+                    'sgst_percent'        => $sgstPercent,
+                    'sgst_amount'         => $sgstAmount,
+                    'igst_percent'        => $igstPercent,
+                    'igst_amount'         => $igstAmount,
+                    'gst_type'            => $gstType,
                 ]);
 
                 // Update PO item received qty
@@ -220,9 +290,21 @@ class PharmacyInventoryService
                         'purchase_item_id'    => $purchaseItem->id,
                         'batch_no'            => $batchNo,
                         'expiry_date'         => $expiryDate,
-                        'unit_purchase_price' => $purchasePrice,
-                        'unit_sale_price'     => $salePrice,
-                        'unit_mrp'            => $mrp,
+                        'pack_size'           => $packSize,
+                        'pack_qty'            => $packQty + $packFreeQty,
+                        'pack_mrp'            => $packMrp,
+                        'pack_purchase_price' => $packPurchasePrice,
+                        'pack_sale_price'     => $packSalePrice,
+                        'purchase_tax_type'   => $purchaseTaxType,
+                        'sale_tax_type'       => $saleTaxType,
+                        'unit_purchase_price' => $unitPurchasePrice,
+                        'unit_sale_price'     => $unitSalePrice,
+                        'unit_mrp'            => $unitMrp,
+                        'tax_percent'         => $taxPercent,
+                        'cgst_percent'        => $cgstPercent,
+                        'sgst_percent'        => $sgstPercent,
+                        'igst_percent'        => $igstPercent,
+                        'gst_type'            => $gstType,
                         'available_qty'       => $stockQty,
                         'status'              => 'active',
                         'received_at'         => now(),
@@ -237,8 +319,8 @@ class PharmacyInventoryService
                         'entry_type'          => 'in',
                         'quantity'            => $stockQty,
                         'balance_after'       => $batch->available_qty,
-                        'unit_purchase_price' => $purchasePrice,
-                        'unit_sale_price'     => $salePrice,
+                        'unit_purchase_price' => $unitPurchasePrice,
+                        'unit_sale_price'     => $unitSalePrice,
                         'remarks'             => 'GRN stock inward (' . $grn->grn_no . ')',
                     ]);
                 }
@@ -253,9 +335,20 @@ class PharmacyInventoryService
                 $totalAmount += $lineTotal;
                 $totalTaxAmount += $lineTax;
                 $taxableAmount += $lineSubtotal;
+                $totalCgst += $cgstAmount;
+                $totalSgst += $sgstAmount;
+                $totalIgst += $igstAmount;
             }
 
-            $grn->update(['total_amount' => round($totalAmount, 2),'total_tax' => round($totalTaxAmount, 2),'taxable_amount' => round($taxableAmount, 2)]);
+            $grn->update([
+                'total_amount' => round($totalAmount, 2),
+                'total_tax' => round($totalTaxAmount, 2),
+                'taxable_amount' => round($taxableAmount, 2),
+                'total_cgst' => round($totalCgst, 2),
+                'total_sgst' => round($totalSgst, 2),
+                'total_igst' => round($totalIgst, 2),
+                'gst_type' => $gstType,
+            ]);
 
             // Update PO fulfilment status
             $bill->refresh();
@@ -373,6 +466,9 @@ class PharmacyInventoryService
             $subtotal = 0.0;
             $discountTotal = 0.0;
             $taxTotal = 0.0;
+            $totalCgst = 0.0;
+            $totalSgst = 0.0;
+            $totalIgst = 0.0;
 
             foreach ($items as $item) {
                 $medicineId = (int) Arr::get($item, 'medicine_id');
@@ -385,7 +481,22 @@ class PharmacyInventoryService
                 $remaining = $requiredQty;
                 $selectedBatchId = Arr::get($item, 'stock_batch_id');
 
-                $batchesQuery = PharmacyStockBatch::query()
+                // 1. Fetch selected batch first
+                $selectedBatch = null;
+                if ($selectedBatchId) {
+                    $selectedBatch = PharmacyStockBatch::query()
+                        ->where('hospital_id', $hospitalId)
+                        ->where('id', (int) $selectedBatchId)
+                        ->where('status', 'active')
+                        ->where('available_qty', '>', 0)
+                        ->where(function ($query) {
+                            $query->whereNull('expiry_date')->orWhere('expiry_date', '>=', now()->toDateString());
+                        })
+                        ->first();
+                }
+
+                // 2. Fetch other batches ordered by FEFO
+                $otherBatchesQuery = PharmacyStockBatch::query()
                     ->where('hospital_id', $hospitalId)
                     ->where('medicine_id', $medicineId)
                     ->where('status', 'active')
@@ -399,10 +510,20 @@ class PharmacyInventoryService
                     ->lockForUpdate();
 
                 if ($selectedBatchId) {
-                    $batchesQuery->where('id', (int) $selectedBatchId);
+                    $otherBatchesQuery->where('id', '!=', (int) $selectedBatchId);
                 }
 
-                $batches = $batchesQuery->get();
+                $otherBatches = $otherBatchesQuery->get();
+
+                // 3. Assemble all batches to consume (Selected first, then other FEFO)
+                $batches = collect();
+                if ($selectedBatch) {
+                    $batches->push($selectedBatch);
+                }
+                foreach ($otherBatches as $ob) {
+                    $batches->push($ob);
+                }
+
                 if ($batches->isEmpty()) {
                     throw new RuntimeException('Stock not available for selected medicine.');
                 }
@@ -420,13 +541,33 @@ class PharmacyInventoryService
                     $unitPrice = (float) Arr::get($item, 'unit_price', $batch->unit_sale_price);
                     $unitMrp = (float) Arr::get($item, 'unit_mrp', $batch->unit_mrp);
                     $discountPercent = (float) Arr::get($item, 'discount_percent', 0);
-                    $taxPercent = (float) Arr::get($item, 'tax_percent', 0);
+                    $taxPercent = (float) Arr::get($item, 'tax_percent', $batch->tax_percent);
 
-                    $lineSubtotal = round($consumeQty * $unitPrice, 2);
-                    $lineDiscount = round(($lineSubtotal * $discountPercent) / 100, 2);
-                    $taxable = max(0, $lineSubtotal - $lineDiscount);
-                    $lineTax = round(($taxable * $taxPercent) / 100, 2);
-                    $lineTotal = round($taxable + $lineTax, 2);
+                    $saleTaxType = $batch->sale_tax_type ?: 'exclusive';
+
+                    if ($saleTaxType === 'inclusive') {
+                        $totalInclusive = $consumeQty * $unitPrice;
+                        $lineDiscount = round(($totalInclusive * $discountPercent) / 100, 2);
+                        $netTotal = max(0, $totalInclusive - $lineDiscount);
+                        $taxable = round($netTotal / (1 + $taxPercent / 100), 2);
+                        $lineTax = round($netTotal - $taxable, 2);
+                        $lineSubtotal = round($totalInclusive / (1 + $taxPercent / 100), 2);
+                        $lineTotal = $netTotal;
+                    } else {
+                        $lineSubtotal = round($consumeQty * $unitPrice, 2);
+                        $lineDiscount = round(($lineSubtotal * $discountPercent) / 100, 2);
+                        $taxable = max(0, $lineSubtotal - $lineDiscount);
+                        $lineTax = round(($taxable * $taxPercent) / 100, 2);
+                        $lineTotal = round($taxable + $lineTax, 2);
+                    }
+
+                    // Sales are local (split CGST & SGST)
+                    $cgstPercent = $taxPercent / 2;
+                    $cgstAmount = $lineTax / 2;
+                    $sgstPercent = $taxPercent / 2;
+                    $sgstAmount = $lineTax / 2;
+                    $igstPercent = 0.0;
+                    $igstAmount = 0.0;
 
                     $saleBill->items()->create([
                         'medicine_id' => $medicineId,
@@ -439,9 +580,16 @@ class PharmacyInventoryService
                         'discount_percent' => $discountPercent,
                         'discount_amount' => $lineDiscount,
                         'tax_percent' => $taxPercent,
+                        'tax_type' => $saleTaxType,
                         'tax_amount' => $lineTax,
                         'line_subtotal' => $lineSubtotal,
                         'line_total' => $lineTotal,
+                        'cgst_percent' => $cgstPercent,
+                        'cgst_amount' => $cgstAmount,
+                        'sgst_percent' => $sgstPercent,
+                        'sgst_amount' => $sgstAmount,
+                        'igst_percent' => $igstPercent,
+                        'igst_amount' => $igstAmount,
                         'is_substituted' => (bool) Arr::get($item, 'is_substituted', false),
                         'substitution_note' => Arr::get($item, 'substitution_note'),
                     ]);
@@ -470,6 +618,9 @@ class PharmacyInventoryService
                     $subtotal += $lineSubtotal;
                     $discountTotal += $lineDiscount;
                     $taxTotal += $lineTax;
+                    $totalCgst += $cgstAmount;
+                    $totalSgst += $sgstAmount;
+                    $totalIgst += $igstAmount;
                 }
 
                 if ($remaining > 0) {
@@ -478,7 +629,7 @@ class PharmacyInventoryService
             }
 
             $extraDiscount = (float) Arr::get($payload, 'discount_amount', 0);
-            $netTotal = round(max(0, $subtotal - ($discountTotal + $extraDiscount) + $taxTotal), 2);
+            $netTotal = round(max(0, ($subtotal - $discountTotal) + $taxTotal - $extraDiscount), 2);
             $paidAmount = (float) Arr::get($payload, 'paid_amount', 0);
             $dueAmount = max(0, round($netTotal - $paidAmount, 2));
 
@@ -486,6 +637,9 @@ class PharmacyInventoryService
                 'subtotal' => round($subtotal, 2),
                 'discount_amount' => round($discountTotal + $extraDiscount, 2),
                 'tax_amount' => round($taxTotal, 2),
+                'total_cgst' => round($totalCgst, 2),
+                'total_sgst' => round($totalSgst, 2),
+                'total_igst' => round($totalIgst, 2),
                 'net_total' => $netTotal,
                 'paid_amount' => $paidAmount,
                 'due_amount' => $dueAmount,

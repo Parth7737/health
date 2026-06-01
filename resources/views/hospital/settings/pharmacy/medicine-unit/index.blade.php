@@ -1,14 +1,13 @@
 @extends('layouts.hospital.app')
-@section('title','Medicine Dosages')
-@section('page_header_icon', '💊')
-@section('page_subtitle', 'Manage Medicine Dosages')
+@section('title','Medicine Units')
+@section('page_header_icon', '🧪')
+@section('page_subtitle', 'Manage Medicine Units')
 @section('page_header_actions')
-@can('create-medicine-dosage')
-    <button class="btn btn-info adddata" data-id="">+ Add Dosage</button>
+@can('create-medicine-unit')
+    <button class="btn btn-info adddata" data-id="">+ Add Unit</button>
 @endcan
 @endsection
 @section('content')
-<!-- Container-fluid starts-->
 <div class="container-fluid">
     <div class="row">
         <div class="col-xl-3">
@@ -22,8 +21,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>#</th>
-                                    <th>Unit</th>
-                                    <th>Dosage</th>
+                                    <th>Name</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>

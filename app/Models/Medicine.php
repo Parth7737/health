@@ -23,4 +23,9 @@ class Medicine extends Model
     {
         return $this->belongsTo(MedicineCategory::class,'medicine_category_id');
     }
+    
+    public function unit()
+    {
+        return $this->belongsTo(MedicineUnit::class,'medicine_unit_id');
+    }
 }

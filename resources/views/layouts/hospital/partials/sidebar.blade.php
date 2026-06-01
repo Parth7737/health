@@ -272,7 +272,7 @@
                     <li><a class="{{ request()->is('hospital/settings/front-office/*') ? 'active' : '' }}" href="{{ $frontOfficeUrl }}">Front Office</a></li>
                 @endif
 
-                @if(auth()->user()->can('view-medicine') || auth()->user()->can('view-medicine-category') || auth()->user()->can('view-medicine-dosage') || auth()->user()->can('view-medicine-instructions') || auth()->user()->can('view-frequency'))
+                @if(auth()->user()->can('view-medicine') || auth()->user()->can('view-medicine-category') || auth()->user()->can('view-medicine-dosage') || auth()->user()->can('view-medicine-unit') || auth()->user()->can('view-medicine-instructions') || auth()->user()->can('view-frequency'))
                     @php $pharmacyUrl = '';
                         if(auth()->user()->can('view-medicine')){
                             $pharmacyUrl = route('hospital.settings.pharmacy.medicine.index');
@@ -280,6 +280,8 @@
                             $pharmacyUrl = route('hospital.settings.pharmacy.medicine-category.index');
                         }elseif(auth()->user()->can('view-medicine-dosage')){
                             $pharmacyUrl = route('hospital.settings.pharmacy.medicine-dosage.index');
+                        }elseif(auth()->user()->can('view-medicine-unit')){
+                            $pharmacyUrl = route('hospital.settings.pharmacy.medicine-unit.index');
                         }elseif(auth()->user()->can('view-medicine-instructions')){
                             $pharmacyUrl = route('hospital.settings.pharmacy.medicine-instructions.index');
                         }elseif(auth()->user()->can('view-frequency')){

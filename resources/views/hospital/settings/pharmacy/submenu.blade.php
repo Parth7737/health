@@ -8,6 +8,9 @@
             @can('view-medicine-category')
                 <a class="nav-link {{ request()->routeIs('hospital.settings.pharmacy.medicine-category.index') ? 'active' : '' }}" href="{{ route('hospital.settings.pharmacy.medicine-category.index') }}">Medicine Categories</a>
             @endcan
+            @can('view-medicine-unit')
+                <a class="nav-link {{ request()->routeIs('hospital.settings.pharmacy.medicine-unit.index') ? 'active' : '' }}" href="{{ route('hospital.settings.pharmacy.medicine-unit.index') }}">Medicine Unit</a>
+            @endcan
             @can('view-medicine-dosage')
                 <a class="nav-link {{ request()->routeIs('hospital.settings.pharmacy.medicine-dosage.index') ? 'active' : '' }}" href="{{ route('hospital.settings.pharmacy.medicine-dosage.index') }}">Medicine Dosage</a>
             @endcan

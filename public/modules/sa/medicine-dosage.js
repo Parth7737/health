@@ -26,7 +26,7 @@ $(document).ready(function() {
                     return meta.row + meta.settings._iDisplayStart + 1;
                 }
             },
-            { data: 'category.name', name: 'category.name' },
+            { data: 'unit.name', name: 'unit.name' },
             { data: 'dosage', name: 'dosage' },
             { data: 'actions', name: 'actions', orderable: false, searchable: false }
         ],
@@ -79,6 +79,9 @@ $(document).ready(function() {
                 loader('hide');
                 if (response) {
                     $("#ajaxdata").html(response);
+                    $(".select2-modal").select2({
+                        dropdownParent: $('.add-datamodal')
+                    });
                     $(".add-datamodal").modal('show');
                     $(".add-datamodal .modal-dialog").removeClass('modal-xl');
                 }

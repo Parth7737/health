@@ -684,6 +684,13 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
                 Route::post('show-medicine-dosage-form', 'MedicineDosageController@showform')->name('medicine-dosage.showform');
             });
 
+            // Medicine Unit
+            Route::middleware(['permission:view-medicine-unit'])->group(function () {
+                Route::resource('medicine-unit', 'MedicineUnitController');
+                Route::post('load-medicine-unit', 'MedicineUnitController@loaddata')->name('medicine-unit-load');
+                Route::post('show-medicine-unit-form', 'MedicineUnitController@showform')->name('medicine-unit.showform');
+            });
+
             // Medicine Instructions
             Route::middleware(['permission:view-medicine-instructions'])->group(function () {
                 Route::resource('medicine-instructions', 'MedicineInstructionsController');

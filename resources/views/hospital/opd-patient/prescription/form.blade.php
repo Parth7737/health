@@ -230,7 +230,7 @@
                                     <select class="form-select select2-modal" id="prescription_entry_medicine" tabindex="1">
                                         <option value="">Select</option>
                                         @foreach($medicines as $medicine)
-                                            <option value="{{ $medicine->id }}" data-category-id="{{ $medicine->medicine_category_id }}">{{ $medicine->name }}</option>
+                                            <option value="{{ $medicine->id }}" data-category-id="{{ $medicine->medicine_category_id }}" data-medicine-unit-id="{{ $medicine->medicine_unit_id }}">{{ $medicine->name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -313,8 +313,9 @@
                                         $selectedMedicineId = $item?->medicine_id;
                                         $selectedDosageId = $item?->medicine_dosage_id;
                                         $selectedCategoryId = $item?->medicine_category_id;
-                                        $dosageOptions = $selectedCategoryId
-                                            ? App\Models\MedicineDosage::query()->where('medicine_category_id', $selectedCategoryId)->orderBy('dosage')->get(['id', 'dosage'])
+                                        $selectedUnitId = $item?->medicine_unit_id;
+                                        $dosageOptions = $selectedUnitId
+                                            ? App\Models\MedicineDosage::query()->where('medicine_unit_id', $selectedUnitId)->orderBy('dosage')->get(['id', 'dosage'])
                                             : collect([]);
                                         $selectedMedicine = $medicineMap->get($selectedMedicineId);
                                         $selectedInstruction = $instructionMap->get($item?->medicine_instruction_id);

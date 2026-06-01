@@ -48,7 +48,7 @@ class PharmacyGrnController extends BaseHospitalController
             'supplier',
             'purchaseBill:id,bill_no,bill_date',
             'receivedByUser:id,name',
-            'items.medicine:id,name,unit',
+            'items.medicine:id,name,medicine_unit_id',
         ]);
 
         return view('hospital.pharmacy.grn.view', compact('grn'));
@@ -64,7 +64,7 @@ class PharmacyGrnController extends BaseHospitalController
             'supplier',
             'purchaseBill:id,bill_no,bill_date',
             'receivedByUser:id,name',
-            'items.medicine:id,name,unit',
+            'items.medicine:id,name,medicine_unit_id',
         ]);
 
         return view('hospital.pharmacy.grn.print', compact('grn'));
@@ -75,7 +75,7 @@ class PharmacyGrnController extends BaseHospitalController
      */
     public function approvedPOs(Request $request)
     {
-        $pos = PharmacyPurchaseBill::with(['items.medicine:id,name,unit', 'supplier:id,name'])
+        $pos = PharmacyPurchaseBill::with(['items.medicine:id,name,medicine_unit_id', 'supplier:id,name'])
             ->whereIn('status', ['approved', 'partially_received'])
             ->latest('id')
             ->get()

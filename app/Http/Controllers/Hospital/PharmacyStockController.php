@@ -42,7 +42,7 @@ class PharmacyStockController extends BaseHospitalController
         return DataTables::of($data)
             ->addColumn('medicine_name', fn ($row) => $row->medicine?->name ?? '-')
             ->addColumn('category_name', fn ($row) => $row->medicine?->category?->name ?? '-')
-            ->addColumn('form_name', fn ($row) => $row->medicine?->unit ?? '-')
+            ->addColumn('form_name', fn ($row) => $row->medicine?->medicine_unit_id ? optional($row->medicine->unit)->name : '-')
             ->addColumn('min_level', fn ($row) => $row->medicine?->min_level ?? 0)
             ->addColumn('reorder_level', fn ($row) => $row->medicine?->reorder_level ?? 0)
             ->addColumn('medicine_available_qty', fn ($row) => (float) ($row->medicine_available_qty ?? 0))
@@ -113,7 +113,7 @@ class PharmacyStockController extends BaseHospitalController
                 fputcsv($out, [
                     $row->medicine?->name ?? '-',
                     $row->medicine?->category?->name ?? '-',
-                    $row->medicine?->unit ?? '-',
+                    $row->medicine?->medicine_unit_id ? optional($row->medicine->unit)->name : '-',
                     $row->batch_no ?? '-',
                     $expiry,
                     (string) $row->available_qty,
@@ -139,7 +139,7 @@ class PharmacyStockController extends BaseHospitalController
             ->leftJoinSub($usableStock, 'usable_stock', function ($join) {
                 $join->on('usable_stock.medicine_id', '=', 'pharmacy_stock_batches.medicine_id');
             })
-            ->with('medicine:id,name,unit,min_level,reorder_level,medicine_category_id')
+            ->with('medicine:id,name,medicine_unit_id,min_level,reorder_level,medicine_category_id')
             ->with('medicine.category:id,name')
             ->latest('pharmacy_stock_batches.id');
 

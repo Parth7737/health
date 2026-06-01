@@ -101,12 +101,12 @@ class IpdPrescriptionController extends BaseHospitalController
 
         $medicineMap = Medicine::query()
             ->whereIn('id', $medicineIds->unique()->all())
-            ->get(['id', 'medicine_category_id'])
+            ->get(['id', 'medicine_category_id','medicine_unit_id'])
             ->keyBy('id');
 
         $dosageMap = MedicineDosage::query()
             ->whereIn('id', $dosageIds->filter()->unique()->all())
-            ->get(['id', 'medicine_category_id'])
+            ->get(['id', 'medicine_unit_id'])
             ->keyBy('id');
 
         $instructionMap = MedicineInstruction::query()
@@ -153,10 +153,10 @@ class IpdPrescriptionController extends BaseHospitalController
 
             if ($dosageId !== null) {
                 $dosage = $dosageMap->get($dosageId);
-                if (!$dosage || (int) $medicine->medicine_category_id !== (int) $dosage->medicine_category_id) {
+                if (!$dosage || (int) $medicine->medicine_unit_id !== (int) $dosage->medicine_unit_id) {
                     return response()->json([
                         'errors' => [
-                            ['code' => 'medicine_dosage_id', 'message' => 'Selected dosage does not belong to selected medicine category.'],
+                            ['code' => 'medicine_dosage_id', 'message' => 'Selected dosage does not belong to selected medicine unit.'],
                         ],
                     ], 422);
                 }
@@ -219,6 +219,7 @@ class IpdPrescriptionController extends BaseHospitalController
                     $prescription->items()->create([
                         'medicine_id' => $medicineId,
                         'medicine_category_id' => $medicineMap->get($medicineId)?->medicine_category_id,
+                        'medicine_unit_id' => $medicineMap->get($medicineId)?->medicine_unit_id,
                         'medicine_dosage_id' => $dosageIds[$index],
                         'medicine_instruction_id' => $instructionIds[$index],
                         'medicine_route_id' => $routeIds[$index],
@@ -263,7 +264,7 @@ class IpdPrescriptionController extends BaseHospitalController
         $allocation = $this->resolveAllocation($allocation);
         $prescription = $this->resolvePrescription($allocation, $prescription)
             ->load([
-                'items.medicine:id,name,medicine_category_id',
+                'items.medicine:id,name,medicine_category_id,medicine_unit_id',
                 'items.category:id,name',
                 'items.dosage:id,dosage',
                 'items.instruction:id,instruction',
@@ -316,7 +317,7 @@ class IpdPrescriptionController extends BaseHospitalController
         $allocation = $this->resolveAllocation($allocation);
         $prescription = $this->resolvePrescription($allocation, $prescription)
             ->load([
-                'items.medicine:id,name,medicine_category_id',
+                'items.medicine:id,name,medicine_category_id,medicine_unit_id',
                 'items.category:id,name',
                 'items.dosage:id,dosage',
                 'items.instruction:id,instruction',
@@ -342,7 +343,7 @@ class IpdPrescriptionController extends BaseHospitalController
 
     public function loadDosages(Request $request)
     {
-        $medicineCategoryIds = collect($request->input('medicine_category_ids', []))
+        $medicineUnitIds = collect($request->input('medicine_unit_ids', []))
             ->filter(fn ($value) => $value !== null && $value !== '')
             ->map(fn ($value) => (int) $value)
             ->unique()
@@ -354,9 +355,9 @@ class IpdPrescriptionController extends BaseHospitalController
             ->unique()
             ->values();
 
-        if ($request->filled('medicine_category_id')) {
-            $medicineCategoryIds->push((int) $request->input('medicine_category_id'));
-            $medicineCategoryIds = $medicineCategoryIds->unique()->values();
+        if ($request->filled('medicine_unit_id')) {
+            $medicineUnitIds->push((int) $request->input('medicine_unit_id'));
+            $medicineUnitIds = $medicineUnitIds->unique()->values();
         }
 
         if ($request->filled('medicine_id')) {
@@ -364,26 +365,26 @@ class IpdPrescriptionController extends BaseHospitalController
             $medicineIds = $medicineIds->unique()->values();
         }
 
-        if ($medicineCategoryIds->isEmpty() && $medicineIds->isNotEmpty()) {
-            $resolvedCategoryIds = Medicine::query()
+        if ($medicineUnitIds->isEmpty() && $medicineIds->isNotEmpty()) {
+            $resolvedUnitIds = Medicine::query()
                 ->whereIn('id', $medicineIds->all())
-                ->whereNotNull('medicine_category_id')
-                ->pluck('medicine_category_id')
+                ->whereNotNull('medicine_unit_id')
+                ->pluck('medicine_unit_id')
                 ->map(fn ($value) => (int) $value)
                 ->unique()
                 ->values();
 
-            $medicineCategoryIds = $medicineCategoryIds->merge($resolvedCategoryIds)->unique()->values();
+            $medicineUnitIds = $medicineUnitIds->merge($resolvedUnitIds)->unique()->values();
         }
 
-        if ($medicineCategoryIds->isEmpty()) {
+        if ($medicineUnitIds->isEmpty()) {
             return response()->json([]);
         }
 
         $dosages = MedicineDosage::query()
-            ->whereIn('medicine_category_id', $medicineCategoryIds->all())
+            ->whereIn('medicine_unit_id', $medicineUnitIds->all())
             ->orderBy('dosage')
-            ->get(['id', 'medicine_category_id', 'dosage']);
+            ->get(['id', 'medicine_unit_id', 'dosage']);
 
         return response()->json($dosages);
     }
@@ -391,7 +392,7 @@ class IpdPrescriptionController extends BaseHospitalController
     protected function renderForm(BedAllocation $allocation, ?IpdPrescription $prescription)
     {
         $medicines = Medicine::query()
-            ->select('id', 'medicine_category_id', 'name')
+            ->select('id', 'medicine_category_id', 'medicine_unit_id', 'name')
             ->orderBy('name')
             ->get();
 

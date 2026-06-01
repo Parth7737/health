@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Hospital;
 use App\Http\Controllers\BaseHospitalController;
 use App\Models\Medicine;
 use App\Models\MedicineCategory;
+use App\Models\MedicineUnit;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
@@ -38,7 +39,7 @@ class MedicineController extends BaseHospitalController
 
     public function loaddata(Request $request)
     {
-        $data = Medicine::with('category');
+        $data = Medicine::with(['category','unit']);
         return DataTables::of($data)
             ->addColumn('actions', function ($row) {
                 return view('hospital.settings.pharmacy.medicine.partials.actions', compact('row'))->render();
@@ -55,7 +56,8 @@ class MedicineController extends BaseHospitalController
             $data = Medicine::where('id', $id)->first();
         }
         $categories = MedicineCategory::where('hospital_id', $this->hospital_id)->get();
-        return view('hospital.settings.pharmacy.medicine.form', compact('data', 'id', 'categories'));
+        $units = MedicineUnit::where('hospital_id', $this->hospital_id)->get();
+        return view('hospital.settings.pharmacy.medicine.form', compact('data', 'id', 'categories', 'units'));
     }
 
     public function store(Request $request)
@@ -65,7 +67,7 @@ class MedicineController extends BaseHospitalController
             'medicine_category_id' => 'nullable|exists:medicine_categories,id',
             'generic_name' => 'nullable|string|max:255',
             'company' => 'nullable|string|max:255',
-            'unit' => 'nullable|string|max:255',
+            'medicine_unit_id' => 'nullable|exists:medicine_units,id',
             'composition' => 'nullable|string',
             'min_level' => 'nullable|integer',
             'reorder_level' => 'nullable|integer',
@@ -86,7 +88,7 @@ class MedicineController extends BaseHospitalController
                 'name' => $request->name,
                 'generic_name' => $request->generic_name,
                 'company' => $request->company,
-                'unit' => $request->unit,
+                'medicine_unit_id' => $request->medicine_unit_id,
                 'composition' => $request->composition,
                 'min_level' => $request->min_level,
                 'reorder_level' => $request->reorder_level,

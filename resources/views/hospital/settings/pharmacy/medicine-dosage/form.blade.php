@@ -7,11 +7,11 @@
     <div class="modal-body">   
         <input type="hidden" id="id" name="id" value="{{$id}}">
         <div class="col-md-12">
-            <label class="form-label">Category</label>
-            <select name="medicine_category_id" id="medicine_category_id" class="form-control">
-                <option value="">Select category</option>
-                @foreach($categories as $cat)
-                    <option value="{{ $cat->id }}" {{ (isset($data) && @$data->medicine_category_id == $cat->id) ? 'selected' : '' }}>{{ $cat->name }}</option>
+            <label class="form-label">Unit</label>
+            <select name="medicine_unit_id" id="medicine_unit_id" class="form-control select2-modal">
+                <option value="">Select unit</option>
+                @foreach($units as $unit)
+                    <option value="{{ $unit->id }}" {{ (isset($data) && @$data->medicine_unit_id == $unit->id) ? 'selected' : '' }}>{{ $unit->name }}</option>
                 @endforeach
             </select>
         </div>

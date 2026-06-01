@@ -313,6 +313,12 @@
         setCountText('phExpiryAlertsTabCount', counts.expiry_alerts);
         setCountText('phLowStockItemsCount', counts.low_stock_items);
         setCountText('phDrugItemsCount', counts.drug_items);
+        setCountText('phTodayDispensedCount', counts.today_dispensed || 0);
+        var salesText = '₹' + parseFloat(counts.today_sales || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        var salesEl = document.getElementById('phTodaySalesAmount');
+        if (salesEl) {
+            salesEl.textContent = salesText;
+        }
     }
 
     function loadDashboardCounts() {
@@ -2719,6 +2725,12 @@
                 if (dispenseTable) { dispenseTable.ajax.reload(null, false); }
                 if (inventoryTable) { inventoryTable.ajax.reload(null, false); }
                 loadDashboardCounts();
+
+                // Handle printing trigger
+                var autoPrint = document.getElementById('dispenseAutoPrint') && document.getElementById('dispenseAutoPrint').checked;
+                if (autoPrint && data.print_url) {
+                    window.open(data.print_url, '_blank');
+                }
             })
             .catch(function (err) {
                 if (typeof window.loader === 'function') { window.loader('hide'); }
@@ -2790,26 +2802,30 @@
         var supplierEl = document.getElementById('grn_supplier_display');
         if (supplierEl) supplierEl.value = po.supplier;
 
+        var defaultPackSize = 10;
+
         body.innerHTML = po.items.map(function (item, idx) {
             var estPrice = item.unit_purchase_price || 0;
             return '<tr data-remaining="' + item.remaining_qty + '">' +
                 '<input type="hidden" name="items[' + idx + '][purchase_item_id]" value="' + item.purchase_item_id + '">' +
                 '<td class="fw-700 fs-12" style="min-width:120px">' + escapeHtml(item.medicine_name) + '</td>' +
-                '<td class="fw-700">' + item.ordered_qty + '</td>' +
                 '<td class="fw-700 text-primary">' + item.remaining_qty + '</td>' +
-                '<td><input class="form-control ph-grid-input ph-grid-input-batch" name="items[' + idx + '][batch_no]" placeholder="Batch" required></td>' +
-                '<td><input type="month" class="form-control ph-grid-input grn-expiry" name="items[' + idx + '][expiry_date]"></td>' +
-                '<td><input type="number" min="0" max="' + item.remaining_qty + '" step="1" class="form-control ph-grid-input ph-grid-input-qty grn-received" name="items[' + idx + '][quantity_received]" value="' + item.remaining_qty + '"></td>' +
-                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input ph-grid-input-free" name="items[' + idx + '][quantity_free]" value="0"></td>' +
-                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input ph-grid-input-qty grn-rejected" name="items[' + idx + '][quantity_rejected]" value="0"></td>' +
-                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price grn-price" name="items[' + idx + '][unit_purchase_price]" value="' + estPrice + '"></td>' +
-                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price" name="items[' + idx + '][unit_sale_price]" value="0"></td>' +
-                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price" name="items[' + idx + '][unit_mrp]" value="0"></td>' +
-                '<td><input type="number" step="0.01" min="0" max="100" class="form-control ph-grid-input grn-tax" name="items[' + idx + '][tax_percent]" value="0"></td>' +
+                '<td><input type="number" min="1" step="1" class="form-control ph-grid-input grn-pack-size" name="items[' + idx + '][pack_size]" value="' + defaultPackSize + '" style="width:60px"></td>' +
+                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input grn-received-packs" name="items[' + idx + '][quantity_received]" value="' + (item.remaining_qty / defaultPackSize).toFixed(1) + '" style="width:70px"></td>' +
+                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input grn-free-packs" name="items[' + idx + '][quantity_free]" value="0" style="width:50px"></td>' +
+                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input grn-rejected-packs" name="items[' + idx + '][quantity_rejected]" value="0" style="width:50px"></td>' +
+                '<td><input class="form-control ph-grid-input ph-grid-input-batch" name="items[' + idx + '][batch_no]" placeholder="Batch" required style="width:90px"></td>' +
+                '<td><input type="month" class="form-control ph-grid-input grn-expiry" name="items[' + idx + '][expiry_date]" style="width:115px"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-price" name="items[' + idx + '][unit_purchase_price]" value="' + (estPrice * defaultPackSize).toFixed(2) + '" style="width:80px"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-sale-price" name="items[' + idx + '][unit_sale_price]" value="' + (estPrice * 1.3 * defaultPackSize).toFixed(2) + '" style="width:80px"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-mrp" name="items[' + idx + '][unit_mrp]" value="' + (estPrice * 1.5 * defaultPackSize).toFixed(2) + '" style="width:80px"></td>' +
+                '<td><select class="form-control ph-grid-input grn-pur-tax-type" name="items[' + idx + '][purchase_tax_type]" style="width:80px"><option value="exclusive">Excl</option><option value="inclusive">Incl</option></select></td>' +
+                '<td><select class="form-control ph-grid-input grn-sale-tax-type" name="items[' + idx + '][sale_tax_type]" style="width:80px"><option value="exclusive">Excl</option><option value="inclusive" selected>Incl</option></select></td>' +
+                '<td><input type="number" step="0.01" min="0" max="100" class="form-control ph-grid-input grn-tax" name="items[' + idx + '][tax_percent]" value="18" style="width:60px"></td>' +
                 '<td><span class="grn-tax-amt fw-700 text-muted">₹0.00</span></td>' +
                 '<td><span class="grn-line-total fw-700 text-muted">₹0.00</span></td>' +
-                '<td><span class="grn-accepted fw-700 text-success">' + item.remaining_qty + '</span></td>' +
-                '<td><input class="form-control ph-grid-input" name="items[' + idx + '][rejection_reason]" placeholder="If rejected..."></td>' +
+                '<td><span class="grn-accepted fw-700 text-success">0</span></td>' +
+                '<td><input class="form-control ph-grid-input" name="items[' + idx + '][rejection_reason]" placeholder="Reason" style="width:80px"></td>' +
                 '</tr>';
         }).join('');
 
@@ -2823,33 +2839,60 @@
 
         window.$('#grnItemBody tr').each(function () {
             var $row = window.$(this);
-            var remaining = parseFloat(this.dataset.remaining) || 0;
-            var recv = parseFloat($row.find('.grn-received').val()) || 0;
-            var rej = parseFloat($row.find('.grn-rejected').val()) || 0;
-            var price = parseFloat($row.find('.grn-price').val()) || 0;
-            var taxPct = parseFloat($row.find('.grn-tax').val()) || 0;
+            var remainingUnits = parseFloat(this.dataset.remaining) || 0;
+            var packSize = parseInt($row.find('.grn-pack-size').val(), 10) || 1;
+            if (packSize < 1) packSize = 1;
 
-            if (recv > remaining) {
-                recv = remaining;
-                $row.find('.grn-received').val(remaining);
+            var maxPacks = remainingUnits / packSize;
+
+            var recdPacks = parseFloat($row.find('.grn-received-packs').val()) || 0;
+            var freePacks = parseFloat($row.find('.grn-free-packs').val()) || 0;
+            var rejPacks = parseFloat($row.find('.grn-rejected-packs').val()) || 0;
+
+            if (recdPacks > maxPacks) {
+                recdPacks = maxPacks;
+                $row.find('.grn-received-packs').val(recdPacks.toFixed(2));
             }
-            if (rej > recv) {
-                rej = recv;
-                $row.find('.grn-rejected').val(rej);
+            if (rejPacks > recdPacks) {
+                rejPacks = recdPacks;
+                $row.find('.grn-rejected-packs').val(rejPacks.toFixed(2));
             }
 
-            var accepted = Math.max(0, recv - rej);
-            var lineAmt = accepted * price;
-            var lineTax = lineAmt * taxPct / 100;
-            var lineTotal = lineAmt + lineTax;
+            var acceptedPacks = Math.max(0, recdPacks - rejPacks);
+            var acceptedUnits = Math.round(acceptedPacks * packSize);
 
-            $row.find('.grn-accepted').text(accepted);
+            var packPrice = parseFloat($row.find('.grn-pack-price').val()) || 0;
+            var taxPercent = parseFloat($row.find('.grn-tax').val()) || 0;
+            var purTaxType = $row.find('.grn-pur-tax-type').val() || 'exclusive';
+
+            var lineSub = 0;
+            var lineTax = 0;
+            var lineTot = 0;
+
+            if (purTaxType === 'inclusive') {
+                var totalUnitPur = packPrice / packSize;
+                var taxableUnitPur = totalUnitPur / (1 + taxPercent / 100);
+                var unitTax = totalUnitPur - taxableUnitPur;
+
+                lineSub = acceptedUnits * taxableUnitPur;
+                lineTax = acceptedUnits * unitTax;
+                lineTot = acceptedUnits * totalUnitPur;
+            } else {
+                var taxableUnitPur = packPrice / packSize;
+                var unitTax = taxableUnitPur * (taxPercent / 100);
+
+                lineSub = acceptedUnits * taxableUnitPur;
+                lineTax = acceptedUnits * unitTax;
+                lineTot = lineSub + lineTax;
+            }
+
+            $row.find('.grn-accepted').text(acceptedUnits);
             $row.find('.grn-tax-amt').text('₹' + lineTax.toFixed(2));
-            $row.find('.grn-line-total').text('₹' + lineTotal.toFixed(2));
+            $row.find('.grn-line-total').text('₹' + lineTot.toFixed(2));
 
-            subTotal += lineAmt;
+            subTotal += lineSub;
             taxTotal += lineTax;
-            finalTotal += lineTotal;
+            finalTotal += lineTot;
         });
 
         var subtotalEl = document.getElementById('grnSubtotal');
@@ -2861,6 +2904,10 @@
     }
 
     window.updateGRNTotal = updateGRNAcceptedTotal;
+
+    if (typeof window.$ !== 'undefined') {
+        window.$(document).on('input change', '.grn-pack-size, .grn-received-packs, .grn-free-packs, .grn-rejected-packs, .grn-pack-price, .grn-pack-sale-price, .grn-pack-mrp, .grn-pur-tax-type, .grn-sale-tax-type, .grn-tax, #grn_gst_type', updateGRNAcceptedTotal);
+    }
 
     window.loadRxPreview = function () {
         return;

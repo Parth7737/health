@@ -124,6 +124,7 @@
             return {
                 medicineId: $medicine.val() || '',
                 categoryId: $selectedMedicine.data('category-id') || '',
+                medicineUnitId: $selectedMedicine.data('medicine-unit-id') || '',
                 medicineText: ($selectedMedicine.text() || '').trim(),
                 dosageId: $dosage.val() || '',
                 dosageText: getSelectedText($dosage),
@@ -140,7 +141,7 @@
         function upsertRow(item) {
             var rowId = editRowId || String(++rowCounter);
             var rowHtml = '' +
-                '<tr class="prescription-item-row" data-row-id="' + rowId + '" data-medicine-id="' + escapeHtml(item.medicineId) + '" data-category-id="' + escapeHtml(item.categoryId) + '" data-dosage-id="' + escapeHtml(item.dosageId) + '" data-instruction-id="' + escapeHtml(item.instructionId) + '" data-route-id="' + escapeHtml(item.routeId) + '" data-frequency-id="' + escapeHtml(item.frequencyId) + '" data-days="' + escapeHtml(item.days) + '">' +
+                '<tr class="prescription-item-row" data-row-id="' + rowId + '" data-medicine-id="' + escapeHtml(item.medicineId) + '" data-category-id="' + escapeHtml(item.categoryId) + '" data-medicine-unit-id="' + escapeHtml(item.medicineUnitId) + '" data-dosage-id="' + escapeHtml(item.dosageId) + '" data-instruction-id="' + escapeHtml(item.instructionId) + '" data-route-id="' + escapeHtml(item.routeId) + '" data-frequency-id="' + escapeHtml(item.frequencyId) + '" data-days="' + escapeHtml(item.days) + '">' +
                     '<td>' + escapeHtml(item.medicineText || '-') + '</td>' +
                     '<td>' + escapeHtml((item.dosageText && item.dosageText != 'Select Dosage') ? item.dosageText : '-') + '</td>' +
                     '<td>' + escapeHtml((item.instructionText && item.instructionText !='Select') ? item.instructionText : '-') + '</td>' +
@@ -183,8 +184,8 @@
             $el('addIcon').attr('class', 'fa-solid fa-check');
             $el('cancelButton').removeClass('d-none');
 
-            loadDosagesByCategory(
-                String($row.data('category-id') || ''),
+            loadDosagesByUnit(
+                String($row.data('medicine-unit-id') || ''),
                 String($row.data('dosage-id') || ''),
                 false,
                 String($row.data('medicine-id') || '')
@@ -192,13 +193,13 @@
             $el('medicine').trigger('focus');
         }
 
-        function loadDosagesByCategory(categoryId, selectedValue, autoOpenDropdown, medicineId) {
-            if (!categoryId && !medicineId) {
+        function loadDosagesByUnit(unitId, selectedValue, autoOpenDropdown, medicineId) {
+            if (!unitId && !medicineId) {
                 setDosageOptions([], null);
                 return $.Deferred().resolve().promise();
             }
 
-            var cacheKey = String(categoryId || ('medicine-' + medicineId));
+            var cacheKey = String(unitId || ('medicine-' + medicineId));
 
             function maybeOpenDosage() {
                 if (!autoOpenDropdown) {
@@ -235,8 +236,7 @@
                 method: 'POST',
                 dataType: 'json',
                 data: {
-                medicine_category_id: categoryId,
-                medicine_id: medicineId || '',
+                medicine_unit_id: unitId || '',
                 _token: settings.getCsrfToken()
                 }
             }).done(function (response) {
@@ -352,9 +352,10 @@
 
         function onMedicineChanged(autoOpenDropdown) {
             var $medicine = $el('medicine');
-            var categoryId = $medicine.find('option:selected').data('category-id') || '';
+            var medicineUnitId = $medicine.find('option:selected').data('medicine-unit-id') || '';
+
             var medicineId = $medicine.val() || '';
-            return loadDosagesByCategory(categoryId, null, autoOpenDropdown !== false, medicineId);
+            return loadDosagesByUnit(medicineUnitId, null, autoOpenDropdown !== false, medicineId);
         }
 
         return {

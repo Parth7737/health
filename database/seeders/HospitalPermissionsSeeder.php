@@ -49,6 +49,7 @@ class HospitalPermissionsSeeder extends Seeder
             'Medicine' => 'medicine',
             'Medicine Category' => 'medicine-category',
             'Medicine Dosage' => 'medicine-dosage',
+            'Medicine Unit' => 'medicine-unit',
             'Medicine Instructions' => 'medicine-instructions',
             'Frequency' => 'frequency',
             'Pharmacy Purchase' => 'pharmacy-purchase',

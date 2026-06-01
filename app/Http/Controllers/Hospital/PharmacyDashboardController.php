@@ -62,7 +62,7 @@ class PharmacyDashboardController extends BaseHospitalController
     public function index()
     {
         $medicineCategories = MedicineCategory::query()->select('id', 'name')->orderBy('name')->get();
-        $medicines = Medicine::query()->select('id', 'name', 'unit')->orderBy('name')->get();
+        $medicines = Medicine::query()->select('id', 'name', 'medicine_unit_id')->orderBy('name')->get();
         $suppliers = PharmacySupplier::query()->select('id', 'name', 'phone')->orderBy('name')->get();
 
         return view('hospital.pharmacy.dashboard', [
@@ -124,12 +124,24 @@ class PharmacyDashboardController extends BaseHospitalController
             ->distinct('medicine_id')
             ->count('medicine_id');
 
+        $todaySales = PharmacySaleBill::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereDate('bill_date', $today)
+            ->sum('net_total');
+
+        $todayDispensed = PharmacySaleBill::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereDate('bill_date', $today)
+            ->count();
+
         return response()->json([
             'queue_pending' => (int) ($pendingOpdCount + $pendingIpdCount),
             'stat_orders' => (int) $statOrdersCount,
             'expiry_alerts' => (int) $expiryAlertsCount,
             'low_stock_items' => (int) $lowStockItemsCount,
             'drug_items' => (int) $drugItemsCount,
+            'today_dispensed' => (int) $todayDispensed,
+            'today_sales' => (float) $todaySales,
         ]);
     }
 
@@ -289,7 +301,7 @@ class PharmacyDashboardController extends BaseHospitalController
         $with = [
             'patient:id,patient_id,mrn,name,gender,age_years,age_months,blood_group,known_allergies',
             'doctor:id,first_name,last_name',
-            'items.medicine:id,name,unit',
+            'items.medicine:id,name,medicine_unit_id',
             'items.dosage:id,dosage',
             'items.frequency:id,frequency,no_of_medicine',
             'items.route:id,route',
@@ -317,7 +329,7 @@ class PharmacyDashboardController extends BaseHospitalController
                 return [
                     'medicine_id' => (int) $item->medicine_id,
                     'medicine_name' => $item->medicine?->name ?? '-',
-                    'unit' => $item->medicine?->unit,
+                    'unit' => $item->medicine?->medicine_unit_id ? optional($item->medicine->unit)->name : '-',
                     'dosage' => $item->dosage?->dosage ?? '-',
                     'frequency' => $item->frequency?->frequency ?? '-',
                     'route' => $item->route?->route ?? '-',
@@ -330,7 +342,9 @@ class PharmacyDashboardController extends BaseHospitalController
                     'batch_id' => $firstBatch?->id,
                     'unit_price' => (float) ($firstBatch?->unit_sale_price ?? 0),
                     'unit_mrp' => (float) ($firstBatch?->unit_mrp ?? 0),
-                    'tax_percent' => (float) ($firstBatch?->purchaseItem?->tax_percent ?? 0),
+                    'tax_percent' => (float) ($firstBatch?->tax_percent ?? $firstBatch?->purchaseItem?->tax_percent ?? 0),
+                    'sale_tax_type' => $firstBatch?->sale_tax_type ?? 'exclusive',
+                    'pack_size' => (int) ($firstBatch?->pack_size ?? 1),
                     'batches' => $batches->map(fn ($batch) => [
                         'id' => $batch->id,
                         'batch_no' => $batch->batch_no,
@@ -338,7 +352,9 @@ class PharmacyDashboardController extends BaseHospitalController
                         'available_qty' => (float) $batch->available_qty,
                         'unit_sale_price' => (float) $batch->unit_sale_price,
                         'unit_mrp' => (float) $batch->unit_mrp,
-                        'tax_percent' => (float) ($batch->purchaseItem?->tax_percent ?? 0),
+                        'tax_percent' => (float) ($batch->tax_percent ?? $batch->purchaseItem?->tax_percent ?? 0),
+                        'sale_tax_type' => $batch->sale_tax_type ?? 'exclusive',
+                        'pack_size' => (int) ($batch->pack_size ?? 1),
                     ])->values(),
                 ];
             });
@@ -392,7 +408,9 @@ class PharmacyDashboardController extends BaseHospitalController
                     'batch_id' => $firstBatch?->id,
                     'unit_price' => (float) ($firstBatch?->unit_sale_price ?? 0),
                     'unit_mrp' => (float) ($firstBatch?->unit_mrp ?? 0),
-                    'tax_percent' => (float) ($firstBatch?->purchaseItem?->tax_percent ?? 0),
+                    'tax_percent' => (float) ($firstBatch?->tax_percent ?? $firstBatch?->purchaseItem?->tax_percent ?? 0),
+                    'sale_tax_type' => $firstBatch?->sale_tax_type ?? 'exclusive',
+                    'pack_size' => (int) ($firstBatch?->pack_size ?? 1),
                     'batches' => $batches->map(fn ($batch) => [
                         'id' => $batch->id,
                         'batch_no' => $batch->batch_no,
@@ -400,7 +418,9 @@ class PharmacyDashboardController extends BaseHospitalController
                         'available_qty' => (float) $batch->available_qty,
                         'unit_sale_price' => (float) $batch->unit_sale_price,
                         'unit_mrp' => (float) $batch->unit_mrp,
-                        'tax_percent' => (float) ($batch->purchaseItem?->tax_percent ?? 0),
+                        'tax_percent' => (float) ($batch->tax_percent ?? $batch->purchaseItem?->tax_percent ?? 0),
+                        'sale_tax_type' => $batch->sale_tax_type ?? 'exclusive',
+                        'pack_size' => (int) ($batch->pack_size ?? 1),
                     ])->values(),
                 ];
             });
@@ -564,7 +584,12 @@ class PharmacyDashboardController extends BaseHospitalController
             ->orderBy('expiry_date')
             ->orderBy('id')
             ->with('purchaseItem:id,tax_percent')
-            ->get(['id', 'purchase_item_id', 'batch_no', 'expiry_date', 'available_qty', 'unit_sale_price', 'unit_mrp']);
+            ->get([
+                'id', 'purchase_item_id', 'batch_no', 'expiry_date', 'available_qty',
+                'unit_sale_price', 'unit_mrp', 'pack_size', 'pack_qty', 'pack_mrp',
+                'pack_purchase_price', 'pack_sale_price', 'purchase_tax_type', 'sale_tax_type',
+                'tax_percent', 'cgst_percent', 'sgst_percent', 'igst_percent', 'gst_type'
+            ]);
     }
 
     private function isPrescriptionAlreadyBilled(string $type, int $id): bool

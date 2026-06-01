@@ -9,14 +9,13 @@ $(document).ready(function() {
         lengthChange: true,
         scrollX: true,
         ajax: {
-            url: loadroute, 
+            url: loadroute,
             type: 'POST',
             data: function (d) {
                 d._token = window.Laravel.csrfToken;
             }
         },
         columns: [
-            
             {
                 data: null,
                 name: 'serial_no',
@@ -27,13 +26,6 @@ $(document).ready(function() {
                 }
             },
             { data: 'name', name: 'name' },
-            { data: 'category.name', name: 'category.name' },
-            { data: 'generic_name', name: 'generic_name' },
-            { data: 'company', name: 'company' },
-            { data: 'unit.name', name: 'unit.name' },
-            { data: 'min_level', name: 'min_level' },
-            { data: 'reorder_level', name: 'reorder_level' },
-            { data: 'vat', name: 'vat' },
             { data: 'actions', name: 'actions', orderable: false, searchable: false }
         ],
         dom: "fBrtip",
@@ -54,7 +46,6 @@ $(document).ready(function() {
         responsive: true
     });
 
-
     $(document).find('.dataTables_filter input').addClass('form-control').css({'width':'300px','display':'inline-block'});
 
     initTooltips();
@@ -68,7 +59,6 @@ $(document).ready(function() {
         $('[data-bs-toggle="tooltip"]').tooltip('dispose');
         $('[data-bs-toggle="tooltip"]').tooltip({ container: 'body' });
     }
-    // Flatpickr init for date fields
     flatpickr('input[type="date"]', { dateFormat: 'd-m-Y' });
     flatpickr('input[type="datetime-local"]', { enableTime: true, dateFormat: 'd-m-Y H:i' });
 
@@ -76,7 +66,7 @@ $(document).ready(function() {
         loader();
         var id = $(this).data('id');       
         var url = route('showform');
-        const token = await csrftoken(); // wait for the new token
+        const token = await csrftoken();
 
         $.ajax({
             url: url,
@@ -88,9 +78,6 @@ $(document).ready(function() {
                     $("#ajaxdata").html(response);
                     $(".add-datamodal").modal('show');
                     $(".add-datamodal .modal-dialog").removeClass('modal-xl');
-                    $(".select2-modal").select2({
-                        dropdownParent: $('.add-datamodal')
-                    });
                 }
             },
             error: function (xhr) {
@@ -100,11 +87,10 @@ $(document).ready(function() {
         });
     });
 
-
     $(document).on('click', '.deletebtn', async function() {
         var id = $(this).data('id');    
-        var url = route('destroy', {medicine : id});
-        const token = await csrftoken(); // wait for the new token
+        var url = route('destroy', {medicine_unit : id});
+        const token = await csrftoken();
         Swal.fire({
             title: 'Are you sure?',
             text: "You won't be able to revert this!",

@@ -29,7 +29,7 @@
         <div class="stat-card stat-green">
             <div class="stat-icon">✅</div>
             <div class="stat-info">
-                <div class="stat-value">89</div>
+                <div class="stat-value" id="phTodayDispensedCount">0</div>
                 <div class="stat-label">Dispensed Today</div>
                 <div class="stat-change up">↑ 15% vs yesterday</div>
             </div>
@@ -53,7 +53,7 @@
         <div class="stat-card stat-purple">
             <div class="stat-icon">💰</div>
             <div class="stat-info">
-                <div class="stat-value">₹42K</div>
+                <div class="stat-value" id="phTodaySalesAmount">₹0.00</div>
                 <div class="stat-label">Today Sales</div>
                 <div class="stat-change up">↑ Good</div>
             </div>
@@ -332,6 +332,7 @@
             </form>
         </div>
         <div class="modal-footer">
+            <label class="form-check me-auto" style="margin-left: 15px;"><input type="checkbox" id="dispenseAutoPrint" checked><span class="form-check-label text-success fw-700">🖨️ Auto Print Bill</span></label>
             <button class="btn btn-secondary" type="button" onclick="closeModal('dispenseModal')">Cancel</button>
             <button class="btn btn-warning" type="button" onclick="holdDispense()">⏸ Hold</button>
             <button class="btn btn-success" type="button" onclick="confirmDispense()">✅ Dispense & Create Bill</button>
@@ -374,13 +375,20 @@
                         <input class="form-control" name="vehicle_no" placeholder="UK-XX-XXXX">
                     </div>
                 </div>
-                <div class="form-row cols-2">
+                <div class="form-row cols-3">
                     <div class="form-group">
                         <label class="form-label">Temperature (Cold Chain)</label>
                         <select class="form-control" name="temperature_status">
                             <option value="Room Temp (N/A)">Room Temp (N/A)</option>
                             <option value="2-8°C (Cold Chain OK)">2-8°C (Cold Chain OK)</option>
                             <option value="Cold Chain Broken">Cold Chain Broken</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">GST Type</label>
+                        <select class="form-control" name="gst_type" id="grn_gst_type">
+                            <option value="local">Local (CGST + SGST)</option>
+                            <option value="interstate">Interstate (IGST)</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -400,20 +408,22 @@
                         <thead>
                             <tr>
                                 <th>Drug Name</th>
-                                <th>Ordered</th>
-                                <th>Remaining</th>
+                                <th>Rem. (Units)</th>
+                                <th>Pack Size <span class="req">*</span></th>
+                                <th>Recd. Packs <span class="req">*</span></th>
+                                <th>Free Packs</th>
+                                <th>Rej. Packs</th>
                                 <th>Batch No. <span class="req">*</span></th>
                                 <th>Expiry</th>
-                                <th>Recd. Qty <span class="req">*</span></th>
-                                <th>Free Qty</th>
-                                <th>Rejected</th>
-                                <th>Pur. Price ₹</th>
-                                <th>Sale Price ₹</th>
-                                <th>MRP ₹</th>
-                                <th>Tax%</th>
-                                <th>Tax Amt.</th>
+                                <th>Pack Pur. Rate ₹ <span class="req">*</span></th>
+                                <th>Pack Sale Rate ₹</th>
+                                <th>Pack MRP ₹</th>
+                                <th>Pur. Tax</th>
+                                <th>Sale Tax</th>
+                                <th>GST %</th>
+                                <th>GST Amt.</th>
                                 <th>Line Total</th>
-                                <th>Accepted</th>
+                                <th>Accd. (Units)</th>
                                 <th>Reason</th>
                             </tr>
                         </thead>

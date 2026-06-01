@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Hospital;
 
 use App\Http\Controllers\BaseHospitalController;
 use App\Models\MedicineDosage;
-use App\Models\MedicineCategory;
+use App\Models\MedicineUnit;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use App\CentralLogics\Helpers;
@@ -38,7 +38,7 @@ class MedicineDosageController extends BaseHospitalController
 
     public function loaddata(Request $request)
     {
-        $data = MedicineDosage::select('*')->with('category');
+        $data = MedicineDosage::select('*')->with('unit');
         return DataTables::of($data)
             ->addColumn('actions', function ($row) {
                 return view('hospital.settings.pharmacy.medicine-dosage.partials.actions', compact('row'))->render();
@@ -54,24 +54,24 @@ class MedicineDosageController extends BaseHospitalController
         if ($id) {
             $data = MedicineDosage::where('id', $id)->first();
         }
-        $categories = MedicineCategory::where('hospital_id', $this->hospital_id)->get();
-        return view('hospital.settings.pharmacy.medicine-dosage.form', compact('data', 'id', 'categories'));
+        $units = MedicineUnit::where('hospital_id', $this->hospital_id)->get();
+        return view('hospital.settings.pharmacy.medicine-dosage.form', compact('data', 'id', 'units'));
     }
 
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'medicine_category_id' => 'required|exists:medicine_categories,id',
+            'medicine_unit_id' => 'required|exists:medicine_units,id',
             'dosage' => [
                 'required',
                 function ($attribute, $value, $fail) use ($request) {
-                    $exists = MedicineDosage::where('medicine_category_id', $request->medicine_category_id)
+                    $exists = MedicineDosage::where('medicine_unit_id', $request->medicine_unit_id)
                         ->where('dosage', $value)
                         ->when($request->id, function ($q) use ($request) {
                             return $q->where('id', '!=', $request->id);
                         })->exists();
                     if ($exists) {
-                        $fail('The dosage for this category already exists.');
+                        $fail('The dosage for this unit already exists.');
                     }
                 }
             ],
@@ -85,7 +85,7 @@ class MedicineDosageController extends BaseHospitalController
             ['id' => $request->id],
             [
                 'hospital_id' => $this->hospital_id,
-                'medicine_category_id' => $request->medicine_category_id,
+                'medicine_unit_id' => $request->medicine_unit_id,
                 'dosage' => $request->dosage,
             ]
         );

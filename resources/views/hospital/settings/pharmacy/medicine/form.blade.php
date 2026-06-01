@@ -30,7 +30,12 @@
             </div>
             <div class="col-md-6 mb-2">
                 <label class="form-label">Unit</label>
-                <input type="text" name="unit" id="unit" value="{{ @$data->unit }}" class="form-control">
+                <select name="medicine_unit_id" id="medicine_unit_id" class="form-control select2-modal">
+                    <option value="">Select unit</option>
+                    @foreach($units as $unit)
+                        <option value="{{ $unit->id }}" {{ (isset($data) && @$data->medicine_unit_id == $unit->id) ? 'selected' : '' }}>{{ $unit->name }}</option>
+                    @endforeach
+                </select>
             </div>
             <div class="col-md-6 mb-2">
                 <label class="form-label">Composition</label>
