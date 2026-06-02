@@ -11,12 +11,6 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (Schema::hasColumn('medicine_dosages', 'medicine_category_id')) {
-            Schema::table('medicine_dosages', function (Blueprint $table) {
-                $table->dropUnique(['medicine_category_id', 'dosage']);
-            });
-        }
-        
         Schema::table('medicine_dosages', function (Blueprint $table) {
             
             $table->dropForeign(['medicine_category_id']);

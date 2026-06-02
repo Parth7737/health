@@ -18,7 +18,6 @@ return new class extends Migration
             $table->string('dosage');
             $table->timestamps();
 
-            $table->unique(['medicine_category_id', 'dosage']);
             $table->foreign('hospital_id')->references('id')->on('hospitals')->onDelete('cascade');
             $table->foreign('medicine_category_id')->references('id')->on('medicine_categories')->onDelete('cascade');
         });
