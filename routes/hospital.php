@@ -353,6 +353,8 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::post('purchase/{bill}/approve', 'PharmacyPurchaseController@approve')->name('purchase.approve');
             Route::post('purchase/{bill}/reject', 'PharmacyPurchaseController@reject')->name('purchase.reject');
             Route::get('purchase/{bill}/print', 'PharmacyPurchaseController@printBill')->name('purchase.print');
+            Route::get('purchase/{bill}/details', 'PharmacyPurchaseController@getDetails')->name('purchase.details');
+            Route::delete('purchase/{bill}/delete', 'PharmacyPurchaseController@destroy')->name('purchase.delete');
         });
 
         // Pharmacy GRN
@@ -371,6 +373,10 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::get('dispense/medicine-search', 'PharmacyDashboardController@medicineSearch')->name('dispense.medicine-search');
             Route::post('dispense/store', 'PharmacyDashboardController@storeDispense')->name('dispense.store');
             Route::get('stat-orders/load', 'PharmacyDashboardController@loadStatOrders')->name('stat-orders-load');
+            Route::post('bills/load', 'PharmacyDashboardController@loadAllBills')->name('bills-load');
+            Route::get('bill/{bill}/view', 'PharmacyDashboardController@viewBill')->name('bill.view');
+            Route::get('dispense/patient-search', 'PharmacyDashboardController@patientSearch')->name('dispense.patient-search');
+            Route::get('dispense/prescription-search', 'PharmacyDashboardController@prescriptionSearchSuggestions')->name('dispense.prescription-search');
             Route::resource('sale', 'PharmacySaleController')->only(['index', 'store']);
             Route::post('sale/load', 'PharmacySaleController@loaddata')->name('sale-load');
             Route::post('sale/show-form', 'PharmacySaleController@showform')->name('sale.showform');

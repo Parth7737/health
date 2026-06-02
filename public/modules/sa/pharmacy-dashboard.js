@@ -81,6 +81,8 @@
     var poTable = null;
     var statOrdersLoaded = false;
     var grnRowCount = 1;
+    var allBillsTable = null;
+    var editingPoId = null;
 
     function getDispenseQueueLoadUrl() {
         if (typeof window.route === 'function') {
@@ -110,6 +112,34 @@
     function getDispenseStoreUrl() {
         if (typeof window.route === 'function') {
             try { return window.route('dispenseStore'); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getAllBillsLoadUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('allBillsLoad'); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getBillViewUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('billView').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getPatientSearchUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('patientSearch'); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getPrescriptionSearchUrl() {
+        if (typeof window.route === 'function') {
+            try { return window.route('prescriptionSearch'); } catch (e) { return ''; }
         }
         return '';
     }
@@ -337,7 +367,7 @@
         })
             .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
             .then(applyDashboardCounts)
-            .catch(function () {});
+            .catch(function () { });
     }
 
     function renderStatOrders(listEl, stats) {
@@ -450,7 +480,7 @@
         }
         return '';
     }
-    
+
     function getQuarantineStockLoadUrl() {
         if (typeof window.route === 'function') {
             try {
@@ -494,7 +524,7 @@
         }
         return '';
     }
-    
+
     function getQuarantineStockExportUrl() {
         if (typeof window.route === 'function') {
             try {
@@ -755,6 +785,7 @@
                 { data: 'available_qty', name: 'available_qty' },
                 { data: 'min_level', name: 'medicine.min_level', orderable: false },
                 { data: 'unit_mrp', name: 'unit_mrp' },
+                { data: 'unit_sale_price', name: 'unit_sale_price' },
                 { data: 'status', name: 'status' },
                 { data: 'actions', orderable: false, searchable: false }
             ],
@@ -859,18 +890,25 @@
                 {
                     targets: 7,
                     render: function (data, type) {
-                        var amount = parseFloat(data || 0);
                         if (type !== 'display') {
+                            var amount = parseFloat(data || 0);
                             return isNaN(amount) ? 0 : amount;
                         }
-                        if (isNaN(amount)) {
-                            return '₹0.00';
-                        }
-                        return '₹' + amount.toFixed(2);
+                        return formatCurrency(data);
                     }
                 },
                 {
                     targets: 8,
+                    render: function (data, type) {
+                        if (type !== 'display') {
+                            var amount = parseFloat(data || 0);
+                            return isNaN(amount) ? 0 : amount;
+                        }
+                        return formatCurrency(data);
+                    }
+                },
+                {
+                    targets: 9,
                     render: function (data, type, row) {
                         if (type !== 'display') {
                             return data;
@@ -896,7 +934,7 @@
                     }
                 },
                 {
-                    targets: 9,
+                    targets: 10,
                     render: function (data, type, row) {
                         if (type !== 'display') {
                             return data;
@@ -1455,10 +1493,12 @@
                         if (type !== 'display') { return data; }
                         var st = String(row.status || 'pending').toLowerCase();
                         var html = '<div style="display:flex;gap:4px">';
-                        html += '<button class="btn btn-secondary btn-xs po-view-btn" data-id="' + row.id + '">👁️</button>';
+                        html += '<button class="btn btn-secondary btn-xs po-view-btn" data-id="' + row.id + '" title="View PO">👁️</button>';
                         if (st === 'pending') {
-                            html += '<button class="btn btn-secondary btn-xs po-approve-btn" data-id="' + row.id + '">✅</button>';
-                            html += '<button class="btn btn-secondary btn-xs po-reject-btn" data-id="' + row.id + '">❌</button>';
+                            html += '<button class="btn btn-secondary btn-xs po-edit-btn" data-id="' + row.id + '" title="Edit PO">✏️</button>';
+                            html += '<button class="btn btn-secondary btn-xs po-delete-btn" data-id="' + row.id + '" title="Delete PO">🗑️</button>';
+                            html += '<button class="btn btn-secondary btn-xs po-approve-btn" data-id="' + row.id + '" title="Approve PO">✅</button>';
+                            html += '<button class="btn btn-secondary btn-xs po-reject-btn" data-id="' + row.id + '" title="Reject PO">❌</button>';
                         } else if (st === 'approved' || st === 'partially_received') {
                             html += '<button class="btn btn-success btn-xs po-create-grn-btn" data-id="' + row.id + '">📥 Create GRN</button>';
                         }
@@ -1511,6 +1551,7 @@
     };
 
     function initDispenseModal() {
+        // Walk-in Medicine Search input binding
         var search = document.getElementById('walkInMedicineSearch');
         if (search && !search.dataset.bound) {
             search.dataset.bound = '1';
@@ -1521,12 +1562,52 @@
             });
         }
 
+        // Walk-in Patient Search input binding
+        var patSearch = document.getElementById('dispensePatientSearch');
+        if (patSearch && !patSearch.dataset.bound) {
+            patSearch.dataset.bound = '1';
+            var patTimer = null;
+            patSearch.addEventListener('input', function () {
+                clearTimeout(patTimer);
+                patTimer = setTimeout(loadDispensePatientOptions, 250);
+            });
+        }
+
+        // Prescription Search input binding
+        var rxSearch = document.getElementById('dispensePrescriptionSearch');
+        if (rxSearch && !rxSearch.dataset.bound) {
+            rxSearch.dataset.bound = '1';
+            var rxTimer = null;
+            rxSearch.addEventListener('input', function () {
+                clearTimeout(rxTimer);
+                rxTimer = setTimeout(loadDispensePrescriptionOptions, 250);
+            });
+        }
+
         ['dispenseDiscount', 'dispensePaid'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el && !el.dataset.bound) {
                 el.dataset.bound = '1';
                 el.addEventListener('input', recalcDispenseTotals);
             }
+        });
+
+        // Close dropdowns on clicking outside
+        if (!document.body.dataset.autocompleteBound) {
+            document.body.dataset.autocompleteBound = '1';
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest('.ph-search') && !e.target.closest('.form-group') && !e.target.closest('.ph-autocomplete-results')) {
+                    closeAllAutocompletes();
+                }
+            });
+        }
+    }
+
+    function closeAllAutocompletes() {
+        var ids = ['walkInMedicineResults', 'dispensePatientSearchResults', 'dispensePrescriptionSearchResults'];
+        ids.forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) { el.style.display = 'none'; }
         });
     }
 
@@ -1536,7 +1617,9 @@
             patient: null,
             prescription: null,
             items: [],
-            medicineSearchResults: dispenseState.medicineSearchResults || []
+            medicineSearchResults: dispenseState.medicineSearchResults || [],
+            patientSearchResults: [],
+            prescriptionSearchResults: []
         };
 
         var form = document.getElementById('dispenseForm');
@@ -1546,8 +1629,28 @@
         setValue('dispensePrescriptionType', '');
         setValue('dispensePrescriptionId', '');
         setValue('dispensePatientId', '');
+
+        // Autocomplete inputs reset
+        var mSearch = document.getElementById('walkInMedicineSearch');
+        if (mSearch) { mSearch.value = ''; }
+        var pSearch = document.getElementById('dispensePatientSearch');
+        if (pSearch) { pSearch.value = ''; }
+        var rxSearch = document.getElementById('dispensePrescriptionSearch');
+        if (rxSearch) { rxSearch.value = ''; }
+        closeAllAutocompletes();
+
         setText('dispenseModeBadge', mode === 'prescription' ? 'Prescription' : 'Walk-in');
         setText('dispenseModalTitle', mode === 'prescription' ? '💊 Dispense Prescription' : '💊 Walk-in Dispense');
+
+        var rxSearchWrap = document.getElementById('dispensePrescriptionSearchBar');
+        if (rxSearchWrap) {
+            rxSearchWrap.style.display = mode === 'prescription' ? 'block' : 'none';
+        }
+        var patSearchWrap = document.getElementById('dispensePatientSearchWrap');
+        if (patSearchWrap) {
+            patSearchWrap.style.display = mode === 'walkin' ? 'block' : 'none';
+        }
+
         renderDispensePatient(null);
         renderDispenseItems();
         recalcDispenseTotals();
@@ -1601,8 +1704,10 @@
         }
         return batches.map(function (batch) {
             var selected = String(batch.id) === String(item.batch_id) ? ' selected' : '';
+            var taxPercent = toNumber(batch.tax_percent || 0);
+            var inclusivePrice = toNumber(batch.unit_sale_price) * (1 + taxPercent / 100);
             return '<option value="' + batch.id + '"' + selected +
-                ' data-price="' + batch.unit_sale_price + '" data-mrp="' + batch.unit_mrp + '" data-tax="' + batch.tax_percent + '" data-available="' + batch.available_qty + '">' +
+                ' data-price="' + inclusivePrice.toFixed(2) + '" data-mrp="' + batch.unit_mrp + '" data-tax="' + batch.tax_percent + '" data-available="' + batch.available_qty + '">' +
                 escapeHtml(batch.batch_no || '-') + ' | Exp ' + escapeHtml(batch.expiry_date || 'NA') + ' | ' + batch.available_qty +
                 '</option>';
         }).join('');
@@ -1626,15 +1731,17 @@
         body.innerHTML = dispenseState.items.map(function (item, idx) {
             var detail = [item.dosage, item.frequency, item.route, item.instruction].filter(function (v) { return v && v !== '-'; }).join(' / ') || '-';
             var prescribed = item.prescribed_qty || 0;
+            var days = item.days || 1;
+
             return '<tr data-index="' + idx + '">' +
                 '<td><input type="hidden" class="disp-medicine-id" value="' + item.medicine_id + '"><div class="fw-700 fs-12">' + escapeHtml(item.medicine_name || '-') + '</div><div class="text-muted fs-10">' + escapeHtml(item.unit || '') + '</div></td>' +
                 '<td class="fs-11">' + escapeHtml(detail) + '</td>' +
                 '<td class="fw-700">' + prescribed + '</td>' +
+                '<td><input type="number" min="1" class="form-control ph-grid-input ph-grid-input-qty disp-days" value="' + days + '" style="width:50px"></td>' +
                 '<td>' + stockBadge(item.stock_status) + '<div class="fs-10 text-muted">' + (item.available_qty || 0) + '</div></td>' +
                 '<td><select class="form-control ph-grid-input disp-batch">' + batchOptions(item) + '</select></td>' +
                 '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input ph-grid-input-qty disp-qty" value="' + (item.dispense_qty || 0) + '"></td>' +
-                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input ph-grid-input-price disp-price" value="' + (item.unit_price || 0) + '"></td>' +
-                '<td><input type="number" min="0" max="100" step="0.01" class="form-control ph-grid-input disp-tax" value="' + (item.tax_percent || 0) + '"></td>' +
+                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input ph-grid-input-price disp-price" value="' + toNumber(item.unit_price || 0).toFixed(2) + '"></td>' +
                 '<td><span class="disp-line-total fw-700">' + formatCurrency(lineTotal(item)) + '</span></td>' +
                 '<td><button class="btn btn-danger btn-xs" type="button" onclick="removeDispenseItem(' + idx + ')">✕</button></td>' +
                 '</tr>';
@@ -1645,9 +1752,7 @@
     function lineTotal(item) {
         var qty = toNumber(item.dispense_qty);
         var price = toNumber(item.unit_price);
-        var tax = toNumber(item.tax_percent);
-        var subtotal = qty * price;
-        return subtotal + (subtotal * tax / 100);
+        return qty * price;
     }
 
     function syncDispenseRowsToState() {
@@ -1657,20 +1762,39 @@
             var idx = parseInt(row.dataset.index, 10);
             var item = dispenseState.items[idx];
             if (!item) { return; }
+
             var batchSel = row.querySelector('.disp-batch');
             var selected = batchSel ? batchSel.options[batchSel.selectedIndex] : null;
             if (selected && selected.value) {
+                var oldBatchId = item.batch_id;
                 item.batch_id = selected.value;
                 item.unit_price = toNumber(selected.dataset.price);
                 item.unit_mrp = toNumber(selected.dataset.mrp);
                 item.tax_percent = toNumber(selected.dataset.tax);
                 item.available_qty = toNumber(selected.dataset.available);
-                row.querySelector('.disp-price').value = item.unit_price;
-                row.querySelector('.disp-tax').value = item.tax_percent;
+
+                // Only reset input if batch changed
+                if (String(oldBatchId) !== String(item.batch_id)) {
+                    row.querySelector('.disp-price').value = item.unit_price;
+                }
             }
+
+            // Days change handler
+            var daysInput = row.querySelector('.disp-days');
+            if (daysInput) {
+                var newDays = parseInt(daysInput.value, 10) || 1;
+                if (item.days !== newDays) {
+                    var factor = item.prescribed_qty / Math.max(1, item.days || 1);
+                    if (isNaN(factor) || factor <= 0) { factor = 1; }
+                    item.days = newDays;
+                    item.dispense_qty = Math.min(newDays * factor, item.available_qty);
+                    row.querySelector('.disp-qty').value = item.dispense_qty;
+                }
+            }
+
             item.dispense_qty = toNumber(row.querySelector('.disp-qty') && row.querySelector('.disp-qty').value);
             item.unit_price = toNumber(row.querySelector('.disp-price') && row.querySelector('.disp-price').value);
-            item.tax_percent = toNumber(row.querySelector('.disp-tax') && row.querySelector('.disp-tax').value);
+
             var line = row.querySelector('.disp-line-total');
             if (line) { line.textContent = formatCurrency(lineTotal(item)); }
         });
@@ -1679,22 +1803,15 @@
     function recalcDispenseTotals() {
         syncDispenseRowsToState();
         var subtotal = 0;
-        var taxTotal = 0;
 
         dispenseState.items.forEach(function (item) {
-            var qty = toNumber(item.dispense_qty);
-            var price = toNumber(item.unit_price);
-            var tax = toNumber(item.tax_percent);
-            var lineSubtotal = qty * price;
-            subtotal += lineSubtotal;
-            taxTotal += lineSubtotal * tax / 100;
+            subtotal += lineTotal(item);
         });
 
         var discount = toNumber(document.getElementById('dispenseDiscount') && document.getElementById('dispenseDiscount').value);
         var paid = toNumber(document.getElementById('dispensePaid') && document.getElementById('dispensePaid').value);
-        var net = Math.max(0, subtotal + taxTotal - discount);
+        var net = Math.max(0, subtotal - discount);
         setText('dispenseSubtotal', formatCurrency(subtotal));
-        setText('dispenseTax', formatCurrency(taxTotal));
         setText('dispenseNet', formatCurrency(net));
         setText('dispenseDue', formatCurrency(Math.max(0, net - paid)));
     }
@@ -1702,11 +1819,12 @@
     function loadWalkInMedicineOptions() {
         var url = getDispenseMedicineSearchUrl();
         var search = document.getElementById('walkInMedicineSearch');
-        var list = document.getElementById('walkInMedicineOptions');
-        if (!url || !search || !list) { return; }
+        var resultsDiv = document.getElementById('walkInMedicineResults');
+        if (!url || !search || !resultsDiv) { return; }
         var q = String(search.value || '').trim();
         if (q.length < 2) {
-            list.innerHTML = '';
+            resultsDiv.innerHTML = '';
+            resultsDiv.style.display = 'none';
             return;
         }
         fetch(url + '?q=' + encodeURIComponent(q), {
@@ -1716,12 +1834,167 @@
             .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
             .then(function (data) {
                 dispenseState.medicineSearchResults = data.items || [];
-                list.innerHTML = dispenseState.medicineSearchResults.map(function (m) {
-                    return '<option value="' + escapeHtml(m.name) + '" label="' + escapeHtml(m.name + ' | Stock ' + m.available_qty) + '"></option>';
+                if (!dispenseState.medicineSearchResults.length) {
+                    resultsDiv.innerHTML = '<div class="ph-autocomplete-row text-muted">No medicines found</div>';
+                    resultsDiv.style.display = 'block';
+                    return;
+                }
+                resultsDiv.innerHTML = dispenseState.medicineSearchResults.map(function (m, idx) {
+                    var unit = m.unit ? ' (' + m.unit + ')' : '';
+                    var taxPercent = toNumber(m.tax_percent || 0);
+                    var inclusivePrice = toNumber(m.unit_price) * (1 + taxPercent / 100);
+                    return '<div class="ph-autocomplete-row" onclick="selectWalkInMedicine(' + idx + ')">' +
+                        '<div class="fw-700">' + escapeHtml(m.name) + '</div>' +
+                        '<div class="sub-text">Stock: ' + m.available_qty + unit + ' | Batch: ' + escapeHtml(m.batch_no || '-') + ' | Rate: ₹' + inclusivePrice.toFixed(2) + '</div>' +
+                        '</div>';
                 }).join('');
+                resultsDiv.style.display = 'block';
             })
-            .catch(function () {});
+            .catch(function () { });
     }
+
+    function loadDispensePatientOptions() {
+        var url = getPatientSearchUrl();
+        var search = document.getElementById('dispensePatientSearch');
+        var resultsDiv = document.getElementById('dispensePatientSearchResults');
+        if (!url || !search || !resultsDiv) { return; }
+        var q = String(search.value || '').trim();
+        if (q.length < 2) {
+            resultsDiv.innerHTML = '';
+            resultsDiv.style.display = 'none';
+            return;
+        }
+        fetch(url + '?q=' + encodeURIComponent(q), {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
+            .then(function (data) {
+                dispenseState.patientSearchResults = data.items || [];
+                if (!dispenseState.patientSearchResults.length) {
+                    resultsDiv.innerHTML = '<div class="ph-autocomplete-row text-muted">No patients found</div>';
+                    resultsDiv.style.display = 'block';
+                    return;
+                }
+                resultsDiv.innerHTML = dispenseState.patientSearchResults.map(function (p, idx) {
+                    return '<div class="ph-autocomplete-row" onclick="selectDispensePatient(' + idx + ')">' +
+                        '<div class="fw-700">' + escapeHtml(p.name) + '</div>' +
+                        '<div class="sub-text">UHID: ' + escapeHtml(p.uhid) + ' | Phone: ' + escapeHtml(p.phone) + ' | Age: ' + escapeHtml(p.age) + ' | Gender: ' + escapeHtml(p.gender) + '</div>' +
+                        '</div>';
+                }).join('');
+                resultsDiv.style.display = 'block';
+            })
+            .catch(function () { });
+    }
+
+    function loadDispensePrescriptionOptions() {
+        var url = getPrescriptionSearchUrl();
+        var search = document.getElementById('dispensePrescriptionSearch');
+        var resultsDiv = document.getElementById('dispensePrescriptionSearchResults');
+        if (!url || !search || !resultsDiv) { return; }
+        var q = String(search.value || '').trim();
+        if (q.length < 2) {
+            resultsDiv.innerHTML = '';
+            resultsDiv.style.display = 'none';
+            return;
+        }
+        fetch(url + '?q=' + encodeURIComponent(q), {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
+            .then(function (data) {
+                dispenseState.prescriptionSearchResults = data.items || [];
+                if (!dispenseState.prescriptionSearchResults.length) {
+                    resultsDiv.innerHTML = '<div class="ph-autocomplete-row text-muted">No prescriptions found</div>';
+                    resultsDiv.style.display = 'block';
+                    return;
+                }
+                resultsDiv.innerHTML = dispenseState.prescriptionSearchResults.map(function (rx, idx) {
+                    var status = rx.has_bill ? ' <span class="badge badge-orange ms-4 fs-10">Partially Dispensed</span>' : ' <span class="badge badge-green ms-4 fs-10">New</span>';
+                    return '<div class="ph-autocomplete-row" onclick="selectSearchPrescription(' + idx + ')">' +
+                        '<div class="fw-700">' + escapeHtml(rx.rx_no) + ' — ' + escapeHtml(rx.patient_name) + status + '</div>' +
+                        '<div class="sub-text">Doctor: ' + escapeHtml(rx.doctor_name) + ' | Date: ' + escapeHtml(rx.rx_date) + ' (' + rx.source_type.toUpperCase() + ')</div>' +
+                        '</div>';
+                }).join('');
+                resultsDiv.style.display = 'block';
+            })
+            .catch(function () { });
+    }
+
+    window.selectWalkInMedicine = function (idx) {
+        var item = dispenseState.medicineSearchResults[idx];
+        if (!item) return;
+        var taxPercent = toNumber(item.tax_percent || 0);
+        var inclusivePrice = toNumber(item.unit_price) * (1 + taxPercent / 100);
+        dispenseState.items.push({
+            medicine_id: item.id,
+            medicine_name: item.name,
+            unit: item.unit,
+            dosage: '-',
+            frequency: '-',
+            route: '-',
+            instruction: '-',
+            prescribed_qty: 0,
+            days: 1,
+            available_qty: item.available_qty,
+            dispense_qty: item.available_qty > 0 ? 1 : 0,
+            stock_status: item.available_qty <= 0 ? 'out' : 'available',
+            batch_id: item.batch_id,
+            unit_price: parseFloat(inclusivePrice.toFixed(2)),
+            unit_mrp: item.unit_mrp,
+            tax_percent: item.tax_percent,
+            batches: item.batches || []
+        });
+        var input = document.getElementById('walkInMedicineSearch');
+        if (input) { input.value = ''; }
+        closeAllAutocompletes();
+        renderDispenseItems();
+    };
+
+    window.selectDispensePatient = function (idx) {
+        var p = dispenseState.patientSearchResults[idx];
+        if (!p) return;
+        dispenseState.patient = p;
+        setValue('dispensePatientId', p.id);
+        var card = document.getElementById('dispensePatientCard');
+        if (card) {
+            var avatar = String(p.name || 'P').charAt(0).toUpperCase();
+            card.innerHTML = '<div class="patient-chip"><div class="patient-chip-avatar">' + escapeHtml(avatar) + '</div><div class="patient-chip-info">' +
+                '<div class="patient-chip-name">' + escapeHtml(p.name || '-') + '</div>' +
+                '<div class="patient-chip-meta">' + escapeHtml(p.uhid || '-') + ' | ' + escapeHtml(p.age || '-') + ' | ' + escapeHtml(p.gender || '-') + ' | ' + escapeHtml(p.blood_group || '-') + '</div>' +
+                '<div class="patient-chip-meta">Phone: ' + escapeHtml(p.phone || '-') + '</div>' +
+                '</div></div>';
+        }
+        var allergy = document.getElementById('dispenseAllergyAlert');
+        if (allergy) {
+            if (p.known_allergies) {
+                allergy.style.display = '';
+                allergy.querySelector('div').innerHTML = '<b>Allergy Alert:</b> ' + escapeHtml(p.known_allergies);
+            } else {
+                allergy.style.display = 'none';
+            }
+        }
+        var input = document.getElementById('dispensePatientSearch');
+        if (input) { input.value = p.name; }
+        closeAllAutocompletes();
+    };
+
+    window.selectSearchPrescription = function (idx) {
+        var rx = dispenseState.prescriptionSearchResults[idx];
+        if (!rx) return;
+        window.openPrescriptionDispense(rx.source_type, rx.source_id);
+        var input = document.getElementById('dispensePrescriptionSearch');
+        if (input) { input.value = rx.rx_no; }
+        closeAllAutocompletes();
+    };
+
+    window.openPrescriptionSearch = function () {
+        resetDispenseState('prescription');
+        window.openModal('dispenseModal');
+        var input = document.getElementById('dispensePrescriptionSearch');
+        if (input) { input.focus(); }
+    };
 
     // Old static updateGRNTotal removed — replaced by updateGRNAcceptedTotal
 
@@ -1767,7 +2040,13 @@
                 dispenseState.mode = 'prescription';
                 dispenseState.patient = data.patient;
                 dispenseState.prescription = data.prescription;
-                dispenseState.items = data.items || [];
+                var items = data.items || [];
+                items.forEach(function (item) {
+                    var tax = toNumber(item.tax_percent || 0);
+                    var inclusivePrice = toNumber(item.unit_price) * (1 + tax / 100);
+                    item.unit_price = parseFloat(inclusivePrice.toFixed(2));
+                });
+                dispenseState.items = items;
                 setValue('dispensePrescriptionType', data.prescription && data.prescription.type);
                 setValue('dispensePrescriptionId', data.prescription && data.prescription.id);
                 setValue('dispensePatientId', data.patient && data.patient.id);
@@ -2057,6 +2336,27 @@
         return '';
     }
 
+    function getPurchaseUpdateUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('purchaseUpdate').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getPurchaseDetailsUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('purchaseDetails').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function getPurchaseDeleteUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('purchaseDelete').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
     function openPOView(id) {
         var url = getPurchaseShowformUrl();
         if (!url || !id) {
@@ -2119,6 +2419,35 @@
             '<td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest(\'tr\').remove(); recalcPOTotal();">✕</button></td></tr>';
     }
 
+    function buildPORowWithDetails(item) {
+        var i = poRowIdx++;
+        var optionsHtml = (window.poMedicines || [])
+            .map(function (m) {
+                var selected = String(m.id) === String(item.medicine_id) ? ' selected' : '';
+                return '<option value="' + m.id + '"' + selected + '>' + escapeHtml(m.name) + (m.unit ? ' [' + m.unit + ']' : '') + '</option>';
+            })
+            .join('');
+
+        return '<tr data-idx="' + i + '">' +
+            '<td><select class="form-control select2 ph-grid-input po-medicine" name="items[' + i + '][medicine_id]"><option value="">Select</option>' + optionsHtml + '</select></td>' +
+            '<td><input type="number" min="1" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][quantity_purchased]" value="' + item.quantity_purchased + '" placeholder="1"></td>' +
+            '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price po-price" name="items[' + i + '][unit_purchase_price]" value="' + item.unit_purchase_price + '" placeholder="0"></td>' +
+            '<td><span class="po-line-amt fw-700 fs-12">₹' + (item.quantity_purchased * item.unit_purchase_price).toFixed(2) + '</span></td>' +
+            '<td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest(\'tr\').remove(); recalcPOTotal();">✕</button></td></tr>';
+    }
+
+    window.openNewPOModal = function () {
+        editingPoId = null;
+        document.getElementById('newPOForm').reset();
+        window.$('#po_supplier_id').val('').trigger('change');
+        window.$('#poItemBody').html('');
+        window.$('#newPOModal .modal-title').text('📤 New Purchase Order');
+        window.$('#submitNewPO').text('📤 Create Purchase Order');
+        poRowIdx = 0;
+        recalcPOTotal();
+        window.openModal('newPOModal');
+    };
+
     function initPOMedicineSelect(el) {
         if (typeof window.$ === 'undefined' || !window.$.fn || !window.$.fn.select2) {
             return;
@@ -2165,29 +2494,29 @@
         });
 
         window.$(document).on('click', '#submitNewPO', function () {
-            var storeUrl = getPurchaseStoreUrl();
-            if (!storeUrl) { toast('Error', 'Store route not available.', 'error'); return; }
+            var url = editingPoId ? getPurchaseUpdateUrl(editingPoId) : getPurchaseStoreUrl();
+            if (!url) { toast('Error', 'Action URL not available.', 'error'); return; }
 
             if (typeof window.loader === 'function') { window.loader(); }
 
             var fd = new FormData(document.getElementById('newPOForm'));
             fd.append('_token', getCsrfToken());
 
-
             window.$.ajax({
-                url: storeUrl, type: 'POST', data: fd, contentType: false, processData: false,
+                url: url, type: 'POST', data: fd, contentType: false, processData: false,
                 success: function (response) {
                     if (typeof window.loader === 'function') { window.loader('hide'); }
                     if (response.status) {
-                        toast('PO Created', response.message + (response.bill_no ? ' (' + response.bill_no + ')' : ''), 'success');
+                        toast(editingPoId ? 'PO Updated' : 'PO Created', response.message + (response.bill_no ? ' (' + response.bill_no + ')' : ''), 'success');
                         window.closeModal('newPOModal');
                         document.getElementById('newPOForm').reset();
                         window.$('#poItemBody').html('');
                         poRowIdx = 0;
+                        editingPoId = null;
                         recalcPOTotal();
                         if (poTable) { poTable.ajax.reload(null, false); }
                     } else {
-                        toast('Error', response.message || 'Failed to create PO.', 'error');
+                        toast('Error', response.message || 'Action failed.', 'error');
                     }
                 },
                 error: function (xhr) {
@@ -2196,7 +2525,7 @@
                         var msgs = xhr.responseJSON.errors.map(function (e) { return e.message; }).join('\n');
                         toast('Validation Error', msgs, 'error');
                     } else {
-                        toast('Error', 'Unable to create purchase order.', 'error');
+                        toast('Error', editingPoId ? 'Unable to update purchase order.' : 'Unable to create purchase order.', 'error');
                     }
                 }
             });
@@ -2205,6 +2534,109 @@
         window.$(document).on('click', '.po-view-btn', function () {
             openPOView(this.getAttribute('data-id'));
         });
+
+        // Edit PO handler
+        window.$(document).on('click', '.po-edit-btn', function () {
+            var id = this.getAttribute('data-id');
+            var url = getPurchaseDetailsUrl(id);
+            if (!url) { toast('Error', 'PO details route not available.', 'error'); return; }
+
+            if (typeof window.loader === 'function') { window.loader(); }
+
+            window.$.ajax({
+                url: url,
+                type: 'GET',
+                success: function (res) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    if (res.status && res.bill) {
+                        editingPoId = res.bill.id;
+
+                        // Populate supplier
+                        window.$('#po_supplier_id').val(res.bill.supplier_id || '').trigger('change');
+
+                        // Populate Date and Notes
+                        var dateEl = document.querySelector('#newPOModal #bill_date');
+                        if (dateEl) { dateEl.value = res.bill.bill_date || ''; }
+                        var notesEl = document.querySelector('#newPOModal input[name="notes"]');
+                        if (notesEl) { notesEl.value = res.bill.notes || ''; }
+
+                        // Clear and populate items
+                        window.$('#poItemBody').html('');
+                        poRowIdx = 0;
+
+                        if (res.items && res.items.length) {
+                            res.items.forEach(function (item) {
+                                var rowHtml = buildPORowWithDetails(item);
+                                window.$('#poItemBody').append(rowHtml);
+                                var $lastRow = window.$('#poItemBody tr:last');
+                                initPOMedicineSelect($lastRow);
+                            });
+                        }
+
+                        recalcPOTotal();
+
+                        // Set titles and open modal
+                        window.$('#newPOModal .modal-title').text('✏️ Edit Purchase Order');
+                        window.$('#submitNewPO').text('💾 Update Purchase Order');
+                        window.openModal('newPOModal');
+                    } else {
+                        toast('Error', res.message || 'Failed to load PO details.', 'error');
+                    }
+                },
+                error: function () {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    toast('Error', 'Unable to fetch purchase order details.', 'error');
+                }
+            });
+        });
+
+        // Delete PO handler
+        window.$(document).on('click', '.po-delete-btn', function () {
+            var id = this.getAttribute('data-id');
+            var url = getPurchaseDeleteUrl(id);
+            if (!url) { toast('Error', 'PO delete route not available.', 'error'); return; }
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Delete PO?',
+                    text: 'Are you sure you want to delete this pending purchase order?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Yes, delete it!'
+                }).then(function (r) {
+                    if (r.isConfirmed) {
+                        doDelete(url);
+                    }
+                });
+            } else if (confirm('Are you sure you want to delete this pending purchase order?')) {
+                doDelete(url);
+            }
+        });
+
+        function doDelete(url) {
+            if (typeof window.loader === 'function') { window.loader(); }
+
+            window.$.ajax({
+                url: url,
+                type: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': getCsrfToken() || '' },
+                success: function (res) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    if (res.status) {
+                        toast('Deleted', res.message || 'Purchase order deleted.', 'success');
+                        if (poTable) { poTable.ajax.reload(null, false); }
+                    } else {
+                        toast('Error', res.message || 'Failed to delete PO.', 'error');
+                    }
+                },
+                error: function (xhr) {
+                    if (typeof window.loader === 'function') { window.loader('hide'); }
+                    var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Unable to delete purchase order.';
+                    toast('Error', msg, 'error');
+                }
+            });
+        }
 
         /* ─── PO Approve / Reject ─── */
         window.$(document).on('click', '.po-approve-btn', function () {
@@ -2327,7 +2759,7 @@
             var poId = window.$('#grn_po_select').val();
             if (!poId) { toast('Error', 'Please select an approved PO first.', 'error'); return; }
 
-            var doSubmit = function() {
+            var doSubmit = function () {
                 clearGrnFormErrors();
                 if (typeof window.loader === 'function') { window.loader(); }
                 var fd = new FormData(document.getElementById('grnForm'));
@@ -2477,7 +2909,7 @@
                 }
             });
         });
-        
+
         window.$(document).on('click', '.bad-quarantine-stock-btn', function () {
             var rowId = window.$(this).data('id');
             var showFormUrl = getShowBadQuarantineStockFormUrl();
@@ -2579,7 +3011,7 @@
         var finalUrl = exportUrl + (params.length ? ('?' + params.join('&')) : '');
         window.location.href = finalUrl;
     };
-    
+
     window.exportQuarantineDrugInventory = function () {
         var exportUrl = getQuarantineStockExportUrl();
         if (!exportUrl) {
@@ -2624,7 +3056,8 @@
             'expiryPane',
             'grnListPane',
             'poPane',
-            'marPane'
+            'marPane',
+            'allBillsPane'
         ].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) {
@@ -2639,7 +3072,7 @@
                 inventoryTable.ajax.reload();
             }
         }
-        
+
         if (paneId === 'quarantinePane') {
             var wasInitialized = !!quarantineInventoryTable;
             loadQuarantineInventory();
@@ -2686,9 +3119,17 @@
                 poTable.ajax.reload();
             }
         }
+
+        if (paneId === 'allBillsPane') {
+            var allBillsWasInit = !!allBillsTable;
+            loadAllBills();
+            if (allBillsWasInit && allBillsTable) {
+                allBillsTable.ajax.reload();
+            }
+        }
     };
 
-    window.confirmDispense = function () {
+    window.confirmDispense = function (shouldPrint) {
         var url = getDispenseStoreUrl();
         if (!url) {
             toast('Error', 'Dispense store route is not available.', 'error');
@@ -2706,7 +3147,7 @@
                     unit_price: toNumber(item.unit_price),
                     unit_mrp: toNumber(item.unit_mrp),
                     discount_percent: 0,
-                    tax_percent: toNumber(item.tax_percent),
+                    tax_percent: toNumber(item.tax_percent || 0),
                     is_substituted: false,
                     substitution_note: ''
                 };
@@ -2745,11 +3186,11 @@
                 window.closeModal('dispenseModal');
                 if (dispenseTable) { dispenseTable.ajax.reload(null, false); }
                 if (inventoryTable) { inventoryTable.ajax.reload(null, false); }
+                if (allBillsTable) { allBillsTable.ajax.reload(null, false); }
                 loadDashboardCounts();
 
-                // Handle printing trigger
-                var autoPrint = document.getElementById('dispenseAutoPrint') && document.getElementById('dispenseAutoPrint').checked;
-                if (autoPrint && data.print_url) {
+                // Handle printing trigger based on shouldPrint parameter
+                if (shouldPrint && data.print_url) {
                     window.open(data.print_url, '_blank');
                 }
             })
@@ -3031,6 +3472,147 @@
             }
         });
     }
+
+    function getBillPrintUrl(id) {
+        if (typeof window.route === 'function') {
+            try { return window.route('billPrint').replace('__ID__', String(id)); } catch (e) { return ''; }
+        }
+        return '';
+    }
+
+    function loadAllBills() {
+        var tableNode = document.getElementById('allBillsTable');
+        if (!tableNode || allBillsTable) { return; }
+
+        var url = getAllBillsLoadUrl();
+        if (!url) { return; }
+
+        if (typeof window.jQuery === 'undefined' || typeof window.jQuery.fn.dataTable === 'undefined') {
+            return;
+        }
+
+        allBillsTable = window.jQuery(tableNode).DataTable({
+            processing: true,
+            serverSide: true,
+            ajax: {
+                url: url,
+                type: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': getCsrfToken() || ''
+                }
+            },
+            columns: [
+                { data: 'bill_no' },
+                { data: 'bill_date' },
+                { data: 'patient_name' },
+                { data: 'items_count', orderable: false, searchable: false },
+                { data: 'subtotal' },
+                { data: 'discount_amount' },
+                { data: 'net_total' },
+                { data: 'paid_amount' },
+                { data: 'due_amount' },
+                {
+                    data: 'actions',
+                    orderable: false,
+                    searchable: false,
+                    render: function (data) {
+                        var printUrl = getBillPrintUrl(data);
+                        return '<div class="btn-group">' +
+                            '<button class="btn btn-outline-primary btn-xs" onclick="window.viewPharmacyBill(' + data + ')">👁️ View</button>' +
+                            '<button class="btn btn-outline-secondary btn-xs ms-4" onclick="window.open(\'' + printUrl + '\', \'_blank\')">🖨️ Print</button>' +
+                            '</div>';
+                    }
+                }
+            ],
+            order: [[0, 'desc']],
+            pageLength: 10
+        });
+    }
+
+    var currentlyViewingBillPrintUrl = '';
+
+    window.viewPharmacyBill = function (id) {
+        var url = getBillViewUrl(id);
+        if (!url) {
+            toast('Error', 'Bill view route is not available.', 'error');
+            return;
+        }
+
+        window.openModal('viewBillModal');
+        var body = document.getElementById('viewBillModalBody');
+        if (body) {
+            body.innerHTML = '<div class="text-muted text-center">Loading...</div>';
+        }
+
+        fetch(url, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
+            .then(function (data) {
+                if (!data.status || !data.bill) {
+                    throw new Error(data.message || 'Failed to load bill details.');
+                }
+                var bill = data.bill;
+                currentlyViewingBillPrintUrl = bill.print_url;
+
+                var itemsHtml = data.items.map(function (item, idx) {
+                    return '<tr>' +
+                        '<td>' + (idx + 1) + '</td>' +
+                        '<td class="fw-700">' + escapeHtml(item.medicine_name) + '</td>' +
+                        '<td>' + escapeHtml(item.batch_no) + '</td>' +
+                        '<td>' + escapeHtml(item.expiry_date) + '</td>' +
+                        '<td class="text-end">' + item.quantity.toFixed(2) + '</td>' +
+                        '<td class="text-end">₹' + item.unit_price.toFixed(2) + '</td>' +
+                        '<td class="text-end fw-700">₹' + item.line_total.toFixed(2) + '</td>' +
+                        '</tr>';
+                }).join('');
+
+                var subtotalInclusive = bill.net_total + bill.discount_amount;
+
+                var html = '<div class="bill-modal-details">' +
+                    '<div class="row mb-8" style="display:flex; justify-content:space-between;">' +
+                    '<div style="font-weight:700;">Bill No: ' + escapeHtml(bill.bill_no) + '</div>' +
+                    '<div style="text-align:right;">Date: ' + escapeHtml(bill.bill_date) + '</div>' +
+                    '</div>' +
+                    '<div class="row mb-12" style="display:flex; justify-content:space-between; margin-bottom:12px;">' +
+                    '<div><b>Patient:</b> ' + escapeHtml(bill.patient_name) + ' (' + escapeHtml(bill.patient_uhid) + ')</div>' +
+                    '<div style="text-align:right;"><b>Phone:</b> ' + escapeHtml(bill.patient_phone) + '</div>' +
+                    '</div>' +
+                    '<table class="hims-table display table-striped mb-12" style="width:100%">' +
+                    '<thead><tr><th>#</th><th>Medicine</th><th>Batch</th><th>Expiry</th><th class="text-end">Qty</th><th class="text-end">Rate</th><th class="text-end">Amount</th></tr></thead>' +
+                    '<tbody>' + itemsHtml + '</tbody>' +
+                    '</table>' +
+                    '<div style="display:flex; justify-content:flex-end; margin-top:12px;">' +
+                    '<div class="ph-bill-preview" style="width: 250px;">' +
+                    '<div class="ph-bill-row"><span>Subtotal:</span><span class="fw-700">₹' + subtotalInclusive.toFixed(2) + '</span></div>' +
+                    '<div class="ph-bill-row mt-4"><span>Discount:</span><span>₹' + bill.discount_amount.toFixed(2) + '</span></div>' +
+                    '<div class="ph-bill-total"><span>Net Payable:</span><span class="fw-700 text-primary">₹' + bill.net_total.toFixed(2) + '</span></div>' +
+                    '<div class="ph-bill-row mt-8"><span>Paid Amount:</span><span>₹' + bill.paid_amount.toFixed(2) + '</span></div>' +
+                    '<div class="ph-bill-row mt-4"><span>Due Amount:</span><span class="fw-700 text-danger">₹' + bill.due_amount.toFixed(2) + '</span></div>' +
+                    '</div>' +
+                    '</div>' +
+                    '<div class="mt-8 text-muted" style="margin-top:12px;"><b>Notes:</b> ' + escapeHtml(bill.notes) + '</div>' +
+                    '</div>';
+
+                if (body) {
+                    body.innerHTML = html;
+                }
+            })
+            .catch(function (err) {
+                if (body) {
+                    body.innerHTML = '<div class="text-danger text-center">Failed to load bill. ' + escapeHtml(err.message || '') + '</div>';
+                }
+            });
+    };
+
+    window.printViewedBill = function () {
+        if (currentlyViewingBillPrintUrl) {
+            window.open(currentlyViewingBillPrintUrl, '_blank');
+        } else {
+            toast('Error', 'No print URL available.', 'error');
+        }
+    };
 
     window.loadRxPreview = function () {
         return;

@@ -97,6 +97,7 @@ class PharmacyStockController extends BaseHospitalController
                 'Stock',
                 'Min Level',
                 'MRP',
+                'Sale Price',
                 'Status',
             ]);
 
@@ -119,6 +120,7 @@ class PharmacyStockController extends BaseHospitalController
                     (string) $row->available_qty,
                     (string) ($row->medicine?->min_level ?? 0),
                     (string) $row->unit_mrp,
+                    (string) $row->unit_sale_price,
                     (string) $row->status,
                 ]);
             }

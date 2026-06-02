@@ -22,7 +22,7 @@ class PharmacyPurchaseController extends BaseHospitalController
     public function __construct()
     {
         parent::__construct();
-        $this->middleware('permission:create-pharmacy-purchase', ['only' => ['store', 'update']]);
+        $this->middleware('permission:create-pharmacy-purchase', ['only' => ['store', 'update', 'destroy']]);
         $this->routes = [
             'store'     => route('hospital.pharmacy.purchase.store'),
             'loadtable' => route('hospital.pharmacy.purchase-load'),
@@ -31,6 +31,8 @@ class PharmacyPurchaseController extends BaseHospitalController
             'approve'   => route('hospital.pharmacy.purchase.approve', ['bill' => '__ID__']),
             'reject'    => route('hospital.pharmacy.purchase.reject', ['bill' => '__ID__']),
             'print'     => route('hospital.pharmacy.purchase.print', ['bill' => '__ID__']),
+            'details'   => route('hospital.pharmacy.purchase.details', ['bill' => '__ID__']),
+            'delete'    => route('hospital.pharmacy.purchase.delete', ['bill' => '__ID__']),
         ];
     }
 
@@ -131,15 +133,18 @@ class PharmacyPurchaseController extends BaseHospitalController
             abort(403);
         }
 
+        if ($bill->status !== 'pending') {
+            return response()->json(['status' => false, 'message' => 'Only pending purchase orders can be updated.'], 422);
+        }
+
         $validator = Validator::make($request->all(), [
-            'bill_date'           => 'required|date',
-            'supplier_id'         => 'nullable|exists:pharmacy_suppliers,id',
-            'supplier_invoice_no' => 'nullable|string|max:255',
-            'discount_type'       => 'nullable|in:percent,fixed',
-            'discount_value'      => 'nullable|numeric|min:0',
-            'shipping_amount'     => 'nullable|numeric|min:0',
-            'round_off'           => 'nullable|numeric',
-            'notes'               => 'nullable|string',
+            'bill_date'                   => 'required|date',
+            'supplier_id'                 => 'nullable|exists:pharmacy_suppliers,id',
+            'notes'                       => 'nullable|string',
+            'items'                       => 'required|array|min:1',
+            'items.*.medicine_id'         => 'required|exists:medicines,id',
+            'items.*.quantity_purchased'  => 'required|numeric|min:1',
+            'items.*.unit_purchase_price' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -147,7 +152,12 @@ class PharmacyPurchaseController extends BaseHospitalController
         }
 
         try {
-            $bill = $inventoryService->updatePurchaseBill($bill, $request->all());
+            $bill = $inventoryService->updatePurchaseBill($bill, [
+                'bill_date'   => $request->bill_date,
+                'supplier_id' => $request->supplier_id,
+                'notes'       => $request->notes,
+                'items'       => $request->items,
+            ]);
         } catch (Throwable $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()], 422);
         }
@@ -208,5 +218,58 @@ class PharmacyPurchaseController extends BaseHospitalController
         $printTemplate = HeaderFooter::query()->where('type', 'pharmacy_bill')->first();
 
         return view('hospital.pharmacy.purchase.print', compact('bill', 'hospital', 'printTemplate'));
+    }
+
+    /**
+     * Get single purchase bill details as JSON.
+     */
+    public function getDetails($id)
+    {
+        $bill = PharmacyPurchaseBill::with('items.medicine')->findOrFail($id);
+        if ($bill->hospital_id !== $this->hospital_id) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        return response()->json([
+            'status' => true,
+            'bill' => [
+                'id' => $bill->id,
+                'bill_no' => $bill->bill_no,
+                'bill_date' => optional($bill->bill_date)->format('Y-m-d'),
+                'supplier_id' => $bill->supplier_id,
+                'notes' => $bill->notes,
+                'status' => $bill->status,
+            ],
+            'items' => $bill->items->map(fn ($item) => [
+                'id' => $item->id,
+                'medicine_id' => $item->medicine_id,
+                'medicine_name' => $item->medicine?->name ?? '—',
+                'quantity_purchased' => (float) $item->quantity_purchased,
+                'unit_purchase_price' => (float) $item->unit_purchase_price,
+            ]),
+        ]);
+    }
+
+    /**
+     * Delete a pending purchase order.
+     */
+    public function destroy(PharmacyPurchaseBill $bill)
+    {
+        if ($bill->hospital_id !== $this->hospital_id) {
+            abort(403);
+        }
+
+        if ($bill->status !== 'pending') {
+            return response()->json(['status' => false, 'message' => 'Only pending purchase orders can be deleted.'], 422);
+        }
+
+        // Delete items and the bill itself
+        $bill->items()->delete();
+        $bill->delete();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Purchase order deleted successfully.',
+        ]);
     }
 }

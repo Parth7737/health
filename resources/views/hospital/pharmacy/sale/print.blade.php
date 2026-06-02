@@ -203,26 +203,17 @@
     <table class="items-table">
         <thead>
             <tr>
-                <th style="width:4%;">SN</th>
+                <th style="width:5%;">SN</th>
                 <th>Medicine</th>
-                <th style="width:12%;">Batch / Expiry</th>
-                <th style="width:7%;" class="text-end">Qty</th>
-                <th style="width:9%;" class="text-end">Rate ₹</th>
-                <th style="width:9%;" class="text-end">Taxable ₹</th>
-                <th style="width:12%;" class="text-end">CGST % (Amt)</th>
-                <th style="width:12%;" class="text-end">SGST % (Amt)</th>
-                <th style="width:8%;" class="text-end">Disc %</th>
-                <th style="width:11%;" class="text-end">Amount ₹</th>
+                <th style="width:15%;">Batch / Expiry</th>
+                <th style="width:10%;" class="text-end">Qty</th>
+                <th style="width:12%;" class="text-end">Rate ₹</th>
+                <th style="width:12%;" class="text-end">Disc %</th>
+                <th style="width:15%;" class="text-end">Amount ₹</th>
             </tr>
         </thead>
         <tbody>
             @forelse($bill->items as $item)
-                @php
-                    $cgstP = $item->cgst_percent ?? ($item->tax_percent / 2);
-                    $cgstA = $item->cgst_amount ?? ($item->tax_amount / 2);
-                    $sgstP = $item->sgst_percent ?? ($item->tax_percent / 2);
-                    $sgstA = $item->sgst_amount ?? ($item->tax_amount / 2);
-                @endphp
                 <tr>
                     <td>{{ $loop->iteration }}</td>
                     <td>
@@ -238,15 +229,18 @@
                         @endif
                     </td>
                     <td class="text-end">{{ rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') }}</td>
-                    <td class="text-end">{{ number_format((float) $item->unit_price, 2) }}</td>
-                    <td class="text-end">{{ number_format((float) $item->line_subtotal, 2) }}</td>
-                    <td class="text-end">{{ number_format((float) $cgstP, 2) }}%<br><small style="color:#4b5563">({{ number_format((float) $cgstA, 2) }})</small></td>
-                    <td class="text-end">{{ number_format((float) $sgstP, 2) }}%<br><small style="color:#4b5563">({{ number_format((float) $sgstA, 2) }})</small></td>
+                    @php
+                        $qty = (float) $item->quantity;
+                        $lineTotal = (float) $item->line_total;
+                        $discAmt = (float) ($item->discount_amount ?? 0);
+                        $unitPriceInclusive = $qty > 0 ? ($lineTotal + $discAmt) / $qty : 0.0;
+                    @endphp
+                    <td class="text-end">{{ number_format($unitPriceInclusive, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->discount_percent, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->line_total, 2) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="10" class="empty">No sale items found.</td></tr>
+                <tr><td colspan="7" class="empty">No sale items found.</td></tr>
             @endforelse
         </tbody>
     </table>
@@ -262,19 +256,14 @@
 
         <table class="totals-table">
             <tbody>
-                <tr><td>Taxable Subtotal</td><td class="text-end">{{ number_format((float) $bill->subtotal, 2) }}</td></tr>
+                @php
+                    $subtotalInclusive = (float) $bill->net_total + (float) $bill->discount_amount;
+                @endphp
+                <tr><td>Subtotal</td><td class="text-end">{{ number_format($subtotalInclusive, 2) }}</td></tr>
                 <tr><td>Discount</td><td class="text-end">{{ number_format((float) $bill->discount_amount, 2) }}</td></tr>
-                @if((float) $bill->total_cgst > 0 || (float) $bill->total_sgst > 0)
-                    <tr><td>CGST Total</td><td class="text-end">{{ number_format((float) $bill->total_cgst, 2) }}</td></tr>
-                    <tr><td>SGST Total</td><td class="text-end">{{ number_format((float) $bill->total_sgst, 2) }}</td></tr>
-                @elseif((float) $bill->total_igst > 0)
-                    <tr><td>IGST Total</td><td class="text-end">{{ number_format((float) $bill->total_igst, 2) }}</td></tr>
-                @else
-                    <tr><td>GST Total</td><td class="text-end">{{ number_format((float) $bill->tax_amount, 2) }}</td></tr>
-                @endif
+                <tr><td>Net Payable</td><td class="text-end">{{ number_format((float) $bill->net_total, 2) }}</td></tr>
                 <tr><td>Paid Amount</td><td class="text-end">{{ number_format((float) $bill->paid_amount, 2) }}</td></tr>
                 <tr><td>Due Balance</td><td class="text-end">{{ number_format((float) $bill->due_amount, 2) }}</td></tr>
-                <tr><td>Net Payable</td><td class="text-end">{{ number_format((float) $bill->net_total, 2) }}</td></tr>
             </tbody>
         </table>
     </div>

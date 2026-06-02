@@ -168,3 +168,43 @@
     width: 100%;
   }
 }
+
+/* Autocomplete Dropdown Styles */
+.ph-autocomplete-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1050;
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border-light, #ccc);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.ph-autocomplete-row {
+  padding: 8px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  color: var(--text-main, #333);
+  border-bottom: 1px solid var(--border-light, #eee);
+  transition: background 0.15s ease;
+}
+
+.ph-autocomplete-row:last-child {
+  border-bottom: none;
+}
+
+.ph-autocomplete-row:hover,
+.ph-autocomplete-row.active {
+  background: var(--primary-light, #e3f2fd);
+  color: var(--primary, #0d47a1);
+}
+
+.ph-autocomplete-row .sub-text {
+  font-size: 11px;
+  color: #777;
+  margin-top: 2px;
+}

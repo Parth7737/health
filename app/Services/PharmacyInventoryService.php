@@ -400,39 +400,60 @@ class PharmacyInventoryService
     public function updatePurchaseBill(PharmacyPurchaseBill $bill, array $payload): PharmacyPurchaseBill
     {
         return DB::transaction(function () use ($bill, $payload) {
-            $subtotal = (float) $bill->items()->sum('line_subtotal');
-            $taxAmount = (float) $bill->items()->sum('tax_amount');
-
-            $discountType = Arr::get($payload, 'discount_type', 'fixed');
-            $discountValue = (float) Arr::get($payload, 'discount_value', 0);
-            if ($discountType === 'percent') {
-                $discountAmount = round(($subtotal * $discountValue) / 100, 2);
-            } else {
-                $discountAmount = round($discountValue, 2);
+            if ($bill->status !== 'pending') {
+                throw new \RuntimeException('Only pending purchase orders can be updated.');
             }
 
-            $shipping = (float) Arr::get($payload, 'shipping_amount', 0);
-            $roundOff = (float) Arr::get($payload, 'round_off', 0);
-            $netTotal = round(max(0, $subtotal - $discountAmount + $taxAmount + $shipping + $roundOff), 2);
+            // Update items
+            $items = Arr::get($payload, 'items', []);
+            if (empty($items)) {
+                throw new \RuntimeException('At least one purchase item is required.');
+            }
+
+            // Delete old items and recreate
+            $bill->items()->delete();
+
+            $estimatedTotal = 0.0;
+
+            foreach ($items as $item) {
+                $qty = (float) Arr::get($item, 'quantity_purchased', 0);
+                if ($qty <= 0) {
+                    throw new \RuntimeException('Purchase item quantity must be greater than zero.');
+                }
+
+                $estRate = (float) Arr::get($item, 'unit_purchase_price', 0);
+                $lineEst = round($qty * $estRate, 2);
+
+                $bill->items()->create([
+                    'medicine_id'        => (int) Arr::get($item, 'medicine_id'),
+                    'batch_no'           => '',
+                    'quantity_purchased'  => $qty,
+                    'quantity_free'       => 0,
+                    'quantity_received'   => 0,
+                    'total_quantity'      => $qty,
+                    'unit_purchase_price' => $estRate,
+                    'unit_sale_price'     => 0,
+                    'unit_mrp'            => 0,
+                    'tax_percent'         => 0,
+                    'tax_amount'          => 0,
+                    'line_subtotal'       => $lineEst,
+                    'line_total'          => $lineEst,
+                ]);
+
+                $estimatedTotal += $lineEst;
+            }
 
             $bill->update([
-                'bill_date' => Arr::get($payload, 'bill_date'),
-                'supplier_id' => Arr::get($payload, 'supplier_id') ?: null,
-                'supplier_name' => Arr::get($payload, 'supplier_name'),
-                'supplier_invoice_no' => Arr::get($payload, 'supplier_invoice_no'),
-                'notes' => Arr::get($payload, 'notes'),
-                'discount_type' => $discountType,
-                'discount_amount' => $discountAmount,
-                'shipping_amount' => $shipping,
-                'round_off' => $roundOff,
-                'net_total' => $netTotal,
-                'paid_amount' => $netTotal,
-                'due_amount' => 0,
-                'payment_status' => 'paid',
-                'updated_by' => auth()->id(),
+                'bill_date'      => Arr::get($payload, 'bill_date', $bill->bill_date),
+                'supplier_id'    => Arr::get($payload, 'supplier_id') ?: null,
+                'notes'          => Arr::get($payload, 'notes'),
+                'subtotal'       => round($estimatedTotal, 2),
+                'net_total'      => round($estimatedTotal, 2),
+                'due_amount'     => round($estimatedTotal, 2),
+                'updated_by'     => auth()->id(),
             ]);
 
-            return $bill->fresh();
+            return $bill->fresh(['items']);
         });
     }
 

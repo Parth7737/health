@@ -51,11 +51,19 @@ class PharmacyDashboardController extends BaseHospitalController
             'purchaseApprove' => route('hospital.pharmacy.purchase.approve', ['bill' => '__ID__']),
             'purchaseReject' => route('hospital.pharmacy.purchase.reject', ['bill' => '__ID__']),
             'purchasePrint' => route('hospital.pharmacy.purchase.print', ['bill' => '__ID__']),
+            'purchaseUpdate' => route('hospital.pharmacy.purchase.update', ['bill' => '__ID__']),
+            'purchaseDetails' => route('hospital.pharmacy.purchase.details', ['bill' => '__ID__']),
+            'purchaseDelete' => route('hospital.pharmacy.purchase.delete', ['bill' => '__ID__']),
             'grnStore' => route('hospital.pharmacy.grn.store'),
             'grnLoad' => route('hospital.pharmacy.grn-load'),
             'grnApprovedPOs' => route('hospital.pharmacy.grn.approved-pos'),
             'grnView' => route('hospital.pharmacy.grn.view', ['grn' => '__ID__']),
             'grnPrint' => route('hospital.pharmacy.grn.print', ['grn' => '__ID__']),
+            'allBillsLoad' => route('hospital.pharmacy.bills-load'),
+            'billView' => route('hospital.pharmacy.bill.view', ['bill' => '__ID__']),
+            'billPrint' => route('hospital.pharmacy.sale.print', ['bill' => '__ID__']),
+            'patientSearch' => route('hospital.pharmacy.dispense.patient-search'),
+            'prescriptionSearch' => route('hospital.pharmacy.dispense.prescription-search'),
         ];
     }
 
@@ -292,10 +300,10 @@ class PharmacyDashboardController extends BaseHospitalController
         $id = (int) $request->input('prescription_id');
 
         if ($this->isPrescriptionAlreadyBilled($type, $id)) {
-            return response()->json([
-                'status' => false,
-                'message' => 'This prescription is already billed in pharmacy sale.',
-            ], 422);
+            // For partial re-dispense, we still load the prescription but mark already dispensed items
+            $allowPartialRedispense = true;
+        } else {
+            $allowPartialRedispense = false;
         }
 
         $with = [
@@ -316,14 +324,19 @@ class PharmacyDashboardController extends BaseHospitalController
                 $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
             })->with($with)->findOrFail($id);
 
+        $dispensedQtys = $this->getAlreadyDispensedQty($type, $id);
+
         $items = $prescription->items
             ->filter(fn ($item) => !empty($item->medicine_id))
             ->values()
-            ->map(function ($item) {
+            ->map(function ($item) use ($dispensedQtys) {
                 $batches = $this->availableBatchesForMedicine((int) $item->medicine_id);
                 $availableQty = (float) $batches->sum('available_qty');
                 $prescribedQty = max(1, (float) ($item->no_of_day ?? 1));
                 $frequencyQty = max(1, (float) ($item->frequency?->no_of_medicine ?? 1));
+                $totalPrescribed = $prescribedQty * $frequencyQty;
+                $alreadyDispensed = (float) ($dispensedQtys[(int) $item->medicine_id] ?? 0);
+                $remainingQty = max(0.0, $totalPrescribed - $alreadyDispensed);
                 $firstBatch = $batches->first();
 
                 return [
@@ -335,16 +348,17 @@ class PharmacyDashboardController extends BaseHospitalController
                     'route' => $item->route?->route ?? '-',
                     'instruction' => $item->instruction?->instruction ?? '-',
                     'days' => (int) ($item->no_of_day ?? 1),
-                    'prescribed_qty' => $prescribedQty * $frequencyQty,
+                    'prescribed_qty' => $totalPrescribed,
                     'available_qty' => $availableQty,
-                    'dispense_qty' => min($prescribedQty * $frequencyQty, $availableQty),
-                    'stock_status' => $availableQty <= 0 ? 'out' : ($availableQty < $prescribedQty ? 'partial' : 'available'),
+                    'dispense_qty' => min($remainingQty, $availableQty),
+                    'stock_status' => $availableQty <= 0 ? 'out' : ($availableQty < $remainingQty ? 'partial' : 'available'),
                     'batch_id' => $firstBatch?->id,
                     'unit_price' => (float) ($firstBatch?->unit_sale_price ?? 0),
                     'unit_mrp' => (float) ($firstBatch?->unit_mrp ?? 0),
                     'tax_percent' => (float) ($firstBatch?->tax_percent ?? $firstBatch?->purchaseItem?->tax_percent ?? 0),
                     'sale_tax_type' => $firstBatch?->sale_tax_type ?? 'exclusive',
                     'pack_size' => (int) ($firstBatch?->pack_size ?? 1),
+                    'already_dispensed_qty' => $alreadyDispensed,
                     'batches' => $batches->map(fn ($batch) => [
                         'id' => $batch->id,
                         'batch_no' => $batch->batch_no,
@@ -383,6 +397,7 @@ class PharmacyDashboardController extends BaseHospitalController
                 'known_allergies' => $patient?->known_allergies,
             ],
             'items' => $items,
+            'is_partial_redispense' => $allowPartialRedispense ?? false,
         ]);
     }
 
@@ -391,7 +406,7 @@ class PharmacyDashboardController extends BaseHospitalController
         $term = trim((string) $request->input('q', ''));
 
         $medicines = Medicine::query()
-            ->select('id', 'name', 'unit')
+            ->select('id', 'name', 'medicine_unit_id')
             ->when($term !== '', fn ($q) => $q->where('name', 'like', '%' . $term . '%'))
             ->orderBy('name')
             ->limit(30)
@@ -403,7 +418,7 @@ class PharmacyDashboardController extends BaseHospitalController
                 return [
                     'id' => $medicine->id,
                     'name' => $medicine->name,
-                    'unit' => $medicine->unit,
+                    'unit' => $medicine?->unit?->name ?? '-',
                     'available_qty' => (float) $batches->sum('available_qty'),
                     'batch_id' => $firstBatch?->id,
                     'unit_price' => (float) ($firstBatch?->unit_sale_price ?? 0),
@@ -457,12 +472,7 @@ class PharmacyDashboardController extends BaseHospitalController
         $prescriptionId = (int) $request->input('prescription_id');
 
         if ($prescriptionType && $prescriptionId && $this->isPrescriptionAlreadyBilled($prescriptionType, $prescriptionId)) {
-            return response()->json([
-                'errors' => [[
-                    'code' => 'prescription_id',
-                    'message' => 'This prescription is already billed in pharmacy sale.',
-                ]],
-            ], 422);
+            // Allow partial re-dispense — don't block, just allow creating another bill for same prescription
         }
 
         $sourcePrescription = null;
@@ -610,4 +620,198 @@ class PharmacyDashboardController extends BaseHospitalController
         return $query->exists();
     }
 
+    /**
+     * Get already dispensed qty per medicine for a given prescription.
+     */
+    private function getAlreadyDispensedQty(string $type, int $id): array
+    {
+        $column = strtolower($type) === 'opd' ? 'opd_prescription_id' : 'ipd_prescription_id';
+
+        return DB::table('pharmacy_sale_bills as sb')
+            ->join('pharmacy_sale_items as si', 'si.sale_bill_id', '=', 'sb.id')
+            ->where('sb.' . $column, $id)
+            ->where('sb.hospital_id', $this->hospital_id)
+            ->groupBy('si.medicine_id')
+            ->selectRaw('si.medicine_id, SUM(si.quantity) as total_dispensed')
+            ->pluck('total_dispensed', 'medicine_id')
+            ->toArray();
+    }
+
+    /**
+     * Load all bills for All Bills tab DataTable.
+     */
+    public function loadAllBills(Request $request)
+    {
+        $data = PharmacySaleBill::query()
+            ->with('patient:id,name,patient_id')
+            ->withCount('items')
+            ->latest('id');
+
+        return DataTables::of($data)
+            ->addColumn('patient_name', fn ($row) => $row->patient?->name ?? 'Walk-in')
+            ->addColumn('patient_uhid', fn ($row) => $row->patient?->patient_id ?? '-')
+            ->editColumn('bill_date', fn ($row) => optional($row->bill_date)->format('d-m-Y'))
+            ->addColumn('items_count', fn ($row) => $row->items_count)
+            ->editColumn('subtotal', fn ($row) => number_format((float) $row->subtotal, 2))
+            ->editColumn('discount_amount', fn ($row) => number_format((float) $row->discount_amount, 2))
+            ->editColumn('net_total', fn ($row) => number_format((float) $row->net_total, 2))
+            ->editColumn('paid_amount', fn ($row) => number_format((float) $row->paid_amount, 2))
+            ->editColumn('due_amount', fn ($row) => number_format((float) $row->due_amount, 2))
+            ->addColumn('actions', fn ($row) => $row->id)
+            ->make(true);
+    }
+
+    /**
+     * View a specific bill for the view modal.
+     */
+    public function viewBill(PharmacySaleBill $bill)
+    {
+        if ($bill->hospital_id !== $this->hospital_id) {
+            abort(403);
+        }
+
+        $bill->load(['items.medicine:id,name', 'patient:id,name,patient_id,phone,gender,age_years']);
+
+        $items = $bill->items->map(function ($item) {
+            $qty = (float) $item->quantity;
+            $lineTotal = (float) $item->line_total;
+            $discAmt = (float) ($item->discount_amount ?? 0);
+            $inclusiveRate = $qty > 0 ? round(($lineTotal + $discAmt) / $qty, 2) : 0.0;
+
+            return [
+                'medicine_name' => $item->medicine?->name ?? '-',
+                'batch_no' => $item->batch_no ?: '-',
+                'expiry_date' => optional($item->expiry_date)->format('m/y'),
+                'quantity' => $qty,
+                'unit_price' => $inclusiveRate,
+                'line_total' => $lineTotal,
+            ];
+        });
+
+        return response()->json([
+            'status' => true,
+            'bill' => [
+                'id' => $bill->id,
+                'bill_no' => $bill->bill_no,
+                'bill_date' => optional($bill->bill_date)->format('d-m-Y'),
+                'patient_name' => $bill->patient?->name ?? 'Walk-in',
+                'patient_uhid' => $bill->patient?->patient_id ?? '-',
+                'patient_phone' => $bill->patient?->phone ?? '-',
+                'subtotal' => (float) $bill->subtotal,
+                'discount_amount' => (float) $bill->discount_amount,
+                'net_total' => (float) $bill->net_total,
+                'paid_amount' => (float) $bill->paid_amount,
+                'due_amount' => (float) $bill->due_amount,
+                'notes' => $bill->notes ?: '-',
+                'print_url' => route('hospital.pharmacy.sale.print', ['bill' => $bill->id]),
+            ],
+            'items' => $items,
+        ]);
+    }
+
+    /**
+     * Search patients for walk-in dispense.
+     */
+    public function patientSearch(Request $request)
+    {
+        $term = trim((string) $request->input('q', ''));
+        if (strlen($term) < 2) {
+            return response()->json(['items' => []]);
+        }
+
+        $patients = Patient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where(function ($q) use ($term) {
+                $q->where('name', 'like', '%' . $term . '%')
+                    ->orWhere('patient_id', 'like', '%' . $term . '%')
+                    ->orWhere('phone', 'like', '%' . $term . '%');
+            })
+            ->select('id', 'name', 'patient_id', 'phone', 'gender', 'age_years', 'age_months', 'blood_group', 'known_allergies')
+            ->orderBy('name')
+            ->limit(20)
+            ->get()
+            ->map(function ($p) {
+                return [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                    'uhid' => $p->patient_id ?? '-',
+                    'phone' => $p->phone ?? '-',
+                    'gender' => $p->gender ?? '-',
+                    'age' => trim(($p->age_years ? $p->age_years . 'Y' : '') . ($p->age_months ? ' ' . $p->age_months . 'M' : '')) ?: '-',
+                    'blood_group' => $p->blood_group ?? '-',
+                    'known_allergies' => $p->known_allergies,
+                ];
+            });
+
+        return response()->json(['items' => $patients]);
+    }
+
+    /**
+     * Search prescriptions for re-dispensing.
+     */
+    public function prescriptionSearchSuggestions(Request $request)
+    {
+        $term = trim((string) $request->input('q', ''));
+        if (strlen($term) < 2) {
+            return response()->json(['items' => []]);
+        }
+
+        $opdResults = DB::table('opd_prescriptions as rx')
+            ->leftJoin('patients as p', 'p.id', '=', 'rx.patient_id')
+            ->leftJoin('staff as d', 'd.id', '=', 'rx.doctor_id')
+            ->where('rx.hospital_id', $this->hospital_id)
+            ->where(function ($q) use ($term) {
+                $q->where('rx.prescription_no', 'like', '%' . $term . '%')
+                    ->orWhere('p.name', 'like', '%' . $term . '%')
+                    ->orWhere('p.patient_id', 'like', '%' . $term . '%');
+            })
+            ->selectRaw("'opd' as source_type, rx.id as source_id")
+            ->selectRaw("COALESCE(rx.prescription_no, CONCAT('OPD-RX-', LPAD(rx.id, 5, '0'))) as rx_no")
+            ->selectRaw("COALESCE(p.name, '-') as patient_name")
+            ->selectRaw("COALESCE(p.patient_id, '-') as patient_uhid")
+            ->selectRaw("TRIM(CONCAT(COALESCE(d.first_name, ''), ' ', COALESCE(d.last_name, ''))) as doctor_name")
+            ->selectRaw("DATE_FORMAT(rx.created_at, '%d-%m-%Y') as rx_date")
+            ->orderByDesc('rx.created_at')
+            ->limit(15)
+            ->get();
+
+        $ipdResults = DB::table('ipd_prescriptions as rx')
+            ->leftJoin('patients as p', 'p.id', '=', 'rx.patient_id')
+            ->leftJoin('staff as d', 'd.id', '=', 'rx.doctor_id')
+            ->where('rx.hospital_id', $this->hospital_id)
+            ->where(function ($q) use ($term) {
+                $q->where('rx.prescription_no', 'like', '%' . $term . '%')
+                    ->orWhere('p.name', 'like', '%' . $term . '%')
+                    ->orWhere('p.patient_id', 'like', '%' . $term . '%');
+            })
+            ->selectRaw("'ipd' as source_type, rx.id as source_id")
+            ->selectRaw("COALESCE(rx.prescription_no, CONCAT('IPD-RX-', LPAD(rx.id, 5, '0'))) as rx_no")
+            ->selectRaw("COALESCE(p.name, '-') as patient_name")
+            ->selectRaw("COALESCE(p.patient_id, '-') as patient_uhid")
+            ->selectRaw("TRIM(CONCAT(COALESCE(d.first_name, ''), ' ', COALESCE(d.last_name, ''))) as doctor_name")
+            ->selectRaw("DATE_FORMAT(rx.created_at, '%d-%m-%Y') as rx_date")
+            ->orderByDesc('rx.created_at')
+            ->limit(15)
+            ->get();
+
+        // Check which have been already billed
+        $results = $opdResults->merge($ipdResults)->map(function ($row) {
+            $col = $row->source_type === 'opd' ? 'opd_prescription_id' : 'ipd_prescription_id';
+            $billExists = PharmacySaleBill::where($col, $row->source_id)->where('hospital_id', $this->hospital_id)->exists();
+
+            return [
+                'source_type' => $row->source_type,
+                'source_id' => $row->source_id,
+                'rx_no' => $row->rx_no,
+                'patient_name' => $row->patient_name,
+                'patient_uhid' => $row->patient_uhid,
+                'doctor_name' => $row->doctor_name,
+                'rx_date' => $row->rx_date,
+                'has_bill' => $billExists,
+                'label' => ($billExists ? '🔄 ' : '') . $row->rx_no . ' — ' . $row->patient_name . ' (' . strtoupper($row->source_type) . ') ' . $row->rx_date,
+            ];
+        })->values();
+
+        return response()->json(['items' => $results]);
+    }
 }

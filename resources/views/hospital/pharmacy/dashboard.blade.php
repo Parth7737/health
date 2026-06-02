@@ -3,6 +3,7 @@
 @section('page_subtitle', 'Dispensing · Inventory · Expiry Alerts · GRN · Purchase Orders')
 
 @section('page_header_actions')
+<button class="btn btn-outline-primary btn-sm" type="button" onclick="openPrescriptionSearch()">🔍 Search Prescription</button>
 <button class="btn btn-warning btn-sm" type="button" onclick="openModal('statOrderModal')">🚨 STAT Order</button>
 <button class="btn btn-primary btn-sm" type="button" onclick="openWalkInDispense()">💊 Dispense</button>
 <button class="btn btn-success btn-sm" type="button" onclick="openModal('grnModal')">📥 GRN / Receive</button>
@@ -80,6 +81,7 @@
                 <button class="tab-btn" type="button" onclick="switchPhTab('grnListPane', this)">📥 GRN Log</button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('poPane', this)">📤 Purchase Orders</button>
                 <button class="tab-btn" type="button" onclick="switchPhTab('marPane', this)">📋 MAR</button>
+                <button class="tab-btn" type="button" onclick="switchPhTab('allBillsPane', this)">📃 All Bills</button>
             </div>
 
             <div id="dispenseQueuePane" class="ph-pane">
@@ -141,7 +143,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="hims-table display table-striped" id="drugInventoryTable">
-                        <thead><tr><th>Drug Name</th><th>Category</th><th>Form</th><th>Batch</th><th>Expiry</th><th>Stock</th><th>Min Level</th><th>MRP ₹</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Drug Name</th><th>Category</th><th>Form</th><th>Batch</th><th>Expiry</th><th>Stock</th><th>Min Level</th><th>MRP ₹</th><th>Sale Price ₹</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody id="drugInventoryBody"></tbody>
                     </table>
                 </div>
@@ -215,7 +217,7 @@
             <div id="poPane" class="ph-pane ph-hidden">
                 <div class="ph-toolbar mb-12">
                     <div class="fw-700 fs-14">Purchase Orders</div>
-                    <button class="btn btn-primary btn-sm" type="button" onclick="openModal('newPOModal')">+ New PO</button>
+                    <button class="btn btn-primary btn-sm" type="button" onclick="window.openNewPOModal()">+ New PO</button>
                 </div>
                 <div class="table-wrap">
                     <table class="hims-table display table-striped" id="purchaseOrdersTable">
@@ -228,6 +230,22 @@
             <div id="marPane" class="ph-pane ph-hidden">
                 <div class="fw-700 fs-14 mb-12">📋 Medication Administration Record — Active IPD Patients</div>
                 <div id="marContent"></div>
+            </div>
+
+            <div id="allBillsPane" class="ph-pane ph-hidden">
+                <div class="ph-toolbar mb-12">
+                    <div class="fw-700 fs-14">📃 All Pharmacy Bills</div>
+                    <div class="d-flex gap-8">
+                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="allBillsSearch" placeholder="Search bill no / patient..."></div>
+                        <button class="btn btn-secondary btn-xs" type="button" onclick="refreshAllBills()">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="hims-table display table-striped" id="allBillsTable">
+                        <thead><tr><th>Bill No</th><th>Date</th><th>Patient</th><th>Items</th><th>Subtotal ₹</th><th>Discount ₹</th><th>Net Total ₹</th><th>Paid ₹</th><th>Due ₹</th><th>Actions</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -245,11 +263,29 @@
                 <input type="hidden" id="dispensePrescriptionId" name="prescription_id">
                 <input type="hidden" id="dispensePatientId" name="patient_id">
 
+                {{-- Prescription Search Bar --}}
+                <div class="ph-toolbar mb-8" id="dispensePrescriptionSearchBar">
+                    <div class="input-group ph-search" style="max-width:400px; position:relative;">
+                        <span class="input-addon">🔍</span>
+                        <input type="text" class="form-control" id="dispensePrescriptionSearch" placeholder="Search Rx No / Patient name..." autocomplete="off">
+                        <div id="dispensePrescriptionSearchResults" class="ph-autocomplete-results" style="display:none"></div>
+                    </div>
+                    <div class="text-muted fs-11">Search a prescription to dispense remaining medicines</div>
+                </div>
+
                 <div class="form-row cols-2">
                     <div class="ph-panel">
                         <div class="d-flex justify-content-between align-center mb-8">
                             <div class="fw-700 fs-13">Patient / Rx</div>
                             <span class="badge badge-gray" id="dispenseModeBadge">Walk-in</span>
+                        </div>
+                        {{-- Walk-in patient search --}}
+                        <div id="dispensePatientSearchWrap" class="mb-8">
+                            <div class="input-group ph-search" style="position:relative">
+                                <span class="input-addon">👤</span>
+                                <input type="text" class="form-control" id="dispensePatientSearch" placeholder="Search patient by name/UHID/phone..." autocomplete="off">
+                                <div id="dispensePatientSearchResults" class="ph-autocomplete-results" style="display:none"></div>
+                            </div>
                         </div>
                         <div id="dispensePatientCard">
                             <div class="patient-chip">
@@ -266,14 +302,10 @@
                     </div>
 
                     <div class="ph-panel">
-                        <div class="form-row cols-2">
-                            <div class="form-group">
-                                <input class="form-control" id="walkInMedicineSearch" list="walkInMedicineOptions" placeholder="Type medicine name...">
-                                <datalist id="walkInMedicineOptions"></datalist>
-                            </div>
-                            <div class="form-group d-flex align-end">
-                                <button class="btn btn-outline-primary btn-sm w-100" type="button" onclick="addWalkInMedicine()">+ Add Medicine</button>
-                            </div>
+                        <div class="form-group" style="position:relative">
+                            <label class="form-label fs-11">Add Medicine</label>
+                            <input class="form-control" id="walkInMedicineSearch" placeholder="Type 2+ chars to search medicine..." autocomplete="off">
+                            <div id="walkInMedicineResults" class="ph-autocomplete-results" style="display:none"></div>
                         </div>
                     </div>
                 </div>
@@ -289,11 +321,11 @@
                                 <th>Medicine</th>
                                 <th>Rx Detail</th>
                                 <th>Prescribed</th>
+                                <th>Days</th>
                                 <th>Available</th>
                                 <th>Batch</th>
                                 <th>Dispense Qty</th>
                                 <th>Rate ₹</th>
-                                <th>Tax%</th>
                                 <th>Total</th>
                                 <th></th>
                             </tr>
@@ -322,20 +354,20 @@
                     <div class="ph-bill-preview">
                         <div class="fw-700 fs-12 mb-8 text-primary">💳 Pharmacy Bill</div>
                         <div class="ph-bill-row"><span>Drugs Total:</span><span class="fw-700" id="dispenseSubtotal">₹0.00</span></div>
-                        <div class="ph-bill-row mt-4"><span>GST / Tax:</span><span id="dispenseTax">₹0.00</span></div>
                         <div class="ph-bill-row mt-4"><span>Discount:</span><input class="form-control ph-grid-input ph-grid-input-price" type="number" min="0" step="0.01" name="discount_amount" id="dispenseDiscount" value="0"></div>
                         <div class="ph-bill-total"><span>Net Payable:</span><span class="fw-700 text-primary" id="dispenseNet">₹0.00</span></div>
                         <div class="ph-bill-row mt-8"><span>Paid:</span><input class="form-control ph-grid-input ph-grid-input-price" type="number" min="0" step="0.01" name="paid_amount" id="dispensePaid" value="0"></div>
                         <div class="ph-bill-row mt-4"><span>Due:</span><span class="fw-700" id="dispenseDue">₹0.00</span></div>
+                        <input type="hidden" id="dispenseTax" value="0">
                     </div>
                 </div>
             </form>
         </div>
         <div class="modal-footer">
-            <label class="form-check me-auto" style="margin-left: 15px;"><input type="checkbox" id="dispenseAutoPrint" checked><span class="form-check-label text-success fw-700">🖨️ Auto Print Bill</span></label>
             <button class="btn btn-secondary" type="button" onclick="closeModal('dispenseModal')">Cancel</button>
             <button class="btn btn-warning" type="button" onclick="holdDispense()">⏸ Hold</button>
-            <button class="btn btn-success" type="button" onclick="confirmDispense()">✅ Dispense & Create Bill</button>
+            <button class="btn btn-success" type="button" onclick="confirmDispense(false)">✅ Dispense & Create Bill</button>
+            <button class="btn btn-primary" type="button" onclick="confirmDispense(true)">🖨️ Dispense & Print</button>
         </div>
     </div>
 </div>
@@ -548,6 +580,23 @@
         <div class="modal-footer">
             <button class="btn btn-secondary" type="button" onclick="closeModal('newPOModal')">Cancel</button>
             <button class="btn btn-primary" type="button" id="submitNewPO">📤 Create Purchase Order</button>
+</div>
+    </div>
+</div>
+
+{{-- ─── View Bill Modal ─── --}}
+<div class="modal-overlay hidden" id="viewBillModal" onclick="if(event.target===this) closeModal('viewBillModal')">
+    <div class="modal modal-md">
+        <div class="modal-header">
+            <div class="modal-title" id="viewBillModalTitle">📃 Bill Details</div>
+            <button class="modal-close" type="button" onclick="closeModal('viewBillModal')">✕</button>
+        </div>
+        <div class="modal-body" id="viewBillModalBody">
+            <div class="text-muted text-center">Loading...</div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" type="button" onclick="closeModal('viewBillModal')">Close</button>
+            <button class="btn btn-primary" type="button" id="viewBillPrintBtn" onclick="printViewedBill()">🖨️ Print Bill</button>
         </div>
     </div>
 </div>
@@ -560,3 +609,4 @@
 window.poMedicines = @json($medicines);
 </script>
 @endpush
+
