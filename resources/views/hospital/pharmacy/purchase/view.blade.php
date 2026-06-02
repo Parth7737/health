@@ -98,7 +98,6 @@
             <tr>
                 <th>#</th>
                 <th>Medicine</th>
-                <th>Unit</th>
                 <th class="text-end">Ordered Qty</th>
                 <th class="text-end">Est. Rate</th>
                 <th class="text-end">Line Total</th>
@@ -109,8 +108,7 @@
                 <tr>
                     <td>{{ $loop->iteration }}</td>
                     <td>{{ $item->medicine?->name ?? '-' }}</td>
-                    <td>{{ $item->medicine?->unit ?? '-' }}</td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_purchased) }}</td>
+                    <td class="text-end">{{ $fmtQty($item->quantity_purchased) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
                     <td class="text-end">{{ number_format((float) $item->unit_purchase_price, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->line_total, 2) }}</td>
                 </tr>

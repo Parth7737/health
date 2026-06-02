@@ -314,7 +314,7 @@
         setCountText('phLowStockItemsCount', counts.low_stock_items);
         setCountText('phDrugItemsCount', counts.drug_items);
         setCountText('phTodayDispensedCount', counts.today_dispensed || 0);
-        var salesText = '₹' + parseFloat(counts.today_sales || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        var salesText = '\u20B9' + parseFloat(counts.today_sales || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         var salesEl = document.getElementById('phTodaySalesAmount');
         if (salesEl) {
             salesEl.textContent = salesText;
@@ -1364,10 +1364,12 @@
                     render: function (data, type, row) {
                         if (type !== 'display') { return data; }
                         var printUrl = row.id ? getGrnPrintUrl(row.id) : '';
-                        var html = '<button class="btn btn-secondary btn-xs grn-view-btn" data-id="' + row.id + '">👁️</button> ';
+                        var html = '<div style="display:flex;gap:4px">';
+                        html += '<button class="btn btn-secondary btn-xs grn-view-btn" data-id="' + row.id + '">👁️</button>';
                         if (printUrl) {
                             html += '<button class="btn btn-secondary btn-xs grn-print-btn" data-url="' + escapeHtml(printUrl) + '">🖨️</button>';
                         }
+                        html += '</div>';
                         return html;
                     }
                 }
@@ -1452,17 +1454,19 @@
                     render: function (data, type, row) {
                         if (type !== 'display') { return data; }
                         var st = String(row.status || 'pending').toLowerCase();
-                        var html = '<button class="btn btn-secondary btn-xs po-view-btn" data-id="' + row.id + '">👁️</button> ';
+                        var html = '<div style="display:flex;gap:4px">';
+                        html += '<button class="btn btn-secondary btn-xs po-view-btn" data-id="' + row.id + '">👁️</button>';
                         if (st === 'pending') {
-                            html += '<button class="btn btn-secondary btn-xs po-approve-btn" data-id="' + row.id + '">✅</button> ';
-                            html += '<button class="btn btn-secondary btn-xs po-reject-btn" data-id="' + row.id + '">❌ </button>';
+                            html += '<button class="btn btn-secondary btn-xs po-approve-btn" data-id="' + row.id + '">✅</button>';
+                            html += '<button class="btn btn-secondary btn-xs po-reject-btn" data-id="' + row.id + '">❌</button>';
                         } else if (st === 'approved' || st === 'partially_received') {
-                            html += '<button class="btn btn-success btn-xs po-create-grn-btn" data-id="' + row.id + '">📥 Create GRN</button> ';
+                            html += '<button class="btn btn-success btn-xs po-create-grn-btn" data-id="' + row.id + '">📥 Create GRN</button>';
                         }
                         var printUrl = row.id ? getPurchasePrintUrl(row.id) : '';
                         if (printUrl && st !== 'pending') {
                             html += '<button class="btn btn-secondary btn-xs po-print-btn" data-url="' + escapeHtml(printUrl) + '">🖨️</button>';
                         }
+                        html += '</div>';
                         return html;
                     }
                 }
@@ -2323,64 +2327,81 @@
             var poId = window.$('#grn_po_select').val();
             if (!poId) { toast('Error', 'Please select an approved PO first.', 'error'); return; }
 
-            clearGrnFormErrors();
+            var doSubmit = function() {
+                clearGrnFormErrors();
+                if (typeof window.loader === 'function') { window.loader(); }
+                var fd = new FormData(document.getElementById('grnForm'));
+                fd.append('_token', getCsrfToken());
 
-            if (typeof window.loader === 'function') { window.loader(); }
-            var fd = new FormData(document.getElementById('grnForm'));
-            fd.append('_token', getCsrfToken());
+                // Normalise month expiry fields to full date
+                document.querySelectorAll('#grnForm .grn-expiry').forEach(function (el) {
+                    if (el.value && el.value.length === 7) {
+                        var parts = el.value.split('-');
+                        var year = parseInt(parts[0], 10);
+                        var month = parseInt(parts[1], 10);
+                        if (!isNaN(year) && !isNaN(month)) {
+                            var lastDay = new Date(year, month, 0).getDate();
+                            fd.set(el.name, el.value + '-' + String(lastDay).padStart(2, '0'));
+                        } else {
+                            fd.set(el.name, el.value);
+                        }
+                    }
+                });
 
-            // Normalise month expiry fields to full date
-            document.querySelectorAll('#grnForm .grn-expiry').forEach(function (el) {
-                if (el.value && el.value.length === 7) {
-                    var parts = el.value.split('-');
-                    var year = parseInt(parts[0], 10);
-                    var month = parseInt(parts[1], 10);
-                    if (!isNaN(year) && !isNaN(month)) {
-                        var lastDay = new Date(year, month, 0).getDate();
-                        fd.set(el.name, el.value + '-' + String(lastDay).padStart(2, '0'));
-                    } else {
-                        fd.set(el.name, el.value);
+                window.$.ajax({
+                    url: storeUrl, type: 'POST', data: fd, contentType: false, processData: false,
+                    success: function (response) {
+                        if (typeof window.loader === 'function') { window.loader('hide'); }
+                        if (response.status) {
+                            toast('GRN Created', response.message + (response.grn_no ? ' (' + response.grn_no + ')' : ''), 'success');
+                            window.closeModal('grnModal');
+                            document.getElementById('grnForm').reset();
+                            window.$('#grnItemBody').html('');
+                            document.getElementById('grnItemsWrap').style.display = 'none';
+                            document.getElementById('grnNoPoAlert').style.display = '';
+                            document.getElementById('grnSubtotal') && (document.getElementById('grnSubtotal').textContent = '₹0.00');
+                            document.getElementById('grnTaxTotal') && (document.getElementById('grnTaxTotal').textContent = '₹0.00');
+                            window.$('#grnTotal').text('₹0.00');
+                            if (grnLogTable) { grnLogTable.ajax.reload(null, false); }
+                            if (poTable) { poTable.ajax.reload(null, false); }
+                            if (inventoryTable) { inventoryTable.ajax.reload(null, false); }
+                            loadDashboardCounts();
+                            loadApprovedPOs();
+                        } else {
+                            toast('Error', response.message || 'Failed to create GRN.', 'error');
+                        }
+                    },
+                    error: function (xhr) {
+                        if (typeof window.loader === 'function') { window.loader('hide'); }
+                        var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Unable to create GRN.';
+                        clearGrnFormErrors();
+                        if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
+                            xhr.responseJSON.errors.forEach(function (error) {
+                                addGrnFieldError(error.code || error.field || error.name || '', error.message || error);
+                            });
+                            msg = 'Validation failed. Please correct the highlighted errors.';
+                        }
+                        toast('Error', msg, 'error');
                     }
-                }
-            });
+                });
+            };
 
-            window.$.ajax({
-                url: storeUrl, type: 'POST', data: fd, contentType: false, processData: false,
-                success: function (response) {
-                    if (typeof window.loader === 'function') { window.loader('hide'); }
-                    if (response.status) {
-                        toast('GRN Created', response.message + (response.grn_no ? ' (' + response.grn_no + ')' : ''), 'success');
-                        window.closeModal('grnModal');
-                        document.getElementById('grnForm').reset();
-                        window.$('#grnItemBody').html('');
-                        document.getElementById('grnItemsWrap').style.display = 'none';
-                        document.getElementById('grnNoPoAlert').style.display = '';
-                        document.getElementById('grnSubtotal') && (document.getElementById('grnSubtotal').textContent = '₹0.00');
-                        document.getElementById('grnTaxTotal') && (document.getElementById('grnTaxTotal').textContent = '₹0.00');
-                        window.$('#grnTotal').text('₹0.00');
-                        if (grnLogTable) { grnLogTable.ajax.reload(null, false); }
-                        if (poTable) { poTable.ajax.reload(null, false); }
-                        if (inventoryTable) { inventoryTable.ajax.reload(null, false); }
-                        loadDashboardCounts();
-                        loadApprovedPOs();
-                    } else {
-                        toast('Error', response.message || 'Failed to create GRN.', 'error');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Submit GRN?',
+                    text: 'Are you sure you want to submit this GRN and inward the stock?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, Submit',
+                    cancelButtonText: 'Cancel'
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        doSubmit();
                     }
-                },
-                error: function (xhr) {
-                    if (typeof window.loader === 'function') { window.loader('hide'); }
-                    var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Unable to create GRN.';
-                    clearGrnFormErrors();
-                    if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
-                        xhr.responseJSON.errors.forEach(function (error) {
-                            addGrnFieldError(error.code || error.field || error.name || '', error.message || error);
-                        });
-                        var markup = formatGrnErrorMessages(xhr.responseJSON.errors);
-                        msg = 'Validation failed. Please correct the highlighted errors.';
-                    }
-                    toast('Error', msg, 'error');
-                }
-            });
+                });
+            } else if (confirm('Are you sure you want to submit this GRN and inward the stock?')) {
+                doSubmit();
+            }
         });
 
         window.$(document).on('click', '.bad-stock-btn', function () {
@@ -2802,26 +2823,34 @@
         var supplierEl = document.getElementById('grn_supplier_display');
         if (supplierEl) supplierEl.value = po.supplier;
 
-        var defaultPackSize = 10;
+        var defaultPackSize = 1;
+        var profitPercent = parseFloat(document.getElementById('grn_profit_percent') ? document.getElementById('grn_profit_percent').value : 30) || 0;
+        var isSaleIsMrp = document.getElementById('grn_sale_is_mrp') ? document.getElementById('grn_sale_is_mrp').checked : false;
 
         body.innerHTML = po.items.map(function (item, idx) {
             var estPrice = item.unit_purchase_price || 0;
-            return '<tr data-remaining="' + item.remaining_qty + '">' +
+            var packPurPrice = estPrice * defaultPackSize;
+            var packSalePrice = packPurPrice * (1 + profitPercent / 100);
+            var packMrp = isSaleIsMrp ? packSalePrice : (packPurPrice * 1.5);
+            var medicineVat = item.vat !== undefined ? item.vat : 18;
+
+            return '<tr data-remaining="' + item.remaining_qty + '" data-est-price="' + estPrice + '">' +
                 '<input type="hidden" name="items[' + idx + '][purchase_item_id]" value="' + item.purchase_item_id + '">' +
+                '<input type="hidden" class="grn-received-packs-hidden" name="items[' + idx + '][quantity_received]" value="' + (item.remaining_qty / defaultPackSize) + '">' +
+                '<input type="hidden" class="grn-free-packs-hidden" name="items[' + idx + '][quantity_free]" value="0">' +
+                '<input type="hidden" class="grn-rejected-packs-hidden" name="items[' + idx + '][quantity_rejected]" value="0">' +
                 '<td class="fw-700 fs-12" style="min-width:120px">' + escapeHtml(item.medicine_name) + '</td>' +
                 '<td class="fw-700 text-primary">' + item.remaining_qty + '</td>' +
                 '<td><input type="number" min="1" step="1" class="form-control ph-grid-input grn-pack-size" name="items[' + idx + '][pack_size]" value="' + defaultPackSize + '" style="width:60px"></td>' +
-                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input grn-received-packs" name="items[' + idx + '][quantity_received]" value="' + (item.remaining_qty / defaultPackSize).toFixed(1) + '" style="width:70px"></td>' +
-                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input grn-free-packs" name="items[' + idx + '][quantity_free]" value="0" style="width:50px"></td>' +
-                '<td><input type="number" min="0" step="0.01" class="form-control ph-grid-input grn-rejected-packs" name="items[' + idx + '][quantity_rejected]" value="0" style="width:50px"></td>' +
+                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input grn-received-qty" value="' + item.remaining_qty + '" style="width:70px"></td>' +
+                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input grn-free-qty" value="0" style="width:50px"></td>' +
+                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input grn-rejected-qty" value="0" style="width:50px"></td>' +
                 '<td><input class="form-control ph-grid-input ph-grid-input-batch" name="items[' + idx + '][batch_no]" placeholder="Batch" required style="width:90px"></td>' +
                 '<td><input type="month" class="form-control ph-grid-input grn-expiry" name="items[' + idx + '][expiry_date]" style="width:115px"></td>' +
-                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-price" name="items[' + idx + '][unit_purchase_price]" value="' + (estPrice * defaultPackSize).toFixed(2) + '" style="width:80px"></td>' +
-                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-sale-price" name="items[' + idx + '][unit_sale_price]" value="' + (estPrice * 1.3 * defaultPackSize).toFixed(2) + '" style="width:80px"></td>' +
-                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-mrp" name="items[' + idx + '][unit_mrp]" value="' + (estPrice * 1.5 * defaultPackSize).toFixed(2) + '" style="width:80px"></td>' +
-                '<td><select class="form-control ph-grid-input grn-pur-tax-type" name="items[' + idx + '][purchase_tax_type]" style="width:80px"><option value="exclusive">Excl</option><option value="inclusive">Incl</option></select></td>' +
-                '<td><select class="form-control ph-grid-input grn-sale-tax-type" name="items[' + idx + '][sale_tax_type]" style="width:80px"><option value="exclusive">Excl</option><option value="inclusive" selected>Incl</option></select></td>' +
-                '<td><input type="number" step="0.01" min="0" max="100" class="form-control ph-grid-input grn-tax" name="items[' + idx + '][tax_percent]" value="18" style="width:60px"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-price" name="items[' + idx + '][unit_purchase_price]" value="' + packPurPrice.toFixed(2) + '" style="width:80px"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-sale-price" name="items[' + idx + '][unit_sale_price]" value="' + packSalePrice.toFixed(2) + '" style="width:80px"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-mrp" name="items[' + idx + '][unit_mrp]" value="' + packMrp.toFixed(2) + '" style="width:80px"></td>' +
+                '<td><input type="number" step="0.01" min="0" max="100" class="form-control ph-grid-input grn-tax" name="items[' + idx + '][tax_percent]" value="' + medicineVat + '" style="width:60px"></td>' +
                 '<td><span class="grn-tax-amt fw-700 text-muted">₹0.00</span></td>' +
                 '<td><span class="grn-line-total fw-700 text-muted">₹0.00</span></td>' +
                 '<td><span class="grn-accepted fw-700 text-success">0</span></td>' +
@@ -2843,27 +2872,29 @@
             var packSize = parseInt($row.find('.grn-pack-size').val(), 10) || 1;
             if (packSize < 1) packSize = 1;
 
-            var maxPacks = remainingUnits / packSize;
+            var recdUnits = parseFloat($row.find('.grn-received-qty').val()) || 0;
+            var freeUnits = parseFloat($row.find('.grn-free-qty').val()) || 0;
+            var rejUnits = parseFloat($row.find('.grn-rejected-qty').val()) || 0;
 
-            var recdPacks = parseFloat($row.find('.grn-received-packs').val()) || 0;
-            var freePacks = parseFloat($row.find('.grn-free-packs').val()) || 0;
-            var rejPacks = parseFloat($row.find('.grn-rejected-packs').val()) || 0;
-
-            if (recdPacks > maxPacks) {
-                recdPacks = maxPacks;
-                $row.find('.grn-received-packs').val(recdPacks.toFixed(2));
+            if (recdUnits > remainingUnits) {
+                recdUnits = remainingUnits;
+                $row.find('.grn-received-qty').val(recdUnits);
             }
-            if (rejPacks > recdPacks) {
-                rejPacks = recdPacks;
-                $row.find('.grn-rejected-packs').val(rejPacks.toFixed(2));
+            if (rejUnits > recdUnits) {
+                rejUnits = recdUnits;
+                $row.find('.grn-rejected-qty').val(rejUnits);
             }
 
-            var acceptedPacks = Math.max(0, recdPacks - rejPacks);
-            var acceptedUnits = Math.round(acceptedPacks * packSize);
+            var acceptedUnits = Math.max(0, recdUnits - rejUnits);
+
+            // Sync hidden inputs for backend submission (expects packs)
+            $row.find('.grn-received-packs-hidden').val((recdUnits / packSize).toFixed(4));
+            $row.find('.grn-free-packs-hidden').val((freeUnits / packSize).toFixed(4));
+            $row.find('.grn-rejected-packs-hidden').val((rejUnits / packSize).toFixed(4));
 
             var packPrice = parseFloat($row.find('.grn-pack-price').val()) || 0;
             var taxPercent = parseFloat($row.find('.grn-tax').val()) || 0;
-            var purTaxType = $row.find('.grn-pur-tax-type').val() || 'exclusive';
+            var purTaxType = 'inclusive'; // Force purchase tax strictly inclusive
 
             var lineSub = 0;
             var lineTax = 0;
@@ -2895,18 +2926,110 @@
             finalTotal += lineTot;
         });
 
+        // Split taxes dynamically in UI based on GST type
+        var gstType = window.$('#grn_gst_type').val() || 'local';
+        var cgstTotal = 0;
+        var sgstTotal = 0;
+        var igstTotal = 0;
+
+        if (gstType === 'interstate') {
+            igstTotal = taxTotal;
+            window.$('#grn_igst_row').show();
+            window.$('#grn_cgst_row').hide();
+            window.$('#grn_sgst_row').hide();
+        } else {
+            cgstTotal = taxTotal / 2;
+            sgstTotal = taxTotal / 2;
+            window.$('#grn_igst_row').hide();
+            window.$('#grn_cgst_row').show();
+            window.$('#grn_sgst_row').show();
+        }
+
         var subtotalEl = document.getElementById('grnSubtotal');
         var taxEl = document.getElementById('grnTaxTotal');
         var totalEl = document.getElementById('grnTotal');
+        var cgstEl = document.getElementById('grnCgstTotal');
+        var sgstEl = document.getElementById('grnSgstTotal');
+        var igstEl = document.getElementById('grnIgstTotal');
+
         if (subtotalEl) subtotalEl.textContent = '₹' + subTotal.toFixed(2);
         if (taxEl) taxEl.textContent = '₹' + taxTotal.toFixed(2);
         if (totalEl) totalEl.textContent = '₹' + finalTotal.toFixed(2);
+        if (cgstEl) cgstEl.textContent = '₹' + cgstTotal.toFixed(2);
+        if (sgstEl) sgstEl.textContent = '₹' + sgstTotal.toFixed(2);
+        if (igstEl) igstEl.textContent = '₹' + igstTotal.toFixed(2);
     }
 
     window.updateGRNTotal = updateGRNAcceptedTotal;
 
     if (typeof window.$ !== 'undefined') {
-        window.$(document).on('input change', '.grn-pack-size, .grn-received-packs, .grn-free-packs, .grn-rejected-packs, .grn-pack-price, .grn-pack-sale-price, .grn-pack-mrp, .grn-pur-tax-type, .grn-sale-tax-type, .grn-tax, #grn_gst_type', updateGRNAcceptedTotal);
+        // Universal inputs change recalculation
+        window.$(document).on('input change', '.grn-pack-size, .grn-received-qty, .grn-free-qty, .grn-rejected-qty, .grn-pack-price, .grn-pack-sale-price, .grn-pack-mrp, .grn-tax, #grn_gst_type', updateGRNAcceptedTotal);
+
+        // Recalculate purchase pack price, sale pack price, and MRP on pack size change (received units stay same)
+        window.$(document).on('change', '.grn-pack-size', function () {
+            var $row = window.$(this).closest('tr');
+            var packSize = parseInt(window.$(this).val(), 10) || 1;
+            if (packSize < 1) packSize = 1;
+
+            var estPrice = parseFloat($row.attr('data-est-price')) || 0;
+            var packPurPrice = estPrice * packSize;
+            $row.find('.grn-pack-price').val(packPurPrice.toFixed(2));
+
+            var profitPercent = parseFloat(window.$('#grn_profit_percent').val()) || 0;
+            var isSaleIsMrp = window.$('#grn_sale_is_mrp').is(':checked');
+
+            var packSale = packPurPrice * (1 + profitPercent / 100);
+            $row.find('.grn-pack-sale-price').val(packSale.toFixed(2));
+
+            if (isSaleIsMrp) {
+                $row.find('.grn-pack-mrp').val(packSale.toFixed(2));
+            } else {
+                $row.find('.grn-pack-mrp').val((packPurPrice * 1.5).toFixed(2));
+            }
+
+            updateGRNAcceptedTotal();
+        });
+
+        // Recalculate sale price and MRP on profit % or purchase price change
+        window.$(document).on('input change', '.grn-pack-price, #grn_profit_percent', function () {
+            var profitPercent = parseFloat(window.$('#grn_profit_percent').val()) || 0;
+            var isSaleIsMrp = window.$('#grn_sale_is_mrp').is(':checked');
+
+            window.$('#grnItemBody tr').each(function () {
+                var $row = window.$(this);
+                var packPrice = parseFloat($row.find('.grn-pack-price').val()) || 0;
+                var packSale = packPrice * (1 + profitPercent / 100);
+
+                $row.find('.grn-pack-sale-price').val(packSale.toFixed(2));
+                if (isSaleIsMrp) {
+                    $row.find('.grn-pack-mrp').val(packSale.toFixed(2));
+                }
+            });
+            updateGRNAcceptedTotal();
+        });
+
+        // Toggle MRP mapping
+        window.$(document).on('change', '#grn_sale_is_mrp', function () {
+            var isSaleIsMrp = window.$(this).is(':checked');
+            if (isSaleIsMrp) {
+                window.$('#grnItemBody tr').each(function () {
+                    var $row = window.$(this);
+                    var packSale = $row.find('.grn-pack-sale-price').val();
+                    $row.find('.grn-pack-mrp').val(packSale);
+                });
+            }
+            updateGRNAcceptedTotal();
+        });
+
+        // Manual sale price change copies to MRP if checked
+        window.$(document).on('input', '.grn-pack-sale-price', function () {
+            var isSaleIsMrp = window.$('#grn_sale_is_mrp').is(':checked');
+            if (isSaleIsMrp) {
+                var $row = window.$(this).closest('tr');
+                $row.find('.grn-pack-mrp').val(window.$(this).val());
+            }
+        });
     }
 
     window.loadRxPreview = function () {

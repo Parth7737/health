@@ -97,17 +97,17 @@
             <tr>
                 <th>#</th>
                 <th>Medicine</th>
-                <th>Unit</th>
                 <th>Batch</th>
                 <th>Expiry</th>
-                <th class="text-end">Ordered</th>
-                <th class="text-end">Received</th>
-                <th class="text-end">Free</th>
-                <th class="text-end">Rejected</th>
-                <th class="text-end">Accepted</th>
-                <th class="text-end">Pur. Price</th>
-                <th class="text-end">Sale Price</th>
-                <th class="text-end">MRP</th>
+                <th class="text-end">Pack Size</th>
+                <th class="text-end">Ordered Qty</th>
+                <th class="text-end">Received Qty</th>
+                <th class="text-end">Free Qty</th>
+                <th class="text-end">Rejected Qty</th>
+                <th class="text-end">Accepted Qty</th>
+                <th class="text-end">Pack Pur. Price</th>
+                <th class="text-end">Pack Sale Price</th>
+                <th class="text-end">Pack MRP</th>
                 <th class="text-end">Tax %</th>
                 <th class="text-end">Tax Amt.</th>
                 <th class="text-end">Line Total</th>
@@ -119,17 +119,17 @@
                 <tr>
                     <td>{{ $loop->iteration }}</td>
                     <td>{{ $item->medicine?->name ?? '-' }}</td>
-                    <td>{{ $item->medicine?->unit ?? '-' }}</td>
                     <td>{{ $item->batch_no ?: '-' }}</td>
                     <td>{{ optional($item->expiry_date)->format('M-Y') ?? '-' }}</td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_ordered) }}</td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_received) }}</td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_free) }}</td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_rejected) }}</td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_accepted) }}</td>
-                    <td class="text-end">{{ number_format((float) $item->unit_purchase_price, 2) }}</td>
-                    <td class="text-end">{{ number_format((float) $item->unit_sale_price, 2) }}</td>
-                    <td class="text-end">{{ number_format((float) $item->unit_mrp, 2) }}</td>
+                    <td class="text-end">{{ $item->pack_size }}</td>
+                    <td class="text-end">{{ $fmtQty($item->quantity_ordered) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
+                    <td class="text-end">{{ $fmtQty($item->quantity_received) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
+                    <td class="text-end">{{ $fmtQty($item->quantity_free) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
+                    <td class="text-end">{{ $fmtQty($item->quantity_rejected) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
+                    <td class="text-end">{{ $fmtQty($item->quantity_accepted) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
+                    <td class="text-end">{{ number_format((float) $item->pack_purchase_price, 2) }}</td>
+                    <td class="text-end">{{ number_format((float) $item->pack_sale_price, 2) }}</td>
+                    <td class="text-end">{{ number_format((float) $item->pack_mrp, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->tax_percent, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->tax_amount, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->line_total, 2) }}</td>
@@ -152,6 +152,21 @@
                     <td>Taxable Total</td>
                     <td class="text-end">{{ number_format($grn->taxable_amount, 2) }}</td>
                 </tr>
+                @if($grn->gst_type === 'interstate')
+                    <tr>
+                        <td>IGST</td>
+                        <td class="text-end">{{ number_format($grn->total_igst, 2) }}</td>
+                    </tr>
+                @else
+                    <tr>
+                        <td>CGST</td>
+                        <td class="text-end">{{ number_format($grn->total_cgst, 2) }}</td>
+                    </tr>
+                    <tr>
+                        <td>SGST</td>
+                        <td class="text-end">{{ number_format($grn->total_sgst, 2) }}</td>
+                    </tr>
+                @endif
                 <tr>
                     <td>Total Tax</td>
                     <td class="text-end">{{ number_format($grn->total_tax, 2) }}</td>

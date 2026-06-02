@@ -67,7 +67,10 @@ class PharmacyGrnController extends BaseHospitalController
             'items.medicine:id,name,medicine_unit_id',
         ]);
 
-        return view('hospital.pharmacy.grn.print', compact('grn'));
+        $hospital = \App\Models\Hospital::query()->find($this->hospital_id);
+        $printTemplate = \App\Models\HeaderFooter::query()->where('type', 'pharmacy_bill')->first();
+
+        return view('hospital.pharmacy.grn.print', compact('grn', 'hospital', 'printTemplate'));
     }
 
     /**
@@ -75,7 +78,7 @@ class PharmacyGrnController extends BaseHospitalController
      */
     public function approvedPOs(Request $request)
     {
-        $pos = PharmacyPurchaseBill::with(['items.medicine:id,name,medicine_unit_id', 'supplier:id,name'])
+        $pos = PharmacyPurchaseBill::with(['items.medicine:id,name,medicine_unit_id,vat', 'supplier:id,name'])
             ->whereIn('status', ['approved', 'partially_received'])
             ->latest('id')
             ->get()
@@ -95,6 +98,7 @@ class PharmacyGrnController extends BaseHospitalController
                             'already_received'    => (float) $item->quantity_received,
                             'remaining_qty'       => $remaining,
                             'unit_purchase_price' => (float) $item->unit_purchase_price,
+                            'vat'                 => (float) ($item->medicine?->vat ?? 0),
                         ];
                     })->filter(fn ($i) => $i['remaining_qty'] > 0)->values(),
                 ];
@@ -117,6 +121,7 @@ class PharmacyGrnController extends BaseHospitalController
             'vehicle_no'                  => 'nullable|string|max:100',
             'temperature_status'          => 'nullable|string|max:100',
             'notes'                       => 'nullable|string',
+            'gst_type'                    => 'required|in:local,interstate',
             'items'                       => 'required|array|min:1',
             'items.*.purchase_item_id'    => 'required|integer',
             'items.*.batch_no'            => 'required|string|max:100',
@@ -145,6 +150,7 @@ class PharmacyGrnController extends BaseHospitalController
                 'temperature_status' => $request->temperature_status,
                 'notes'            => $request->notes,
                 'items'            => $request->items,
+                'gst_type'         => $request->gst_type,
             ]);
         } catch (Throwable $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()], 422);

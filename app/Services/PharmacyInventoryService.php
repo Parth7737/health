@@ -198,8 +198,8 @@ class PharmacyInventoryService
                 $packMrp           = (float) Arr::get($grnItem, 'unit_mrp', $packSalePrice); // represents pack MRP
                 $taxPercent        = (float) Arr::get($grnItem, 'tax_percent', 0);
 
-                $purchaseTaxType = Arr::get($grnItem, 'purchase_tax_type', 'exclusive');
-                $saleTaxType     = Arr::get($grnItem, 'sale_tax_type', 'exclusive');
+                $purchaseTaxType = Arr::get($grnItem, 'purchase_tax_type', 'inclusive');
+                $saleTaxType     = Arr::get($grnItem, 'sale_tax_type', 'inclusive');
 
                 // Compute Unit Purchase price and taxable amount
                 if ($purchaseTaxType === 'inclusive') {

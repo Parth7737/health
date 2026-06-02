@@ -396,6 +396,17 @@
                         <input class="form-control" name="notes" placeholder="Optional remarks">
                     </div>
                 </div>
+                <div class="form-row cols-3">
+                    <div class="form-group">
+                        <label class="form-label">Default Profit %</label>
+                        <input type="number" class="form-control" id="grn_profit_percent" value="30" min="0" placeholder="e.g. 30">
+                    </div>
+                    <div class="form-group d-flex align-items-center" style="padding-top: 25px;">
+                        <label class="form-check" style="margin-left: 0;"><input type="checkbox" id="grn_sale_is_mrp" checked><span class="form-check-label text-success fw-700">Is Sale Price MRP?</span></label>
+                    </div>
+                    <div class="form-group">
+                    </div>
+                </div>
 
                 <div class="ph-toolbar mb-8 mt-12">
                     <div class="fw-700 fs-13">Receive Items — Inspect & Enter Details</div>
@@ -410,30 +421,52 @@
                                 <th>Drug Name</th>
                                 <th>Rem. (Units)</th>
                                 <th>Pack Size <span class="req">*</span></th>
-                                <th>Recd. Packs <span class="req">*</span></th>
-                                <th>Free Packs</th>
-                                <th>Rej. Packs</th>
+                                <th>Recd. Qty (Units) <span class="req">*</span></th>
+                                <th>Free Qty (Units)</th>
+                                <th>Rej. Qty (Units)</th>
                                 <th>Batch No. <span class="req">*</span></th>
                                 <th>Expiry</th>
                                 <th>Pack Pur. Rate ₹ <span class="req">*</span></th>
                                 <th>Pack Sale Rate ₹</th>
                                 <th>Pack MRP ₹</th>
-                                <th>Pur. Tax</th>
-                                <th>Sale Tax</th>
                                 <th>GST %</th>
                                 <th>GST Amt.</th>
                                 <th>Line Total</th>
-                                <th>Accd. (Units)</th>
+                                <th>Accd. Qty (Units)</th>
                                 <th>Reason</th>
                             </tr>
                         </thead>
                         <tbody id="grnItemBody"></tbody>
                     </table>
                 </div>
-                <div class="ph-total-wrap">
-                    <span class="fw-700 fs-14">Subtotal: <span id="grnSubtotal" class="text-primary">₹0.00</span></span>
-                    <span class="fw-700 fs-14 ms-4">Tax: <span id="grnTaxTotal" class="text-primary">₹0.00</span></span>
-                    <span class="fw-700 fs-14 ms-4">Final Total: <span id="grnTotal" class="text-primary">₹0.00</span></span>
+                <div class="d-flex justify-content-end mt-3">
+                    <div class="ph-bill-preview" style="width: 320px; background: #fafafa; border: 1.5px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-right: 15px;">
+                        <div class="fw-700 fs-13 mb-2 text-success" style="border-bottom: 1.5px solid #e0e0e0; padding-bottom: 4px;">📥 Invoice Summary</div>
+                        <div class="ph-bill-row d-flex justify-content-between fs-12 mb-1">
+                            <span>Taxable Value (Subtotal):</span>
+                            <span class="fw-700" id="grnSubtotal">₹0.00</span>
+                        </div>
+                        <div class="ph-bill-row d-flex justify-content-between fs-12 mb-1" id="grn_cgst_row">
+                            <span>CGST:</span>
+                            <span class="fw-700" id="grnCgstTotal">₹0.00</span>
+                        </div>
+                        <div class="ph-bill-row d-flex justify-content-between fs-12 mb-1" id="grn_sgst_row">
+                            <span>SGST:</span>
+                            <span class="fw-700" id="grnSgstTotal">₹0.00</span>
+                        </div>
+                        <div class="ph-bill-row d-flex justify-content-between fs-12 mb-1" id="grn_igst_row" style="display:none;">
+                            <span>IGST:</span>
+                            <span class="fw-700" id="grnIgstTotal">₹0.00</span>
+                        </div>
+                        <div class="ph-bill-row d-flex justify-content-between fs-12 mb-1" style="border-bottom: 1.5px dashed #ccc; padding-bottom: 6px;">
+                            <span>Total GST / Tax:</span>
+                            <span class="fw-700" id="grnTaxTotal">₹0.00</span>
+                        </div>
+                        <div class="ph-bill-total d-flex justify-content-between fs-14 fw-700 text-success mt-2">
+                            <span>Gross Total (Payable):</span>
+                            <span id="grnTotal">₹0.00</span>
+                        </div>
+                    </div>
                 </div>
             </form>
         </div>

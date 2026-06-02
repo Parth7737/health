@@ -397,6 +397,7 @@ class PharmacySaleController extends BaseHospitalController
             'status' => true,
             'message' => 'Sale bill created successfully.',
             'bill_no' => $bill->bill_no,
+            'print_url' => route('hospital.pharmacy.sale.print', ['bill' => $bill->id]),
         ]);
     }
 
