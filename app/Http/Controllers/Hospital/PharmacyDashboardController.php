@@ -142,6 +142,32 @@ class PharmacyDashboardController extends BaseHospitalController
             ->whereDate('bill_date', $today)
             ->count();
 
+        $yesterday = Carbon::yesterday()->toDateString();
+
+        $yesterdaySales = PharmacySaleBill::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereDate('bill_date', $yesterday)
+            ->sum('net_total');
+
+        $yesterdayDispensed = PharmacySaleBill::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->whereDate('bill_date', $yesterday)
+            ->count();
+
+        $dispensedChange = 0.0;
+        if ($yesterdayDispensed > 0) {
+            $dispensedChange = (($todayDispensed - $yesterdayDispensed) / $yesterdayDispensed) * 100;
+        } elseif ($todayDispensed > 0) {
+            $dispensedChange = 100.0;
+        }
+
+        $salesChange = 0.0;
+        if ($yesterdaySales > 0) {
+            $salesChange = (($todaySales - $yesterdaySales) / $yesterdaySales) * 100;
+        } elseif ($todaySales > 0) {
+            $salesChange = 100.0;
+        }
+
         return response()->json([
             'queue_pending' => (int) ($pendingOpdCount + $pendingIpdCount),
             'stat_orders' => (int) $statOrdersCount,
@@ -150,6 +176,8 @@ class PharmacyDashboardController extends BaseHospitalController
             'drug_items' => (int) $drugItemsCount,
             'today_dispensed' => (int) $todayDispensed,
             'today_sales' => (float) $todaySales,
+            'dispensed_change' => round($dispensedChange, 1),
+            'sales_change' => round($salesChange, 1),
         ]);
     }
 
@@ -273,6 +301,8 @@ class PharmacyDashboardController extends BaseHospitalController
             ]);
 
             return [
+                'prescription_id' => $row->prescription_id,
+                'source_type' => 'ipd',
                 'rx' => $row->rx_no,
                 'patient' => trim($row->patient_name . ($locationParts ? ' - ' . implode(' ', $locationParts) : '')),
                 'drug' => $row->drugs,
@@ -642,12 +672,29 @@ class PharmacyDashboardController extends BaseHospitalController
      */
     public function loadAllBills(Request $request)
     {
-        $data = PharmacySaleBill::query()
+        $query = PharmacySaleBill::query()
             ->with('patient:id,name,patient_id')
-            ->withCount('items')
-            ->latest('id');
+            ->withCount('items');
 
-        return DataTables::of($data)
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('bill_date', [$request->input('start_date'), $request->input('end_date')]);
+        }
+
+        $query->latest('id');
+
+        return DataTables::of($query)
+            ->filter(function ($q) use ($request) {
+                $search = $request->input('search.value');
+                if (!empty($search)) {
+                    $q->where(function ($sub) use ($search) {
+                        $sub->where('bill_no', 'like', '%' . $search . '%')
+                            ->orWhereHas('patient', function ($pq) use ($search) {
+                                $pq->where('name', 'like', '%' . $search . '%')
+                                  ->orWhere('patient_id', 'like', '%' . $search . '%');
+                            });
+                    });
+                }
+            })
             ->addColumn('patient_name', fn ($row) => $row->patient?->name ?? 'Walk-in')
             ->addColumn('patient_uhid', fn ($row) => $row->patient?->patient_id ?? '-')
             ->editColumn('bill_date', fn ($row) => optional($row->bill_date)->format('d-m-Y'))

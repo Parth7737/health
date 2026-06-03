@@ -333,6 +333,31 @@
         }
     }
 
+    function updateTrendEl(id, changeValue) {
+        var el = document.getElementById(id);
+        if (!el) {
+            return;
+        }
+
+        el.classList.remove('up', 'down', 'neutral');
+
+        var val = parseFloat(changeValue);
+        if (isNaN(val)) {
+            val = 0;
+        }
+
+        if (val > 0) {
+            el.classList.add('up');
+            el.innerHTML = '↑ ' + val.toFixed(1) + '% vs yesterday';
+        } else if (val < 0) {
+            el.classList.add('down');
+            el.innerHTML = '↓ ' + Math.abs(val).toFixed(1) + '% vs yesterday';
+        } else {
+            el.classList.add('neutral');
+            el.innerHTML = '0% vs yesterday';
+        }
+    }
+
     function applyDashboardCounts(counts) {
         counts = counts || {};
         setCountText('phQueuePendingCount', counts.queue_pending);
@@ -349,6 +374,8 @@
         if (salesEl) {
             salesEl.textContent = salesText;
         }
+        updateTrendEl('phTodayDispensedTrend', counts.dispensed_change);
+        updateTrendEl('phTodaySalesTrend', counts.sales_change);
     }
 
     function loadDashboardCounts() {
@@ -375,6 +402,12 @@
             .map(function (s) {
                 var elapsed = parseInt(String(s.elapsed || '0'), 10) || 0;
                 var elapsedText = s.elapsed || (elapsed + ' min');
+                var clickAction = '';
+                if (s.prescription_id && s.source_type) {
+                    clickAction = 'openPrescriptionDispense(\'' + escapeJs(s.source_type) + '\', ' + parseInt(s.prescription_id, 10) + ')';
+                } else {
+                    clickAction = 'dispenseSTAT(this, \'' + escapeJs(s.rx || s.rx_no || '') + '\')';
+                }
                 return '' +
                     '<div style="background:#fff5f5;border:1.5px solid rgba(198,40,40,.2);border-radius:10px;padding:14px;margin-bottom:10px">' +
                     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">' +
@@ -384,7 +417,7 @@
                     '<div class="fs-12 text-muted"><b>Ordered by:</b> ' + escapeHtml(s.doctor || s.ordered_by || '-') + ' | <b>Time:</b> ' + escapeHtml(s.time || '-') + '</div></div>' +
                     '<div style="text-align:right;flex-shrink:0"><div style="font-size:20px;font-weight:900;color:' + (elapsed > 15 ? 'var(--danger)' : 'var(--warning)') + '">' + escapeHtml(elapsedText) + '</div>' +
                     '<div class="fs-10 text-muted">elapsed</div>' +
-                    '<button class="btn btn-danger btn-xs mt-8" onclick="dispenseSTAT(this, \'' + (escapeHtml(s.rx || s.rx_no || '')) + '\')">🚨 Dispense NOW</button></div></div></div>';
+                    '<button class="btn btn-danger btn-xs mt-8" onclick="' + clickAction + '">🚨 Dispense NOW</button></div></div></div>';
             })
             .join('');
     }
@@ -3038,6 +3071,40 @@
         var finalUrl = exportUrl + (params.length ? ('?' + params.join('&')) : '');
         window.location.href = finalUrl;
     };
+    window.scrollPharmacyTabs = function (direction) {
+        var tabsBar = document.getElementById('pharmacyTabsBar');
+        if (!tabsBar) return;
+        var scrollAmount = 200;
+        if (direction === 'left') {
+            tabsBar.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+        } else {
+            tabsBar.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        }
+    };
+
+    function updateScrollButtons() {
+        var tabsBar = document.getElementById('pharmacyTabsBar');
+        var leftBtn = document.querySelector('.tabs-scroll-btn.scroll-left');
+        var rightBtn = document.querySelector('.tabs-scroll-btn.scroll-right');
+        if (!tabsBar) return;
+
+        if (leftBtn) {
+            if (tabsBar.scrollLeft > 5) {
+                leftBtn.classList.add('visible');
+            } else {
+                leftBtn.classList.remove('visible');
+            }
+        }
+
+        if (rightBtn) {
+            var maxScroll = tabsBar.scrollWidth - tabsBar.clientWidth;
+            if (tabsBar.scrollLeft < maxScroll - 5) {
+                rightBtn.classList.add('visible');
+            } else {
+                rightBtn.classList.remove('visible');
+            }
+        }
+    }
 
     window.switchPhTab = function (paneId, btn) {
         document.querySelectorAll('.tab-btn').forEach(function (b) {
@@ -3045,6 +3112,9 @@
         });
         if (btn) {
             btn.classList.add('active');
+            if (typeof btn.scrollIntoView === 'function') {
+                btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            }
         }
 
         [
@@ -3499,6 +3569,22 @@
                 type: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': getCsrfToken() || ''
+                },
+                data: function (d) {
+                    var searchEl = document.getElementById('allBillsSearch');
+                    var dateRangeEl = document.getElementById('allBillsDateRange');
+                    d.search.value = searchEl ? String(searchEl.value || '').trim() : '';
+
+                    if (dateRangeEl && dateRangeEl.value) {
+                        var dates = dateRangeEl.value.split(' to ');
+                        if (dates.length === 2) {
+                            d.start_date = dates[0].trim();
+                            d.end_date = dates[1].trim();
+                        } else if (dates.length === 1 && dates[0]) {
+                            d.start_date = dates[0].trim();
+                            d.end_date = dates[0].trim();
+                        }
+                    }
                 }
             },
             columns: [
@@ -3518,8 +3604,8 @@
                     render: function (data) {
                         var printUrl = getBillPrintUrl(data);
                         return '<div class="btn-group">' +
-                            '<button class="btn btn-outline-primary btn-xs" onclick="window.viewPharmacyBill(' + data + ')">👁️ View</button>' +
-                            '<button class="btn btn-outline-secondary btn-xs ms-4" onclick="window.open(\'' + printUrl + '\', \'_blank\')">🖨️ Print</button>' +
+                            '<button class="btn btn-secondary btn-xs" onclick="window.viewPharmacyBill(' + data + ')">👁️ View</button>' +
+                            '<button class="btn btn-secondary btn-xs ms-2" onclick="window.open(\'' + printUrl + '\', \'_blank\')">🖨️ Print</button>' +
                             '</div>';
                     }
                 }
@@ -3527,6 +3613,48 @@
             order: [[0, 'desc']],
             pageLength: 10
         });
+
+        // Debounced search text input
+        var debounceTimer = null;
+        var searchBox = document.getElementById('allBillsSearch');
+        if (searchBox) {
+            searchBox.addEventListener('input', function () {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function () {
+                    if (allBillsTable) {
+                        allBillsTable.ajax.reload();
+                    }
+                }, 300);
+            });
+        }
+
+        // Date range Flatpickr initialization
+        var dateInput = document.getElementById('allBillsDateRange');
+        var clearBtn = document.getElementById('clearAllBillsDate');
+        if (dateInput && typeof window.flatpickr === 'function') {
+            var fp = window.flatpickr(dateInput, {
+                mode: 'range',
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd-M-Y',
+                onChange: function (selectedDates, dateStr, instance) {
+                    if (selectedDates.length === 2) {
+                        if (clearBtn) clearBtn.style.display = 'block';
+                        if (allBillsTable) allBillsTable.ajax.reload();
+                    } else if (selectedDates.length === 0) {
+                        if (clearBtn) clearBtn.style.display = 'none';
+                        if (allBillsTable) allBillsTable.ajax.reload();
+                    }
+                }
+            });
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function () {
+                    fp.clear();
+                    clearBtn.style.display = 'none';
+                    if (allBillsTable) allBillsTable.ajax.reload();
+                });
+            }
+        }
     }
 
     var currentlyViewingBillPrintUrl = '';
@@ -3623,5 +3751,13 @@
         loadDispenseQueue();
         loadRxValidation();
         loadMARContent();
+
+        // Tab scrolling arrows update and setup
+        var tabsBar = document.getElementById('pharmacyTabsBar');
+        if (tabsBar) {
+            tabsBar.addEventListener('scroll', updateScrollButtons);
+            window.addEventListener('resize', updateScrollButtons);
+            setTimeout(updateScrollButtons, 300);
+        }
     });
 })();

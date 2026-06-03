@@ -86,7 +86,7 @@
         </li>
 
         <li class="sidebar-list">
-            <a class="sidebar-link sidebar-title {{ request()->is('hospital/pharmacy/*') ? 'active' : '' }}" href="{{ route('hospital.pharmacy.index') }}">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.pharmacy.*') ? 'active' : '' }}" href="{{ route('hospital.pharmacy.index') }}">
                 <span class="nav-icon">💊</span>
                 <span class="nav-label">Pharmacy</span>
             </a>

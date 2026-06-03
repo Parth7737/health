@@ -208,3 +208,80 @@
   color: #777;
   margin-top: 2px;
 }
+
+/* Tabs scroll buttons and container styles */
+.tabs-bar-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.tabs-bar-wrapper .tabs-bar {
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+}
+
+.tabs-bar-wrapper .tabs-bar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+.tabs-scroll-btn {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border-light, #e0e0e0);
+  color: var(--text-sec, #555);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  padding-bottom: 2px;
+}
+
+.tabs-scroll-btn:hover {
+  background: var(--primary-light, #e3f2fd);
+  color: var(--primary, #0d47a1);
+  border-color: var(--primary, #0d47a1);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.tabs-scroll-btn.scroll-left {
+  left: 6px;
+}
+
+.tabs-scroll-btn.scroll-right {
+  right: 6px;
+}
+
+.tabs-scroll-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Date range clear button */
+.btn-clear-date {
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.btn-clear-date:hover {
+  color: var(--danger, #d32f2f) !important;
+  transform: translateY(-50%) scale(1.15) !important;
+}
+
+.all-bills-date-input {
+  padding-right: 30px !important;
+}

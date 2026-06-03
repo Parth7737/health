@@ -32,7 +32,7 @@
             <div class="stat-info">
                 <div class="stat-value" id="phTodayDispensedCount">0</div>
                 <div class="stat-label">Dispensed Today</div>
-                <div class="stat-change up">↑ 15% vs yesterday</div>
+                <div class="stat-change neutral" id="phTodayDispensedTrend">0% vs yesterday</div>
             </div>
         </div>
         <div class="stat-card stat-orange">
@@ -56,7 +56,7 @@
             <div class="stat-info">
                 <div class="stat-value" id="phTodaySalesAmount">₹0.00</div>
                 <div class="stat-label">Today Sales</div>
-                <div class="stat-change up">↑ Good</div>
+                <div class="stat-change neutral" id="phTodaySalesTrend">0% vs yesterday</div>
             </div>
         </div>
         <div class="stat-card stat-teal">
@@ -71,17 +71,21 @@
 
     <div class="card">
         <div class="card-body p-0">
-            <div class="tabs-bar pharmacy-tabs-bar">
-                <button class="tab-btn active" type="button" onclick="switchPhTab('dispenseQueuePane', this)">💊 Dispense Queue <span class="tab-count" id="phQueuePendingTabCount">0</span></button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('statPane', this)">🚨 STAT Orders <span class="tab-count" id="phStatOrdersTabCount">0</span></button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('rxValidatePane', this)">✅ Rx Validation</button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('inventoryPane', this)">📦 Drug Inventory</button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('quarantinePane', this)">📦 Quarantine Inventory</button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('expiryPane', this)">⚠️ Expiry Alerts <span class="tab-count tab-count-danger" id="phExpiryAlertsTabCount">0</span></button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('grnListPane', this)">📥 GRN Log</button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('poPane', this)">📤 Purchase Orders</button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('marPane', this)">📋 MAR</button>
-                <button class="tab-btn" type="button" onclick="switchPhTab('allBillsPane', this)">📃 All Bills</button>
+            <div class="tabs-bar-wrapper">
+                <button class="tabs-scroll-btn scroll-left" type="button" onclick="scrollPharmacyTabs('left')">&lsaquo;</button>
+                <div class="tabs-bar pharmacy-tabs-bar" id="pharmacyTabsBar">
+                    <button class="tab-btn active" type="button" onclick="switchPhTab('dispenseQueuePane', this)">💊 Dispense Queue <span class="tab-count" id="phQueuePendingTabCount">0</span></button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('statPane', this)">🚨 STAT Orders <span class="tab-count" id="phStatOrdersTabCount">0</span></button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('allBillsPane', this)">📃 All Bills</button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('rxValidatePane', this)">✅ Rx Validation</button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('inventoryPane', this)">📦 Drug Inventory</button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('quarantinePane', this)">📦 Quarantine Inventory</button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('expiryPane', this)">⚠️ Expiry Alerts <span class="tab-count tab-count-danger" id="phExpiryAlertsTabCount">0</span></button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('grnListPane', this)">📥 GRN Log</button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('poPane', this)">📤 Purchase Orders</button>
+                    <button class="tab-btn" type="button" onclick="switchPhTab('marPane', this)">📋 MAR</button>
+                </div>
+                <button class="tabs-scroll-btn scroll-right" type="button" onclick="scrollPharmacyTabs('right')">&rsaquo;</button>
             </div>
 
             <div id="dispenseQueuePane" class="ph-pane">
@@ -235,8 +239,13 @@
             <div id="allBillsPane" class="ph-pane ph-hidden">
                 <div class="ph-toolbar mb-12">
                     <div class="fw-700 fs-14">📃 All Pharmacy Bills</div>
-                    <div class="d-flex gap-8">
+                    <div class="d-flex gap-8 align-center">
                         <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="allBillsSearch" placeholder="Search bill no / patient..."></div>
+                        <div class="input-group" style="width: 270px; position: relative;">
+                            <span class="input-addon">📅</span>
+                            <input type="text" class="form-control all-bills-date-input" id="allBillsDateRange" placeholder="Select Date Range" readonly>
+                            <button type="button" class="btn-clear-date" id="clearAllBillsDate" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 14px; cursor: pointer; color: var(--text-light); display: none; z-index: 5;">✕</button>
+                        </div>
                         <button class="btn btn-secondary btn-xs" type="button" onclick="refreshAllBills()">🔄 Refresh</button>
                     </div>
                 </div>
