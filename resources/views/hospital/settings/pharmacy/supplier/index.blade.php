@@ -25,6 +25,7 @@
                                 <th>Contact Person</th>
                                 <th>Phone</th>
                                 <th>Email</th>
+                                <th>State</th>
                                 <th>GST No</th>
                                 <th>Action</th>
                             </tr>

@@ -12,6 +12,7 @@ use App\Models\Patient;
 use App\Models\PharmacySaleBill;
 use App\Models\PharmacySupplier;
 use App\Models\PharmacyStockBatch;
+use App\Models\Hospital;
 use App\Services\PharmacyInventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -72,6 +73,7 @@ class PharmacyDashboardController extends BaseHospitalController
         $medicineCategories = MedicineCategory::query()->select('id', 'name')->orderBy('name')->get();
         $medicines = Medicine::query()->select('id', 'name', 'medicine_unit_id')->orderBy('name')->get();
         $suppliers = PharmacySupplier::query()->select('id', 'name', 'phone')->orderBy('name')->get();
+        $hospitalStateId = Hospital::where('id', $this->hospital_id)->first()?->state_id;
 
         return view('hospital.pharmacy.dashboard', [
             'pathurl' => 'pharmacy-dashboard',
@@ -79,6 +81,7 @@ class PharmacyDashboardController extends BaseHospitalController
             'medicineCategories' => $medicineCategories,
             'medicines' => $medicines,
             'suppliers' => $suppliers,
+            'hospitalStateId' => $hospitalStateId,
         ]);
     }
 

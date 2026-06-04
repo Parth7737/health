@@ -36,7 +36,7 @@ class PharmacySupplierController extends BaseHospitalController
 
     public function loaddata(Request $request)
     {
-        $data = PharmacySupplier::query()->latest('id');
+        $data = PharmacySupplier::query()->latest('id')->with('state:id,name');
 
         return DataTables::of($data)
             ->addColumn('actions', function ($row) {
@@ -50,8 +50,9 @@ class PharmacySupplierController extends BaseHospitalController
     {
         $id   = $request->id;
         $data = $id ? PharmacySupplier::where('id', $id)->firstOrFail() : null;
+        $states = \App\Models\HospitalState::where('country_id', 101)->get();
 
-        return view('hospital.settings.pharmacy.supplier.form', compact('data', 'id'));
+        return view('hospital.settings.pharmacy.supplier.form', compact('data', 'id', 'states'));
     }
 
     public function store(Request $request)
@@ -64,6 +65,7 @@ class PharmacySupplierController extends BaseHospitalController
             'address'        => 'nullable|string',
             'gstin'          => 'nullable|string|max:20',
             'notes'          => 'nullable|string',
+            'state_id'       => 'nullable|integer|exists:hospital_states,id',
         ]);
 
         if ($validator->fails()) {
@@ -81,6 +83,7 @@ class PharmacySupplierController extends BaseHospitalController
                 'address'        => $request->address,
                 'gstin'          => $request->gstin,
                 'notes'          => $request->notes,
+                'state_id'       => $request->state_id,
             ]
         );
 

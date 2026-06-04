@@ -26,6 +26,15 @@
                 <label class="form-label">GST No</label>
                 <input type="text" class="form-control" name="gstin" value="{{ $data?->gstin }}" maxlength="20">
             </div>
+            <div class="col-md-6">
+                <label class="form-label">State</label>
+                <select class="form-control select2-modal" name="state_id">
+                    <option value="">Select State</option>
+                    @foreach($states as $state)
+                        <option value="{{ $state->id }}" {{ (isset($data) && $data->state_id == $state->id) ? 'selected' : '' }}>{{ $state->name }}</option>
+                    @endforeach
+                </select>
+            </div>
             <div class="col-md-12">
                 <label class="form-label">Address</label>
                 <textarea class="form-control" name="address" rows="2">{{ $data?->address }}</textarea>

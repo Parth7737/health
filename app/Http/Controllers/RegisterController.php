@@ -105,7 +105,8 @@ class RegisterController extends Controller
         $user->email = $draft_register->email;
         $user->password = $draft_register->password;
         $user->gender = $draft_register->gender;
-        $user->state = $draft_register->state;
+        $user->state_id = $draft_register->state;
+        $user->state = HospitalState::where('id', $draft_register->state)->value('name');
         $user->avatar = $draft_register->avatar;
         $user->mobile_no = $draft_register->mobile_no;
         $user->hospital_type = $draft_register->hospital_type;

@@ -8,7 +8,7 @@ $(document).ready(function () {
         lengthChange: true,
         scrollX: true,
         ajax: {
-            url: loadroute, 
+            url: loadroute,
             type: 'POST',
             data: function (d) {
                 d._token = window.Laravel.csrfToken;
@@ -20,13 +20,14 @@ $(document).ready(function () {
             { data: 'contact_person', name: 'contact_person' },
             { data: 'phone', name: 'phone' },
             { data: 'email', name: 'email' },
+            { data: 'state.name', name: 'state.name' },
             { data: 'gstin', name: 'gstin' },
             { data: 'actions', name: 'actions', orderable: false, searchable: false }
         ],
         dom: 'fBrtip',
         autoWidth: true,
         buttons: [
-            { text: '<i class="fa fa-sync"></i>', className: 'btn btn-secondary', titleAttr: 'Reload Table', action: function (e, dt, node, config) { dt.ajax.reload(); }},
+            { text: '<i class="fa fa-sync"></i>', className: 'btn btn-secondary', titleAttr: 'Reload Table', action: function (e, dt, node, config) { dt.ajax.reload(); } },
             { extend: 'copy', className: 'buttons-copy btn btn-light', text: '<i class="fa fa-copy"></i>', titleAttr: 'Copy' },
             { extend: 'csv', className: 'buttons-csv btn btn-info', text: '<i class="fa fa-file-csv"></i>', titleAttr: 'Export as CSV' },
             { extend: 'excel', className: 'buttons-excel btn btn-success', text: '<i class="fa fa-file-excel"></i>', titleAttr: 'Export as Excel' },
@@ -48,6 +49,9 @@ $(document).ready(function () {
         $.post(route('showform'), { _token: token }, function (response) {
             loader('hide');
             $('#ajaxdata').html(response);
+            $('.select2-modal').select2({
+                dropdownParent: $('.add-datamodal')
+            });
             $('.add-datamodal').modal('show');
         });
     });
@@ -60,6 +64,9 @@ $(document).ready(function () {
         $.post(route('showform'), { _token: token, id: id }, function (response) {
             loader('hide');
             $('#ajaxdata').html(response);
+            $('.select2-modal').select2({
+                dropdownParent: $('.add-datamodal')
+            });
             $('.add-datamodal').modal('show');
         });
     });

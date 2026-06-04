@@ -14,9 +14,13 @@
 @include('layouts.partials.datatable-css')
 @include('layouts.partials.flatpickr-css')
 <style>
-  /* Visual focus rings for PO Modal elements */
+  /* Visual focus rings for PO Modal, GRN Modal & Dispense Modal elements */
   #newPOModal .modal-footer .btn:focus,
-  #newPOModal .modal-footer .btn:focus-visible {
+  #newPOModal .modal-footer .btn:focus-visible,
+  #grnModal .modal-footer .btn:focus,
+  #grnModal .modal-footer .btn:focus-visible,
+  #dispenseModal .modal-footer .btn:focus,
+  #dispenseModal .modal-footer .btn:focus-visible {
     outline: 3px solid #0d47a1 !important;
     outline-offset: 3px;
     box-shadow: 0 0 0 2px #fff, 0 0 0 7px rgba(25, 118, 210, 0.55) !important;
@@ -24,11 +28,21 @@
     z-index: 2;
   }
   #newPOModal .modal-footer .btn-primary:focus,
-  #newPOModal .modal-footer .btn-primary:focus-visible {
+  #newPOModal .modal-footer .btn-primary:focus-visible,
+  #grnModal .modal-footer .btn-success:focus,
+  #grnModal .modal-footer .btn-success:focus-visible,
+  #dispenseModal .modal-footer .btn-success:focus,
+  #dispenseModal .modal-footer .btn-success:focus-visible,
+  #dispenseModal .modal-footer .btn-primary:focus,
+  #dispenseModal .modal-footer .btn-primary:focus-visible {
     outline-color: #0d47a1 !important;
   }
   #newPOModal .modal-footer .btn-secondary:focus,
-  #newPOModal .modal-footer .btn-secondary:focus-visible {
+  #newPOModal .modal-footer .btn-secondary:focus-visible,
+  #grnModal .modal-footer .btn-secondary:focus,
+  #grnModal .modal-footer .btn-secondary:focus-visible,
+  #dispenseModal .modal-footer .btn-secondary:focus,
+  #dispenseModal .modal-footer .btn-secondary:focus-visible {
     outline-color: #555 !important;
     box-shadow: 0 0 0 2px #fff, 0 0 0 7px rgba(100, 100, 100, 0.4) !important;
   }
@@ -39,7 +53,11 @@
     box-shadow: 0 0 0 2px #fff, 0 0 0 5px rgba(239, 83, 80, 0.4) !important;
   }
   #newPOModal .form-control:focus,
-  #newPOModal .form-control:focus-visible {
+  #newPOModal .form-control:focus-visible,
+  #grnModal .form-control:focus,
+  #grnModal .form-control:focus-visible,
+  #dispenseModal .form-control:focus,
+  #dispenseModal .form-control:focus-visible {
     border-color: #1976d2 !important;
     outline: 2px solid #1976d2 !important;
     outline-offset: 0;
@@ -306,6 +324,9 @@
             <button class="modal-close" type="button" onclick="closeModal('dispenseModal')">✕</button>
         </div>
         <div class="modal-body">
+            <div id="dispenseKeyboardHints" style="margin:0 0 12px;padding:10px 12px;border:1px dashed var(--border-light);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
+                Keyboard: <b>Tab</b> cycles inside modal · <b>Enter</b> advances to next input in row (or next row) · <b>Alt+S</b> / <b>Ctrl+S</b> Dispense & Bill · <b>Alt+P</b> / <b>Ctrl+P</b> Dispense & Print · <b>Alt+H</b> / <b>Ctrl+H</b> Hold · <b>Alt+B</b> / <b>Esc</b> Close
+            </div>
             <form id="dispenseForm">
                 <input type="hidden" id="dispensePrescriptionType" name="prescription_type">
                 <input type="hidden" id="dispensePrescriptionId" name="prescription_id">
@@ -412,10 +433,10 @@
             </form>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-secondary" type="button" onclick="closeModal('dispenseModal')">Cancel</button>
-            <button class="btn btn-warning" type="button" onclick="holdDispense()">⏸ Hold</button>
-            <button class="btn btn-success" type="button" onclick="confirmDispense(false)">✅ Dispense & Create Bill</button>
-            <button class="btn btn-primary" type="button" onclick="confirmDispense(true)">🖨️ Dispense & Print</button>
+            <button class="btn btn-secondary" type="button" id="dispenseCancelBtn" onclick="closeModal('dispenseModal')">Cancel</button>
+            <button class="btn btn-warning" type="button" id="dispenseHoldBtn" onclick="holdDispense()">⏸ Hold</button>
+            <button class="btn btn-success" type="button" id="dispenseSaveBtn" onclick="confirmDispense(false)">✅ Dispense & Create Bill</button>
+            <button class="btn btn-primary" type="button" id="dispensePrintBtn" onclick="confirmDispense(true)">🖨️ Dispense & Print</button>
         </div>
     </div>
 </div>
@@ -428,6 +449,9 @@
             <button class="modal-close" type="button" onclick="closeModal('grnModal')">✕</button>
         </div>
         <div class="modal-body">
+            <div id="grnKeyboardHints" style="margin:0 0 12px;padding:10px 12px;border:1px dashed var(--border-light);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
+                Keyboard: <b>Tab</b> cycles inside modal · <b>Enter</b> advances to next input in row (or next row) · <b>Alt+S</b> / <b>Ctrl+S</b> Submit GRN · <b>Alt+B</b> / <b>Esc</b> Close
+            </div>
             <form id="grnForm">
                 <div class="form-row cols-2">
                     <div class="form-group">
@@ -448,7 +472,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Invoice Date</label>
-                        <input type="date" class="form-control" name="invoice_date" value="{{ date('Y-m-d') }}">
+                        <input type="text" class="form-control" id="grn_invoice_date" name="invoice_date" value="{{ date('Y-m-d') }}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Vehicle No.</label>
@@ -464,7 +488,7 @@
                             <option value="Cold Chain Broken">Cold Chain Broken</option>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="display: none;">
                         <label class="form-label">GST Type</label>
                         <select class="form-control" name="gst_type" id="grn_gst_type">
                             <option value="local">Local (CGST + SGST)</option>
@@ -658,6 +682,7 @@
 @include('layouts.partials.flatpickr-js')
 <script>
 window.poMedicines = @json($medicines);
+window.hospitalStateId = {{ $hospitalStateId ?? 'null' }};
 </script>
 @endpush
 

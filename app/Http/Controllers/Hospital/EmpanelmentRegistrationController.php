@@ -106,6 +106,7 @@ class EmpanelmentRegistrationController extends Controller
         $hospital->name = $request->name;
         $hospital->user_id = auth()->user()->id;
         $hospital->parent_id = auth()->user()->parent_id;
+        $hospital->state_id = auth()->user()->state_id;
         $hospital->hospital_type = auth()->user()->hospital_type;
         $hospital->uuid = auth()->user()->uuid;
         $hospital->email = $request->hospital_email;

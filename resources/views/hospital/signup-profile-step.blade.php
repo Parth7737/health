@@ -455,8 +455,8 @@
                                     <select id="state" class="form-control select2" name="state" required>
                                         <option value="">Select</option>
                                         @foreach ($states as $key => $value)
-                                            <option value="{{ $value->name }}"
-                                                {{ $data->state == $value->name ? 'selected' : '' }}>{{ $value->name }}
+                                            <option value="{{ $value->id }}"
+                                                {{ $data->state == $value->id ? 'selected' : '' }}>{{ $value->name }}
                                             </option>
                                         @endforeach
                                     </select>

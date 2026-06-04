@@ -25,4 +25,9 @@ class PharmacySupplier extends Model
     {
         return $this->hasMany(PharmacyPurchaseBill::class, 'supplier_id');
     }
+
+    public function state(): BelongsTo
+    {
+        return $this->belongsTo(HospitalState::class, 'state_id');
+    }
 }

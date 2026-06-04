@@ -34,12 +34,31 @@
             initNewPOModal();
         }
         if (id === 'grnModal') {
-            loadApprovedPOs();
+            loadApprovedPOs(initGRNModal);
         }
         if (id === 'dispenseModal') {
             initDispenseModal();
         }
     };
+
+    function parseDateStringToObj(dateStr) {
+        if (!dateStr) return null;
+        var parts = dateStr.split('-');
+        if (parts.length === 3) {
+            if (parts[0].length === 4) {
+                var y = parseInt(parts[0], 10);
+                var m = parseInt(parts[1], 10) - 1;
+                var d = parseInt(parts[2], 10);
+                return new Date(y, m, d);
+            } else if (parts[2].length === 4) {
+                var d = parseInt(parts[0], 10);
+                var m = parseInt(parts[1], 10) - 1;
+                var y = parseInt(parts[2], 10);
+                return new Date(y, m, d);
+            }
+        }
+        return null;
+    }
 
     function ensureAltInputEditable(instance) {
         var alt = instance ? instance.altInput : null;
@@ -69,8 +88,37 @@
             altInput: true,
             altFormat: 'd-m-Y',
             dateFormat: 'd-m-Y',
-            defaultDate: new Date(),
-            maxDate: new Date(),
+            defaultDate: 'today',
+            maxDate: 'today',
+            allowInput: true,
+            onReady: function (selectedDates, dateStr, instance) {
+                ensureAltInputEditable(instance);
+            },
+            onOpen: function (selectedDates, dateStr, instance) {
+                ensureAltInputEditable(instance);
+            }
+        });
+    }
+
+    function initGRNInvoiceDatePicker() {
+        var invoiceDateInput = document.getElementById('grn_invoice_date');
+        if (!invoiceDateInput) {
+            return;
+        }
+        if (typeof flatpickr !== 'function') {
+            setTimeout(initGRNInvoiceDatePicker, 50);
+            return;
+        }
+        if (invoiceDateInput._flatpickr) {
+            return;
+        }
+        flatpickr(invoiceDateInput, {
+            enableTime: false,
+            altInput: true,
+            altFormat: 'd-m-Y',
+            dateFormat: 'd-m-Y',
+            defaultDate: 'today',
+            maxDate: 'today',
             allowInput: true,
             onReady: function (selectedDates, dateStr, instance) {
                 ensureAltInputEditable(instance);
@@ -91,7 +139,7 @@
         if (el.type === 'hidden') {
             return false;
         }
-        if (el.tagName === 'INPUT' && el.classList.contains('flatpickr-input') && 
+        if (el.tagName === 'INPUT' && el.classList.contains('flatpickr-input') &&
             !el.classList.contains('flatpickr-alt-input') && el._flatpickr && el._flatpickr.altInput) {
             return false;
         }
@@ -344,7 +392,7 @@
         if (modal) {
             modal.removeEventListener('keydown', handlePOModalKeydown, true);
             modal.addEventListener('keydown', handlePOModalKeydown, true);
-            
+
             var form = document.getElementById('newPOForm');
             if (form) {
                 form.removeEventListener('keydown', handlePORowKeydown, true);
@@ -379,6 +427,431 @@
                 }
             }
         }, 150);
+    }
+
+    function getGRNModalFocusables() {
+        var modal = document.getElementById('grnModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return [];
+        }
+        var list = [];
+        var seen = new Set();
+
+        // 1. Close button in header
+        var closeBtn = modal.querySelector('.modal-header .modal-close');
+        if (closeBtn && isElementFocusable(closeBtn)) {
+            list.push(closeBtn);
+            seen.add(closeBtn);
+        }
+
+        // 2. Form fields
+        var form = document.getElementById('grnForm');
+        if (form) {
+            var candidates = form.querySelectorAll(
+                'input:not([type="hidden"]), select, textarea, button'
+            );
+            for (var i = 0; i < candidates.length; i++) {
+                var el = candidates[i];
+                if (!isElementFocusable(el) || seen.has(el)) {
+                    continue;
+                }
+                seen.add(el);
+                list.push(el);
+            }
+        }
+
+        // 3. Footer buttons
+        var footer = modal.querySelector('.modal-footer');
+        if (footer) {
+            var footerBtns = footer.querySelectorAll('button');
+            for (var j = 0; j < footerBtns.length; j++) {
+                var btn = footerBtns[j];
+                if (isElementFocusable(btn) && !seen.has(btn)) {
+                    seen.add(btn);
+                    list.push(btn);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    function handleGRNModalKeydown(event) {
+        var modal = document.getElementById('grnModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return;
+        }
+
+        if (isDropdownOrCalendarOpen()) {
+            return;
+        }
+
+        // 1. Alt-shortcuts
+        if (event.altKey && !event.repeat) {
+            var key = String(event.key || '').toLowerCase();
+            if (key === 's') {
+                event.preventDefault();
+                event.stopPropagation();
+                var submitBtn = document.getElementById('submitGRNBtn');
+                if (submitBtn && !submitBtn.disabled) {
+                    submitBtn.click();
+                }
+                return;
+            }
+            if (key === 'b') {
+                event.preventDefault();
+                event.stopPropagation();
+                window.closeModal('grnModal');
+                return;
+            }
+        }
+
+        // 2. Ctrl+S Save
+        if (event.ctrlKey && String(event.key || '').toLowerCase() === 's' && !event.repeat) {
+            event.preventDefault();
+            event.stopPropagation();
+            var submitBtn = document.getElementById('submitGRNBtn');
+            if (submitBtn && !submitBtn.disabled) {
+                submitBtn.click();
+            }
+            return;
+        }
+
+        // 3. Tab cycling (focus trap)
+        if (event.key === 'Tab') {
+            var focusables = getGRNModalFocusables();
+            if (!focusables.length) {
+                return;
+            }
+            var active = document.activeElement;
+            var idx = focusables.indexOf(active);
+
+            if (event.shiftKey) {
+                if (idx <= 0) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    focusables[focusables.length - 1].focus();
+                }
+            } else {
+                if (active && active.id === 'submitGRNBtn') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+
+                if (idx === focusables.length - 1 || idx === -1) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    focusables[0].focus();
+                }
+            }
+        }
+    }
+
+    function handleGRNRowKeydown(event) {
+        if (event.key === 'Enter') {
+            var active = document.activeElement;
+            if (!active) return;
+
+            var tr = active.closest('tr');
+            if (tr && tr.parentNode && tr.parentNode.id === 'grnItemBody') {
+                event.preventDefault();
+                event.stopPropagation();
+
+                var rowInputs = window.$(tr).find('input:not([readonly]):not([type="hidden"]), select:not([readonly])').toArray();
+                var idx = rowInputs.indexOf(active);
+
+                if (idx !== -1 && idx < rowInputs.length - 1) {
+                    rowInputs[idx + 1].focus();
+                } else if (idx === rowInputs.length - 1) {
+                    var nextTr = tr.nextElementSibling;
+                    if (nextTr) {
+                        var nextInputs = window.$(nextTr).find('input:not([readonly]):not([type="hidden"]), select:not([readonly])').toArray();
+                        if (nextInputs.length > 0) {
+                            nextInputs[0].focus();
+                        }
+                    } else {
+                        var submitBtn = document.getElementById('submitGRNBtn');
+                        if (submitBtn) submitBtn.focus();
+                    }
+                }
+            }
+        }
+    }
+
+    function handleGRNFocusContain(event) {
+        if (isDropdownOrCalendarOpen()) {
+            return;
+        }
+
+        var modal = document.getElementById('grnModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return;
+        }
+        var target = event.target;
+        if (!target || !(target instanceof HTMLElement)) {
+            return;
+        }
+        if (modal.contains(target)) {
+            return;
+        }
+        if (target.closest('.select2-dropdown') || target.closest('.flatpickr-calendar')) {
+            return;
+        }
+
+        var focusables = getGRNModalFocusables();
+        if (focusables.length > 0) {
+            focusables[0].focus();
+        }
+    }
+
+    function bindGRNKeyboardEvents() {
+        var modal = document.getElementById('grnModal');
+        if (modal) {
+            modal.removeEventListener('keydown', handleGRNModalKeydown, true);
+            modal.addEventListener('keydown', handleGRNModalKeydown, true);
+
+            var form = document.getElementById('grnForm');
+            if (form) {
+                form.removeEventListener('keydown', handleGRNRowKeydown, true);
+                form.addEventListener('keydown', handleGRNRowKeydown, true);
+            }
+        }
+
+        document.removeEventListener('focusin', handleGRNFocusContain, true);
+        document.addEventListener('focusin', handleGRNFocusContain, true);
+    }
+
+    function initGRNModal() {
+        bindGRNKeyboardEvents();
+        initGRNInvoiceDatePicker();
+
+        setTimeout(function () {
+            var poSelect = document.getElementById('grn_po_select');
+            if (poSelect) {
+                poSelect.focus();
+            }
+        }, 150);
+    }
+
+    function getDispenseModalFocusables() {
+        var modal = document.getElementById('dispenseModal');
+        if (!modal) {
+            return [];
+        }
+
+        var list = [];
+        var seen = new Set();
+
+        // 1. Close button in header
+        var closeBtn = modal.querySelector('.modal-header .modal-close');
+        if (closeBtn && isElementFocusable(closeBtn)) {
+            list.push(closeBtn);
+            seen.add(closeBtn);
+        }
+
+        // 2. Form fields
+        var form = document.getElementById('dispenseForm');
+        if (form) {
+            var candidates = form.querySelectorAll(
+                'input:not([type="hidden"]), select, textarea, button'
+            );
+            for (var i = 0; i < candidates.length; i++) {
+                var el = candidates[i];
+                if (!isElementFocusable(el) || seen.has(el)) {
+                    continue;
+                }
+                seen.add(el);
+                list.push(el);
+            }
+        }
+
+        // 3. Footer buttons
+        var footer = modal.querySelector('.modal-footer');
+        if (footer) {
+            var footerBtns = footer.querySelectorAll('button');
+            for (var j = 0; j < footerBtns.length; j++) {
+                var btn = footerBtns[j];
+                if (isElementFocusable(btn) && !seen.has(btn)) {
+                    seen.add(btn);
+                    list.push(btn);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    function handleDispenseModalKeydown(event) {
+        var modal = document.getElementById('dispenseModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return;
+        }
+
+        if (isDropdownOrCalendarOpen()) {
+            return;
+        }
+
+        // 1. Alt-shortcuts
+        if (event.altKey && !event.repeat) {
+            var key = String(event.key || '').toLowerCase();
+            if (key === 's') {
+                event.preventDefault();
+                event.stopPropagation();
+                var saveBtn = document.getElementById('dispenseSaveBtn');
+                if (saveBtn && !saveBtn.disabled) {
+                    saveBtn.click();
+                }
+                return;
+            }
+            if (key === 'p') {
+                event.preventDefault();
+                event.stopPropagation();
+                var printBtn = document.getElementById('dispensePrintBtn');
+                if (printBtn && !printBtn.disabled) {
+                    printBtn.click();
+                }
+                return;
+            }
+            if (key === 'h') {
+                event.preventDefault();
+                event.stopPropagation();
+                var holdBtn = document.getElementById('dispenseHoldBtn');
+                if (holdBtn && !holdBtn.disabled) {
+                    holdBtn.click();
+                }
+                return;
+            }
+            if (key === 'b') {
+                event.preventDefault();
+                event.stopPropagation();
+                window.closeModal('dispenseModal');
+                return;
+            }
+        }
+
+        // 2. Ctrl+S Save
+        if (event.ctrlKey && String(event.key || '').toLowerCase() === 's' && !event.repeat) {
+            event.preventDefault();
+            event.stopPropagation();
+            var saveBtn = document.getElementById('dispenseSaveBtn');
+            if (saveBtn && !saveBtn.disabled) {
+                saveBtn.click();
+            }
+            return;
+        }
+
+        // Ctrl+P Print
+        if (event.ctrlKey && String(event.key || '').toLowerCase() === 'p' && !event.repeat) {
+            event.preventDefault();
+            event.stopPropagation();
+            var printBtn = document.getElementById('dispensePrintBtn');
+            if (printBtn && !printBtn.disabled) {
+                printBtn.click();
+            }
+            return;
+        }
+
+        // 3. Tab cycling (focus trap)
+        if (event.key === 'Tab') {
+            var focusables = getDispenseModalFocusables();
+            if (!focusables.length) {
+                return;
+            }
+            var active = document.activeElement;
+            var idx = focusables.indexOf(active);
+
+            if (event.shiftKey) {
+                if (idx === -1 || idx === 0) {
+                    event.preventDefault();
+                    focusables[focusables.length - 1].focus();
+                }
+            } else {
+                if (idx === -1 || idx === focusables.length - 1) {
+                    event.preventDefault();
+                    focusables[0].focus();
+                }
+            }
+        }
+    }
+
+    function handleDispenseRowKeydown(event) {
+        if (event.key === 'Enter') {
+            var active = document.activeElement;
+            if (!active) return;
+
+            var tr = active.closest('tr');
+            if (tr && tr.parentNode && tr.parentNode.id === 'dispenseItemsBody') {
+                event.preventDefault();
+                event.stopPropagation();
+
+                var rowInputs = window.$(tr).find('input:not([readonly]):not([type="hidden"]), select:not([readonly])').toArray();
+                var idx = rowInputs.indexOf(active);
+
+                if (idx !== -1 && idx < rowInputs.length - 1) {
+                    rowInputs[idx + 1].focus();
+                } else if (idx === rowInputs.length - 1) {
+                    var nextTr = tr.nextElementSibling;
+                    if (nextTr) {
+                        var nextInputs = window.$(nextTr).find('input:not([readonly]):not([type="hidden"]), select:not([readonly])').toArray();
+                        if (nextInputs.length > 0) {
+                            nextInputs[0].focus();
+                        }
+                    } else {
+                        var notesEl = document.getElementById('dispenseNotes');
+                        if (notesEl) {
+                            notesEl.focus();
+                        } else {
+                            var saveBtn = document.getElementById('dispenseSaveBtn');
+                            if (saveBtn) saveBtn.focus();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    function handleDispenseFocusContain(event) {
+        if (isDropdownOrCalendarOpen()) {
+            return;
+        }
+
+        var modal = document.getElementById('dispenseModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return;
+        }
+        var target = event.target;
+        if (!target || !(target instanceof HTMLElement)) {
+            return;
+        }
+        if (modal.contains(target)) {
+            return;
+        }
+        if (target.closest('.select2-dropdown') || target.closest('.flatpickr-calendar')) {
+            return;
+        }
+
+        var focusables = getDispenseModalFocusables();
+        if (focusables.length > 0) {
+            focusables[0].focus();
+        }
+    }
+
+    function bindDispenseKeyboardEvents() {
+        var modal = document.getElementById('dispenseModal');
+        if (modal) {
+            modal.removeEventListener('keydown', handleDispenseModalKeydown, true);
+            modal.addEventListener('keydown', handleDispenseModalKeydown, true);
+
+            var form = document.getElementById('dispenseForm');
+            if (form) {
+                form.removeEventListener('keydown', handleDispenseRowKeydown, true);
+                form.addEventListener('keydown', handleDispenseRowKeydown, true);
+            }
+        }
+
+        document.removeEventListener('focusin', handleDispenseFocusContain, true);
+        document.addEventListener('focusin', handleDispenseFocusContain, true);
     }
 
     document.addEventListener('DOMContentLoaded', initBillDatePicker);
@@ -1893,6 +2366,7 @@
     };
 
     function initDispenseModal() {
+        bindDispenseKeyboardEvents();
         // Walk-in Medicine Search input binding
         var search = document.getElementById('walkInMedicineSearch');
         if (search && !search.dataset.bound) {
@@ -1943,6 +2417,64 @@
                 }
             });
         }
+
+        bindAutocompleteKeyboardNavigation('walkInMedicineSearch', 'walkInMedicineResults');
+        bindAutocompleteKeyboardNavigation('dispensePatientSearch', 'dispensePatientSearchResults');
+        bindAutocompleteKeyboardNavigation('dispensePrescriptionSearch', 'dispensePrescriptionSearchResults');
+    }
+
+    function bindAutocompleteKeyboardNavigation(inputId, resultsId) {
+        var input = document.getElementById(inputId);
+        if (!input) return;
+
+        if (input.dataset.kbBound) return;
+        input.dataset.kbBound = '1';
+
+        input.addEventListener('keydown', function (e) {
+            var resultsDiv = document.getElementById(resultsId);
+            if (!resultsDiv || resultsDiv.style.display === 'none') {
+                return;
+            }
+
+            var rows = resultsDiv.querySelectorAll('.ph-autocomplete-row:not(.text-muted)');
+            if (!rows.length) return;
+
+            var activeIdx = -1;
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i].classList.contains('active')) {
+                    activeIdx = i;
+                    break;
+                }
+            }
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (activeIdx !== -1) {
+                    rows[activeIdx].classList.remove('active');
+                }
+                var nextIdx = (activeIdx + 1) % rows.length;
+                rows[nextIdx].classList.add('active');
+                rows[nextIdx].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (activeIdx !== -1) {
+                    rows[activeIdx].classList.remove('active');
+                }
+                var prevIdx = (activeIdx - 1 + rows.length) % rows.length;
+                rows[prevIdx].classList.add('active');
+                rows[prevIdx].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                if (activeIdx !== -1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    rows[activeIdx].click();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                closeAllAutocompletes();
+            }
+        });
     }
 
     function closeAllAutocompletes() {
@@ -2292,6 +2824,19 @@
         if (input) { input.value = ''; }
         closeAllAutocompletes();
         renderDispenseItems();
+        setTimeout(function () {
+            var body = document.getElementById('dispenseItemsBody');
+            if (body) {
+                var lastTr = body.querySelector('tr:last-child');
+                if (lastTr) {
+                    var lastInput = lastTr.querySelector('.disp-qty') || lastTr.querySelector('input:not([readonly]):not([type="hidden"]), select:not([readonly])');
+                    if (lastInput) {
+                        lastInput.focus();
+                        lastInput.select();
+                    }
+                }
+            }
+        }, 150);
     };
 
     window.selectDispensePatient = function (idx) {
@@ -2320,6 +2865,10 @@
         var input = document.getElementById('dispensePatientSearch');
         if (input) { input.value = p.name; }
         closeAllAutocompletes();
+        setTimeout(function () {
+            var medSearch = document.getElementById('walkInMedicineSearch');
+            if (medSearch) { medSearch.focus(); }
+        }, 150);
     };
 
     window.selectSearchPrescription = function (idx) {
@@ -2353,6 +2902,10 @@
     window.openWalkInDispense = function () {
         resetDispenseState('walkin');
         window.openModal('dispenseModal');
+        setTimeout(function () {
+            var input = document.getElementById('dispensePatientSearch');
+            if (input) { input.focus(); }
+        }, 150);
     };
 
     window.openPrescriptionDispense = function (type, id) {
@@ -2394,6 +2947,15 @@
                 setValue('dispensePatientId', data.patient && data.patient.id);
                 renderDispensePatient(data);
                 renderDispenseItems();
+                setTimeout(function () {
+                    var body = document.getElementById('dispenseItemsBody');
+                    if (body) {
+                        var firstInput = body.querySelector('input:not([readonly]):not([type="hidden"]), select:not([readonly])');
+                        if (firstInput) {
+                            firstInput.focus();
+                        }
+                    }
+                }, 150);
             })
             .catch(function (err) {
                 if (typeof window.loader === 'function') { window.loader('hide'); }
@@ -2755,7 +3317,7 @@
         var i = poRowIdx++;
         return '<tr data-idx="' + i + '">' +
             '<td><select class="form-control select2 ph-grid-input po-medicine" name="items[' + i + '][medicine_id]"><option value="">Select</option>' + poMedicineOptions() + '</select></td>' +
-            '<td><input type="number" min="1" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][quantity_purchased]" value="1" placeholder="1"></td>' +
+            '<td><input type="number" min="1" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][quantity_purchased]" value="" placeholder="1"></td>' +
             '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price po-price" name="items[' + i + '][unit_purchase_price]" value="0" placeholder="0"></td>' +
             '<td><span class="po-line-amt fw-700 fs-12">₹0</span></td>' +
             '<td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest(\'tr\').remove(); recalcPOTotal();">✕</button></td></tr>';
@@ -2790,7 +3352,7 @@
 
         var dateEl = document.getElementById('bill_date');
         if (dateEl && dateEl._flatpickr) {
-            dateEl._flatpickr.setDate(new Date());
+            dateEl._flatpickr.setDate('today', true);
         }
 
         window.openModal('newPOModal');
@@ -2926,7 +3488,18 @@
 
                         // Populate Date and Notes
                         var dateEl = document.querySelector('#newPOModal #bill_date');
-                        if (dateEl) { dateEl.value = res.bill.bill_date || ''; }
+                        if (dateEl) {
+                            var parsedDate = parseDateStringToObj(res.bill.bill_date);
+                            if (dateEl._flatpickr) {
+                                if (parsedDate) {
+                                    dateEl._flatpickr.setDate(parsedDate, true);
+                                } else {
+                                    dateEl._flatpickr.clear();
+                                }
+                            } else {
+                                dateEl.value = res.bill.bill_date || '';
+                            }
+                        }
                         var notesEl = document.querySelector('#newPOModal input[name="notes"]');
                         if (notesEl) { notesEl.value = res.bill.notes || ''; }
 
@@ -3136,6 +3709,14 @@
         /* ─── GRN: PO select change → populate items ─── */
         window.$(document).on('change', '#grn_po_select', function () {
             renderGrnItems(this.value);
+            if (this.value) {
+                setTimeout(function () {
+                    var invoiceNoEl = document.querySelector('#grnForm input[name="invoice_no"]');
+                    if (invoiceNoEl) {
+                        invoiceNoEl.focus();
+                    }
+                }, 150);
+            }
         });
 
         window.$(document).on('input', '.grn-received, .grn-rejected, .grn-price, .grn-tax', updateGRNAcceptedTotal);
@@ -3689,6 +4270,22 @@
 
         var supplierEl = document.getElementById('grn_supplier_display');
         if (supplierEl) supplierEl.value = po.supplier;
+
+        // Auto-determine GST Type (local vs interstate)
+        var supplierStateId = po.supplier_state_id;
+        var hospitalStateId = window.hospitalStateId;
+        var gstTypeSelect = window.$('#grn_gst_type');
+        if (gstTypeSelect.length) {
+            if (supplierStateId && hospitalStateId && parseInt(supplierStateId, 10) === parseInt(hospitalStateId, 10)) {
+                gstTypeSelect.val('local').trigger('change');
+            } else {
+                if (supplierStateId && hospitalStateId) {
+                    gstTypeSelect.val('interstate').trigger('change');
+                } else {
+                    gstTypeSelect.val('local').trigger('change');
+                }
+            }
+        }
 
         var defaultPackSize = 1;
         var profitPercent = parseFloat(document.getElementById('grn_profit_percent') ? document.getElementById('grn_profit_percent').value : 30) || 0;
