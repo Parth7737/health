@@ -13,6 +13,45 @@
 <link rel="stylesheet" href="{{ asset('public/css/hospital/pharmacy-dashboard.css') }}">
 @include('layouts.partials.datatable-css')
 @include('layouts.partials.flatpickr-css')
+<style>
+  /* Visual focus rings for PO Modal elements */
+  #newPOModal .modal-footer .btn:focus,
+  #newPOModal .modal-footer .btn:focus-visible {
+    outline: 3px solid #0d47a1 !important;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 7px rgba(25, 118, 210, 0.55) !important;
+    position: relative;
+    z-index: 2;
+  }
+  #newPOModal .modal-footer .btn-primary:focus,
+  #newPOModal .modal-footer .btn-primary:focus-visible {
+    outline-color: #0d47a1 !important;
+  }
+  #newPOModal .modal-footer .btn-secondary:focus,
+  #newPOModal .modal-footer .btn-secondary:focus-visible {
+    outline-color: #555 !important;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 7px rgba(100, 100, 100, 0.4) !important;
+  }
+  #newPOModal #poItemBody .btn-danger:focus,
+  #newPOModal #poItemBody .btn-danger:focus-visible {
+    outline: 2px solid #c62828 !important;
+    outline-offset: 1px;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 5px rgba(239, 83, 80, 0.4) !important;
+  }
+  #newPOModal .form-control:focus,
+  #newPOModal .form-control:focus-visible {
+    border-color: #1976d2 !important;
+    outline: 2px solid #1976d2 !important;
+    outline-offset: 0;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2) !important;
+  }
+  #newPOModal .select2-container--focus .select2-selection,
+  #newPOModal .select2-selection:focus {
+    border-color: #1976d2 !important;
+    outline: 2px solid #1976d2 !important;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2) !important;
+  }
+</style>
 @endpush
 
 @section('content')
@@ -551,6 +590,9 @@
             <button class="modal-close" type="button" onclick="closeModal('newPOModal')">✕</button>
         </div>
         <div class="modal-body">
+            <div id="poKeyboardHints" style="margin:0 0 12px;padding:10px 12px;border:1px dashed var(--border-light);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
+                Keyboard: <b>Tab</b> cycles inside modal · <b>Alt+A</b> Add Item · <b>Enter</b> on Price or <b>Ctrl+Enter</b> adds row & focuses Medicine · <b>Alt+S</b> / <b>Ctrl+S</b> Create PO · <b>Alt+B</b> / <b>Esc</b> Close
+            </div>
             <form id="newPOForm">
                 <div class="form-row cols-3">
                     <div class="form-group">

@@ -217,11 +217,36 @@ $(document).ready(function () {
         const url = route('reject').replace('__ID__', id);
         let reason = '';
         if (typeof Swal !== 'undefined') {
-            const result = await Swal.fire({ title: 'Reject PO?', input: 'text', inputLabel: 'Reason (optional)', showCancelButton: true, confirmButtonText: 'Reject', confirmButtonColor: '#d33' });
+            const result = await Swal.fire({
+                title: 'Reject PO?',
+                input: 'textarea',
+                inputLabel: 'Reason',
+                inputPlaceholder: 'Enter rejection reason...',
+                inputAttributes: {
+                    maxlength: 500,
+                    rows: 4
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Reject',
+                confirmButtonColor: '#d33',
+                preConfirm: function (value) {
+                    if (!value || !value.trim()) {
+                        Swal.showValidationMessage('Rejection reason is required');
+                        return false;
+                    }
+                    return value.trim();
+                }
+            });
             if (!result.isConfirmed) return;
-            reason = result.value || '';
+            reason = result.value;
         } else {
-            reason = prompt('Rejection reason (optional):') || '';
+            const val = prompt('Rejection reason (required):');
+            if (val === null) return; // User cancelled
+            if (!val.trim()) {
+                sendmsg('error', 'Rejection reason is required.');
+                return;
+            }
+            reason = val.trim();
         }
         loader();
         const token = await csrftoken();
@@ -231,7 +256,15 @@ $(document).ready(function () {
             sendmsg('success', res.message || 'PO rejected.');
         }).fail(function (xhr) {
             loader('hide');
-            sendmsg('error', (xhr.responseJSON && xhr.responseJSON.message) || 'Rejection failed.');
+            var errorMsg = 'Rejection failed.';
+            if (xhr.responseJSON) {
+                if (xhr.responseJSON.errors && xhr.responseJSON.errors.length > 0) {
+                    errorMsg = xhr.responseJSON.errors[0].message;
+                } else if (xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                }
+            }
+            sendmsg('error', errorMsg);
         });
     });
 

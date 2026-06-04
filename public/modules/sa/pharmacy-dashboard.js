@@ -41,6 +41,17 @@
         }
     };
 
+    function ensureAltInputEditable(instance) {
+        var alt = instance ? instance.altInput : null;
+        if (!alt) {
+            return;
+        }
+        alt.removeAttribute('readonly');
+        alt.setAttribute('placeholder', 'DD-MM-YYYY');
+        alt.setAttribute('inputmode', 'numeric');
+        alt.setAttribute('autocomplete', 'off');
+    }
+
     function initBillDatePicker() {
         var billDateInput = document.getElementById('bill_date');
         if (!billDateInput) {
@@ -55,10 +66,294 @@
         }
         flatpickr(billDateInput, {
             enableTime: false,
+            altInput: true,
+            altFormat: 'd-m-Y',
             dateFormat: 'd-m-Y',
             defaultDate: new Date(),
-            maxDate: new Date()
+            maxDate: new Date(),
+            allowInput: true,
+            onReady: function (selectedDates, dateStr, instance) {
+                ensureAltInputEditable(instance);
+            },
+            onOpen: function (selectedDates, dateStr, instance) {
+                ensureAltInputEditable(instance);
+            }
         });
+    }
+
+    function isElementFocusable(el) {
+        if (!el || el.disabled) {
+            return false;
+        }
+        if (el.getAttribute('aria-hidden') === 'true') {
+            return false;
+        }
+        if (el.type === 'hidden') {
+            return false;
+        }
+        if (el.tagName === 'INPUT' && el.classList.contains('flatpickr-input') && 
+            !el.classList.contains('flatpickr-alt-input') && el._flatpickr && el._flatpickr.altInput) {
+            return false;
+        }
+        return !!(el.offsetParent || el.getClientRects().length);
+    }
+
+    function getPOModalFocusables() {
+        var modal = document.getElementById('newPOModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return [];
+        }
+        var list = [];
+        var seen = new Set();
+
+        // 1. Close button in header
+        var closeBtn = modal.querySelector('.modal-header .modal-close');
+        if (closeBtn && isElementFocusable(closeBtn)) {
+            list.push(closeBtn);
+            seen.add(closeBtn);
+        }
+
+        // 2. Form fields
+        var form = document.getElementById('newPOForm');
+        if (form) {
+            var candidates = form.querySelectorAll(
+                'input:not([type="hidden"]), select, textarea, button, .select2-selection'
+            );
+            for (var i = 0; i < candidates.length; i++) {
+                var el = candidates[i];
+                if (el.tagName === 'SELECT' && el.classList.contains('select2-hidden-accessible')) {
+                    var selection = el.nextElementSibling ? el.nextElementSibling.querySelector('.select2-selection') : null;
+                    if (selection && isElementFocusable(selection) && !seen.has(selection)) {
+                        seen.add(selection);
+                        seen.add(el);
+                        list.push(selection);
+                    }
+                    continue;
+                }
+                if (el.classList.contains('select2-selection')) {
+                    var prev = el.closest('.select2-container') ? el.closest('.select2-container').previousElementSibling : null;
+                    if (prev && prev.matches && prev.matches('select.select2-hidden-accessible')) {
+                        continue;
+                    }
+                }
+                if (!isElementFocusable(el) || seen.has(el)) {
+                    continue;
+                }
+                seen.add(el);
+                list.push(el);
+            }
+        }
+
+        // 3. Footer buttons
+        var footer = modal.querySelector('.modal-footer');
+        if (footer) {
+            var footerBtns = footer.querySelectorAll('button');
+            for (var j = 0; j < footerBtns.length; j++) {
+                var btn = footerBtns[j];
+                if (isElementFocusable(btn) && !seen.has(btn)) {
+                    seen.add(btn);
+                    list.push(btn);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    function isDropdownOrCalendarOpen() {
+        return !!document.querySelector('.select2-container--open') || !!document.querySelector('.flatpickr-calendar.open');
+    }
+
+    function focusLastMedicineRow() {
+        var body = document.getElementById('poItemBody');
+        if (!body) return;
+        var lastTr = body.querySelector('tr:last-child');
+        if (!lastTr) return;
+        var select = lastTr.querySelector('select.po-medicine');
+        if (select) {
+            if (window.jQuery && window.$(select).data('select2')) {
+                window.$(select).select2('open');
+            } else {
+                select.focus();
+            }
+        }
+    }
+
+    function handlePOModalKeydown(event) {
+        var modal = document.getElementById('newPOModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return;
+        }
+
+        // Suspend custom navigation/shortcuts when Select2 dropdown or Flatpickr is open
+        if (isDropdownOrCalendarOpen()) {
+            return;
+        }
+
+        // 1. Alt-shortcuts (when Select2 dropdown is NOT open)
+        if (event.altKey && !event.repeat) {
+            var key = String(event.key || '').toLowerCase();
+            if (key === 'a') {
+                event.preventDefault();
+                event.stopPropagation();
+                var addBtn = document.getElementById('addPOItemRow');
+                if (addBtn) {
+                    addBtn.click();
+                    setTimeout(function () {
+                        focusLastMedicineRow();
+                    }, 50);
+                }
+                return;
+            }
+            if (key === 's') {
+                event.preventDefault();
+                event.stopPropagation();
+                var submitBtn = document.getElementById('submitNewPO');
+                if (submitBtn && !submitBtn.disabled) {
+                    submitBtn.click();
+                }
+                return;
+            }
+            if (key === 'b') {
+                event.preventDefault();
+                event.stopPropagation();
+                window.closeModal('newPOModal');
+                return;
+            }
+        }
+
+        // 2. Ctrl+S Save
+        if (event.ctrlKey && String(event.key || '').toLowerCase() === 's' && !event.repeat) {
+            event.preventDefault();
+            event.stopPropagation();
+            var submitBtn = document.getElementById('submitNewPO');
+            if (submitBtn && !submitBtn.disabled) {
+                submitBtn.click();
+            }
+            return;
+        }
+
+        // 3. Tab cycling (focus trap)
+        if (event.key === 'Tab') {
+            var focusables = getPOModalFocusables();
+            if (!focusables.length) {
+                return;
+            }
+            var active = document.activeElement;
+            var idx = focusables.indexOf(active);
+
+            if (event.shiftKey) {
+                if (idx <= 0) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    focusables[focusables.length - 1].focus();
+                }
+            } else {
+                // If on the Create Purchase Order button, don't wrap to the start; stay on the button
+                if (active && active.id === 'submitNewPO') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+
+                if (idx === focusables.length - 1 || idx === -1) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    focusables[0].focus();
+                }
+            }
+        }
+    }
+
+    function handlePORowKeydown(event) {
+        if (event.key === 'Enter') {
+            var active = document.activeElement;
+            if (!active) return;
+
+            if (isDropdownOrCalendarOpen()) {
+                return;
+            }
+
+            var isPrice = active.classList.contains('po-price');
+            var isCtrlEnter = event.ctrlKey;
+
+            if (isPrice || isCtrlEnter) {
+                var tr = active.closest('tr');
+                if (tr && tr.parentNode && tr.parentNode.id === 'poItemBody') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    var addBtn = document.getElementById('addPOItemRow');
+                    if (addBtn) {
+                        addBtn.click();
+                        setTimeout(function () {
+                            focusLastMedicineRow();
+                        }, 50);
+                    }
+                }
+            } else if (active.classList.contains('po-qty')) {
+                var row = active.closest('tr');
+                if (row) {
+                    var priceInput = row.querySelector('.po-price');
+                    if (priceInput) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        priceInput.focus();
+                    }
+                }
+            }
+        }
+    }
+
+    function handlePOFocusContain(event) {
+        // Suspend focus containment check when select2 / calendar is open to avoid pulling focus away from dropdowns/search inputs
+        if (isDropdownOrCalendarOpen()) {
+            return;
+        }
+
+        var modal = document.getElementById('newPOModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return;
+        }
+        var target = event.target;
+        if (!target || !(target instanceof HTMLElement)) {
+            return;
+        }
+        if (modal.contains(target)) {
+            return;
+        }
+        if (target.closest('.select2-dropdown') || target.closest('.flatpickr-calendar')) {
+            return;
+        }
+
+        var focusables = getPOModalFocusables();
+        if (focusables.length > 0) {
+            var preferred = document.getElementById('po_supplier_id');
+            if (preferred && window.jQuery && window.$(preferred).data('select2')) {
+                var selection = preferred.nextElementSibling ? preferred.nextElementSibling.querySelector('.select2-selection') : null;
+                if (selection) {
+                    selection.focus();
+                    return;
+                }
+            }
+            focusables[0].focus();
+        }
+    }
+
+    function bindPOKeyboardEvents() {
+        var modal = document.getElementById('newPOModal');
+        if (modal) {
+            modal.removeEventListener('keydown', handlePOModalKeydown, true);
+            modal.addEventListener('keydown', handlePOModalKeydown, true);
+            
+            var form = document.getElementById('newPOForm');
+            if (form) {
+                form.removeEventListener('keydown', handlePORowKeydown, true);
+                form.addEventListener('keydown', handlePORowKeydown, true);
+            }
+        }
+
+        document.removeEventListener('focusin', handlePOFocusContain, true);
+        document.addEventListener('focusin', handlePOFocusContain, true);
     }
 
     function initNewPOModal() {
@@ -70,6 +365,20 @@
             initPOMedicineSelect(body);
             recalcPOTotal();
         }
+
+        bindPOKeyboardEvents();
+
+        // Focus the first element (Supplier Select2)
+        setTimeout(function () {
+            var supplierSelect = document.getElementById('po_supplier_id');
+            if (supplierSelect) {
+                if (window.jQuery && window.$(supplierSelect).data('select2')) {
+                    window.$(supplierSelect).select2('open');
+                } else {
+                    supplierSelect.focus();
+                }
+            }
+        }, 150);
     }
 
     document.addEventListener('DOMContentLoaded', initBillDatePicker);
@@ -2478,6 +2787,12 @@
         window.$('#submitNewPO').text('📤 Create Purchase Order');
         poRowIdx = 0;
         recalcPOTotal();
+
+        var dateEl = document.getElementById('bill_date');
+        if (dateEl && dateEl._flatpickr) {
+            dateEl._flatpickr.setDate(new Date());
+        }
+
         window.openModal('newPOModal');
     };
 
@@ -2521,6 +2836,28 @@
         });
 
         window.$(document).on('input', '.po-qty, .po-price', recalcPOTotal);
+
+        window.$(document).on('select2:close', '#po_supplier_id', function () {
+            setTimeout(function () {
+                var dateInput = document.querySelector('#newPOModal .flatpickr-alt-input') || document.getElementById('bill_date');
+                if (dateInput) {
+                    dateInput.focus();
+                }
+            }, 50);
+        });
+
+        window.$(document).on('select2:close', 'select.po-medicine', function () {
+            var selectEl = this;
+            setTimeout(function () {
+                var tr = selectEl.closest('tr');
+                if (tr) {
+                    var qtyInput = tr.querySelector('.po-qty');
+                    if (qtyInput) {
+                        qtyInput.focus();
+                    }
+                }
+            }, 50);
+        });
 
         window.$(function () {
             initPOMedicineSelect(window.$('#poItemBody'));
@@ -2717,7 +3054,15 @@
                     },
                     error: function (xhr) {
                         if (typeof window.loader === 'function') { window.loader('hide'); }
-                        toast('Error', (xhr.responseJSON && xhr.responseJSON.message) || 'Rejection failed.', 'error');
+                        var errorMsg = 'Rejection failed.';
+                        if (xhr.responseJSON) {
+                            if (xhr.responseJSON.errors && xhr.responseJSON.errors.length > 0) {
+                                errorMsg = xhr.responseJSON.errors[0].message;
+                            } else if (xhr.responseJSON.message) {
+                                errorMsg = xhr.responseJSON.message;
+                            }
+                        }
+                        toast('Error', errorMsg, 'error');
                     }
                 });
             }
@@ -2726,7 +3071,7 @@
                 Swal.fire({
                     title: 'Reject PO',
                     input: 'textarea',
-                    inputLabel: 'Rejection reason (optional)',
+                    inputLabel: 'Rejection reason',
                     inputPlaceholder: 'Enter rejection reason...',
                     inputAttributes: {
                         'aria-label': 'Rejection reason',
@@ -2737,7 +3082,11 @@
                     confirmButtonText: 'Reject PO',
                     cancelButtonText: 'Cancel',
                     preConfirm: function (value) {
-                        return value || '';
+                        if (!value || !value.trim()) {
+                            Swal.showValidationMessage('Rejection reason is required');
+                            return false;
+                        }
+                        return value.trim();
                     }
                 }).then(function (result) {
                     if (result.isConfirmed) {
@@ -2745,8 +3094,15 @@
                     }
                 });
             } else {
-                var reason = prompt('Rejection reason (optional):') || '';
-                submitReject(reason);
+                var reason = prompt('Rejection reason (required):');
+                if (reason === null) {
+                    return; // User clicked Cancel
+                }
+                if (!reason.trim()) {
+                    toast('Error', 'Rejection reason is required.', 'error');
+                    return;
+                }
+                submitReject(reason.trim());
             }
         });
 

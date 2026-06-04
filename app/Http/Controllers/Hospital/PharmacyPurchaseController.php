@@ -194,8 +194,16 @@ class PharmacyPurchaseController extends BaseHospitalController
             abort(403);
         }
 
+        $validator = Validator::make($request->all(), [
+            'reject_reason' => 'required|string|min:5|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
         try {
-            $bill = $inventoryService->rejectPurchaseBill($bill, $request->input('reject_reason', ''));
+            $bill = $inventoryService->rejectPurchaseBill($bill, $request->input('reject_reason'));
         } catch (Throwable $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()], 422);
         }
