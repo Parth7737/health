@@ -191,8 +191,9 @@
             <tr>
                 <th style="width:4%;">SN</th>
                 <th style="width:18%;">Medicine</th>
-                <th style="width:7%;" class="text-end">Qty</th>
-                <th style="width:8%;" class="text-end">Est. Price</th>
+                <th style="width:7%;" class="text-end">Packs</th>
+                <th style="width:7%;" class="text-end">Units</th>
+                <th style="width:8%;" class="text-end">Pack Rate</th>
                 <th style="width:9%;" class="text-end">Amount</th>
             </tr>
         </thead>
@@ -201,8 +202,14 @@
                 <tr>
                     <td>{{ $loop->iteration }}</td>
                     <td>{{ $item->medicine?->name ?? '-' }}</td>
+                    @php
+                        $packSize = max(1, (int) ($item->pack_size_qty ?: 1));
+                        $packQty = (float) ($item->pack_qty ?: ((float) $item->quantity_purchased / $packSize));
+                        $packRate = (float) ($item->pack_purchase_price ?: ((float) $item->unit_purchase_price * $packSize));
+                    @endphp
+                    <td class="text-end">{{ rtrim(rtrim(number_format($packQty, 2), '0'), '.') }} x {{ $packSize }}</td>
                     <td class="text-end">{{ rtrim(rtrim(number_format((float) $item->quantity_purchased, 2), '0'), '.') }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
-                    <td class="text-end">{{ number_format((float) $item->unit_purchase_price, 2) }}</td>
+                    <td class="text-end">{{ number_format($packRate, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->line_subtotal, 2) }}</td>
                 </tr>
             @empty

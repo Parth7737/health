@@ -2,116 +2,133 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Pharmacy Sale Bill</title>
+    <title>Pharmacy Sale Bill - {{ $bill->bill_no }}</title>
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: #111827; background: #fff; font-size: 11px; line-height: 1.25; }
-        .sheet { max-width: 980px; margin: 8px auto; background: #fff; }
-        .banner { width: 100%; margin-bottom: 4px; }
-        .banner img { width: 100%; max-height: 110px; object-fit: cover; display: block; }
-        .head { padding: 6px 8px 4px; border-bottom: 1px solid #000; }
-        .head-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
-        .brand { display: flex; align-items: center; gap: 8px; }
-        .brand img { width: 40px; height: 40px; object-fit: cover; border: 1px solid #b9bec7; }
-        .brand h2 { margin: 0; font-size: 17px; font-weight: 700; color: #000; }
-        .brand p { margin: 2px 0 0; font-size: 10px; color: #374151; }
-        .bill-tag { text-align: right; font-size: 10px; line-height: 1.4; }
-        .bill-tag .title { font-size: 13px; font-weight: 700; letter-spacing: 0.4px; }
-
-        .meta-table,
-        .items-table,
-        .totals-table {
+        body {
+            margin: 0;
+            background: #f4f4f2;
+            color: #222;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 12px;
+            line-height: 1.12;
+        }
+        .bill-paper {
+            width: 840px;
+            min-height: 420px;
+            margin: 10px auto;
+            padding: 18px 26px 12px;
+            background: #fff;
+            border: 1px solid #cfcfcf;
+            position: relative;
+        }
+        .bill-paper:before,
+        .bill-paper:after {
+            content: "";
+            position: absolute;
+            top: 16px;
+            bottom: 16px;
+            width: 14px;
+            background:
+                radial-gradient(circle at center, #d9d9d9 0 4px, transparent 5px) center top / 14px 54px repeat-y;
+        }
+        .bill-paper:before { left: 6px; }
+        .bill-paper:after { right: 6px; }
+        .content { padding: 0 18px; }
+        .center { text-align: center; }
+        .right { text-align: right; }
+        .strong { font-weight: 700; }
+        .muted { color: #666; }
+        .brand-name {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .brand-line { margin-top: 2px; }
+        .top-grid {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 16px;
+            margin-top: 6px;
+        }
+        .meta-line {
+            display: grid;
+            grid-template-columns: 68px 1fr 78px 1fr;
+            column-gap: 6px;
+            margin-top: 2px;
+            white-space: nowrap;
+        }
+        .invoice-line {
+            display: grid;
+            grid-template-columns: 128px 1fr 68px 150px;
+            gap: 8px;
+            margin: 7px 0 2px;
+            align-items: end;
+            font-size: 16px;
+        }
+        .invoice-line .value {
+            font-weight: 700;
+            border-bottom: 1px solid #777;
+            min-height: 18px;
+        }
+        .rule { border-top: 1px solid #777; height: 0; margin: 2px 0 0; }
+        table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
-
-        .meta-table { margin-top: 4px; }
-        .meta-table th,
-        .meta-table td {
-            border: 1px solid #000;
-            padding: 3px 4px;
+        th, td {
+            padding: 2px 3px;
             vertical-align: top;
-            font-size: 10px;
+            overflow: hidden;
+            text-overflow: clip;
         }
-        .meta-table th { width: 12%; background: #f3f4f6; text-align: left; font-weight: 700; }
-
-        .section-title {
-            margin: 6px 0 3px;
-            padding: 3px 4px;
-            border: 1px solid #000;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            background: #f3f4f6;
+        thead th {
+            border-bottom: 1px solid #777;
+            font-weight: 400;
         }
-
-        .items-table th,
-        .items-table td {
-            border: 1px solid #000;
-            padding: 3px 4px;
-            vertical-align: top;
-        }
-        .items-table th {
-            font-size: 9px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.2px;
-            background: #f3f4f6;
-            color: #000;
-            text-align: left;
-        }
-        .items-table td { font-size: 9.5px; }
-
-        .text-end { text-align: right; }
-        .empty { text-align: center; color: #4b5563; }
-
-        .totals-wrap {
+        tbody td { height: 20px; }
+        .product { white-space: nowrap; }
+        .mono-small { font-size: 11px; }
+        .totals {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 300px;
-            gap: 8px;
-            margin-top: 4px;
-            align-items: end;
+            grid-template-columns: 1fr 360px;
+            gap: 18px;
+            margin-top: 86px;
         }
-        .notes {
-            border: 1px solid #000;
-            padding: 4px 5px;
-            font-size: 9.5px;
-            min-height: 70px;
-        }
-        .totals-table td {
-            border: 1px solid #000;
-            padding: 4px 5px;
-            font-size: 10px;
-        }
-        .totals-table tr:last-child td {
-            font-weight: 700;
-            font-size: 10.5px;
-            background: #f3f4f6;
-        }
-
-        .footer {
-            margin-top: 8px;
-            padding: 0 2px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            font-size: 9.5px;
-            color: #1f2937;
-        }
-        .sign {
-            min-width: 180px;
+        .qty-total {
+            border-top: 1px solid #777;
+            padding-top: 3px;
+            width: 70px;
             text-align: center;
         }
-        .line {
-            margin-top: 24px;
-            border-top: 1px solid #000;
-            padding-top: 4px;
+        .amount-lines {
+            border-top: 1px solid #777;
+            padding-top: 3px;
         }
-
+        .amount-row {
+            display: grid;
+            grid-template-columns: 1fr 110px;
+            gap: 8px;
+            min-height: 20px;
+        }
+        .grand {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .footer-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 14px;
+            margin-top: 8px;
+            border-top: 1px solid #777;
+            padding-top: 5px;
+        }
         .no-print {
+            width: 840px;
             margin: 8px auto 0;
-            max-width: 980px;
             display: flex;
             gap: 8px;
         }
@@ -122,170 +139,175 @@
             cursor: pointer;
             color: #fff;
             font-size: 12px;
+            font-family: Arial, sans-serif;
         }
         .btn-print { background: #2563eb; }
         .btn-close { background: #6b7280; }
-
-        @page { margin: 6mm; size: A4 portrait; }
+        @page { margin: 5mm; size: 9.5in 5.5in landscape; }
         @media print {
             body { background: #fff; }
-            .sheet { margin: 0; border: 0; box-shadow: none; max-width: none; }
+            .bill-paper {
+                width: auto;
+                min-height: auto;
+                margin: 0;
+                padding: 12px 20px 8px;
+                border: 0;
+            }
+            .content { padding: 0 18px; }
             .no-print { display: none !important; }
         }
     </style>
 </head>
 <body>
 @php
-    $logo = $hospital?->image ? asset('public/storage/' . $hospital->image) : asset('images/logo.png');
-    $templateHeader = !empty($printTemplate?->header_image) ? asset('public/storage/' . $printTemplate->header_image) : null;
-    $addressLine = trim(implode(', ', array_filter([$hospital?->address, $hospital?->city, $hospital?->pincode])));
     $patient = $bill->patient;
+    $addressLine = trim(implode(', ', array_filter([$hospital?->address, $hospital?->city, $hospital?->pincode])));
+    $patientAddress = trim(implode(', ', array_filter([$patient?->address, $patient?->district, $patient?->state, $patient?->pin_code])));
+    $doctor = $bill->opdPrescription?->doctor ?? $bill->ipdPrescription?->doctor;
+    $doctorName = $doctor?->full_name ? trim($doctor->full_name) : null;
+    $rxNo = $bill->opdPrescription?->prescription_no
+        ?? $bill->ipdPrescription?->prescription_no
+        ?? ($bill->opd_prescription_id ? 'OPD #' . $bill->opd_prescription_id : ($bill->ipd_prescription_id ? 'IPD #' . $bill->ipd_prescription_id : '-'));
+    $fmtQty = fn ($value) => rtrim(rtrim(number_format((float) $value, 2), '0'), '.');
+    $money = fn ($value) => number_format((float) $value, 2);
+    $roundOff = (float) ($bill->round_off ?? 0);
+    $discount = (float) ($bill->discount_amount ?? 0);
+    $grossTotal = (float) ($bill->subtotal ?? 0) + (float) ($bill->tax_amount ?? 0);
+    $saved = max(0, $discount + max(0, -1 * $roundOff));
+    $roundedGrand = round((float) $bill->net_total);
+    $roundingDiff = $roundedGrand - (float) $bill->net_total;
+    $totalQty = $bill->items->sum(fn ($item) => (float) $item->quantity);
 @endphp
 
+<div class="no-print">
+    <button type="button" class="btn-print" onclick="window.print()">Print</button>
+    <button type="button" class="btn-close" onclick="window.close()">Close</button>
+</div>
 
-<div class="sheet">
-    @if($templateHeader)
-        <div class="banner"><img src="{{ $templateHeader }}" alt="Pharmacy Bill Header"></div>
-    @endif
-
-    <div class="head">
-        <div class="head-top">
-            <div class="brand">
-                <img src="{{ $logo }}" alt="Hospital Logo">
-                <div>
-                    <h2>{{ $hospital?->name ?? config('app.name') }}</h2>
-                    <p>@if($addressLine !== ''){{ $addressLine }}@endif</p>
-                </div>
+<div class="bill-paper">
+    <div class="content">
+        <div class="center">
+            <div class="brand-name">{{ $hospital?->name ?? config('app.name') }}</div>
+            <div class="brand-line">{{ $addressLine !== '' ? $addressLine : '-' }}</div>
+            <div class="brand-line">
+                Phone: {{ $hospital?->phone ?? '-' }}
+                @if(!empty($hospital?->gstin))
+                    , GSTIN: {{ $hospital->gstin }}
+                @endif
             </div>
-            <div class="bill-tag">
-                <div class="title">PHARMACY SALE BILL</div>
-                <div><strong>Bill No:</strong> {{ $bill->bill_no }}</div>
-                <div><strong>Bill Date:</strong> {{ optional($bill->bill_date)->format('d-m-Y') ?? '-' }}</div>
-                <div><strong>Printed At:</strong> {{ now()->format('d-m-Y h:i A') }}</div>
-            </div>
-        </div>
-
-        <table class="meta-table">
-            <tbody>
-                <tr>
-                    <th>Patient</th>
-                    <td>{{ $patient?->name ?? '-' }}</td>
-                    <th>UHID</th>
-                    <td>{{ $patient?->patient_id ?? '-' }}</td>
-                    <th>Payment</th>
-                    <td>{{ strtoupper((string) ($bill->payment_status ?? 'paid')) }}</td>
-                </tr>
-                <tr>
-                    <th>Phone</th>
-                    <td>{{ $patient?->phone ?? '-' }}</td>
-                    <th>Prescription</th>
-                    <td>
-                        @if($bill->opd_prescription_id)
-                            OPD #{{ $bill->opd_prescription_id }}
-                        @elseif($bill->ipd_prescription_id)
-                            IPD #{{ $bill->ipd_prescription_id }}
-                        @else
-                            -
-                        @endif
-                    </td>
-                    <th>Paid / Due</th>
-                    <td>{{ number_format((float) $bill->paid_amount, 2) }} / {{ number_format((float) $bill->due_amount, 2) }}</td>
-                </tr>
-                <tr>
-                    <th>Notes</th>
-                    <td colspan="5">{{ $bill->notes ?: '-' }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="section-title">Items</div>
-    <table class="items-table">
-        <thead>
-            <tr>
-                <th style="width:3%;">SN</th>
-                <th>Product</th>
-                <th style="width:10%;">Pack</th>
-                <th style="width:10%;">Mfg</th>
-                <th class="text-end" style="width:10%;">Qty</th>
-                <th class="text-end" style="width:12%;">MRP</th>
-                <th style="width:12%;">Batch</th>
-                <th style="width:8%;">Exp</th>
-                <th class="text-end" style="width:8%;">Disc %</th>
-                <th class="text-end" style="width:8%;">GST</th>
-                <th class="text-end" style="width:12%;">Amount ₹</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($bill->items as $item)
-                @php
-                    $packSize = $item->stockBatch?->pack_size ?? ($item->medicine?->default_pack_size ?? 1);
-                    $packMrp = $item->stockBatch?->pack_mrp ?? 0;
-                    if ($packMrp <= 0) {
-                        $packMrp = (float) $item->unit_mrp * $packSize;
-                    }
-                @endphp
-                <tr>
-                    <td>{{ $loop->iteration }}</td>
-                    <td>
-                        <strong>{{ $item->medicine?->name ?? '-' }}</strong>
-                        @if($item->is_substituted)
-                            <div style="font-size: 8.5px; color: #dc2626;">Substituted: {{ $item->substitution_note ?: 'Yes' }}</div>
-                        @endif
-                    </td>
-                    <td>{{ $packSize }} {{ $item->medicine?->unit?->name }}</td>
-                    <td>{{ $item->medicine?->company ?? '-' }}</td>
-                    <td class="text-end">{{ rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') }}</td>
-                    <td class="text-end">{{ number_format($packMrp, 2) }}</td>
-                    <td><span style="font-family: monospace; font-size: 9px;">{{ $item->batch_no ?: '-' }}</span></td>
-                    <td>{{ $item->expiry_date ? $item->expiry_date->format('m-y') : '-' }}</td>
-                    <td class="text-end">{{ number_format((float) $item->discount_percent, 2) }}%</td>
-                    <td class="text-end">{{ number_format((float) $item->tax_percent, 0) }}%</td>
-                    <td class="text-end">{{ number_format((float) $item->line_total, 2) }}</td>
-                </tr>
-            @empty
-                <tr><td colspan="11" class="empty">No sale items found.</td></tr>
-            @endforelse
-        </tbody>
-    </table>
-
-    <div class="totals-wrap">
-        <div class="notes">
-            <div><strong>Remarks:</strong></div>
-            <div style="margin-top: 4px;">Medicine once sold will not be taken back unless authorized.</div>
             @if(!empty($printTemplate?->footer_text))
-                <div style="margin-top: 8px;">{!! nl2br(e($printTemplate->footer_text)) !!}</div>
+                <div class="brand-line">{!! nl2br(e($printTemplate->footer_text)) !!}</div>
             @endif
         </div>
 
-        <table class="totals-table">
+        <div class="top-grid">
+            <div>
+                <div class="meta-line">
+                    <span>Patient:</span><span>{{ $patient?->name ?? 'Walk-in Customer' }}</span>
+                    <span>Address:</span><span>{{ $patientAddress !== '' ? $patientAddress : '-' }}</span>
+                </div>
+                <div class="meta-line">
+                    <span>UHID:</span><span>{{ $patient?->patient_id ?? '-' }}</span>
+                    <span>Phone:</span><span>{{ $patient?->phone ?? '-' }}</span>
+                </div>
+                <div class="meta-line">
+                    <span>Dr.:</span><span>{{ $doctorName ?: '-' }}</span>
+                    <span>Rx:</span><span>{{ $rxNo }}</span>
+                </div>
+            </div>
+            <div class="right mono-small">
+                <div>Payment: {{ strtoupper((string) ($bill->payment_mode ?: 'Cash')) }}</div>
+                <div>Status: {{ strtoupper((string) ($bill->payment_status ?: 'paid')) }}</div>
+            </div>
+        </div>
+
+        <div class="invoice-line">
+            <div>Invoice No:</div>
+            <div class="value">{{ $bill->bill_no }}</div>
+            <div class="right">Date:</div>
+            <div class="value right">{{ optional($bill->bill_date)->format('d-m-y') ?? '-' }}</div>
+        </div>
+
+        <table>
+            <thead>
+            <tr>
+                <th style="width:6%;" class="right">Qty</th>
+                <th style="width:28%;">Product</th>
+                <th style="width:8%;">Pack</th>
+                <th style="width:8%;">Mfg</th>
+                <th style="width:10%;" class="right">MRP</th>
+                <th style="width:12%;">Batch</th>
+                <th style="width:8%;">Exp.</th>
+                <th style="width:7%;" class="right">Disc</th>
+                <th style="width:6%;" class="right">GST</th>
+                <th style="width:7%;" class="right">Amount</th>
+            </tr>
+            </thead>
             <tbody>
-                <tr><td>Subtotal</td><td class="text-end">{{ number_format($bill->subtotal, 2) }}</td></tr>
-                @if($bill->discount_amount > 0)
-                    <tr><td>Discount</td><td class="text-end">{{ number_format((float) $bill->discount_amount, 2) }}</td></tr>
-                @endif
-                @if($bill->round_off != 0)
-                    <tr><td>Round Off</td><td class="text-end">{{ number_format((float) $bill->round_off, 2) }}</td></tr>
-                @endif
+            @forelse($bill->items as $item)
                 @php
-                    $totalSavings = (float) $bill->discount_amount + (float) $bill->round_off;
+                    $packSize = (int) ($item->stockBatch?->pack_size ?? $item->medicine?->default_pack_size ?? 1);
+                    $packSize = max(1, $packSize);
+                    $packMrp = (float) ($item->stockBatch?->pack_mrp ?? 0);
+                    if ($packMrp <= 0) {
+                        $packMrp = (float) $item->unit_mrp * $packSize;
+                    }
+                    $packLabel = $packSize . ' ' . ($item->medicine?->unit?->name ?? 'Unit');
                 @endphp
-                @if($totalSavings > 0)
-                    <tr style="color: #16a34a; font-weight: bold;"><td>You Saved</td><td class="text-end">{{ number_format($totalSavings, 2) }}</td></tr>
-                @endif
-                <tr class="table-light fw-bold"><td>Grand Total</td><td class="text-end">{{ number_format((float) $bill->net_total, 2) }}</td></tr>
-                <tr><td>Payment Mode</td><td class="text-end">{{ $bill->payment_mode ?: 'Cash' }}</td></tr>
-                @if($bill->payment_reference)
-                    <tr><td>Payment Ref</td><td class="text-end">{{ $bill->payment_reference }}</td></tr>
-                @endif
+                <tr>
+                    <td class="right">{{ $fmtQty($item->quantity) }}</td>
+                    <td class="product">
+                        {{ $item->medicine?->name ?? '-' }}
+                        @if($item->is_substituted)
+                            <span class="muted">*</span>
+                        @endif
+                    </td>
+                    <td>{{ $packLabel }}</td>
+                    <td>{{ $item->medicine?->company ?? '-' }}</td>
+                    <td class="right">{{ $money($packMrp) }}</td>
+                    <td>{{ $item->batch_no ?: '-' }}</td>
+                    <td>{{ $item->expiry_date ? $item->expiry_date->format('m-y') : '-' }}</td>
+                    <td class="right">{{ $fmtQty($item->discount_percent) }}</td>
+                    <td class="right">{{ $fmtQty($item->tax_percent) }}%</td>
+                    <td class="right">{{ $money($item->line_total) }}</td>
+                </tr>
+            @empty
+                <tr><td colspan="10" class="center muted">No sale items found.</td></tr>
+            @endforelse
             </tbody>
         </table>
-    </div>
 
-    <div class="footer">
-        <div>Printed on {{ now()->format('d-m-Y h:i A') }}</div>
-        <div class="sign">
-            <div class="line">Authorized Signature</div>
+        <div class="totals">
+            <div>
+                <div class="qty-total">{{ $fmtQty($totalQty) }}</div>
+            </div>
+            <div class="amount-lines">
+                <div class="amount-row">
+                    <div class="center">Total:</div>
+                    <div class="right">{{ $money($grossTotal) }}</div>
+                </div>
+                @if($saved > 0)
+                    <div class="amount-row">
+                        <div class="center">You saved:</div>
+                        <div class="right">{{ $money($saved) }}</div>
+                    </div>
+                @endif
+                @if(abs($roundingDiff) >= 0.005 || abs($roundOff) >= 0.005)
+                    <div class="amount-row">
+                        <div class="center">Round Off:</div>
+                        <div class="right">{{ $money(abs($roundingDiff) >= 0.005 ? $roundingDiff : $roundOff) }}</div>
+                    </div>
+                @endif
+                <div class="amount-row grand">
+                    <div>Grand Total:</div>
+                    <div class="right">{{ $money($roundedGrand) }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-row">
+            <div>E.&amp; O.E. Subject to {{ strtoupper((string) ($hospital?->city ?: 'local')) }} jurisdiction.</div>
+            <div>For, {{ strtoupper((string) ($hospital?->name ?? config('app.name'))) }}</div>
         </div>
     </div>
 </div>

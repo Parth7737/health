@@ -120,7 +120,17 @@ class PharmacySaleController extends BaseHospitalController
             ->orderBy('name')
             ->get();
 
-        $medicines = Medicine::query()->select('id', 'name', 'unit')->orderBy('name')->get();
+        $medicines = Medicine::query()
+            ->with('unit:id,name')
+            ->select('id', 'name', 'medicine_unit_id', 'default_pack_size')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($medicine) => [
+                'id' => $medicine->id,
+                'name' => $medicine->name,
+                'unit' => $medicine->unit?->name,
+                'default_pack_size' => max(1, (int) ($medicine->default_pack_size ?? 1)),
+            ]);
 
         $opdPrescriptions = OpdPrescription::query()
             ->where('hospital_id', $this->hospital_id)
@@ -278,7 +288,22 @@ class PharmacySaleController extends BaseHospitalController
             ->orderBy('expiry_date')
             ->orderBy('id')
             ->with('purchaseItem:id,tax_percent')
-            ->get(['id', 'purchase_item_id', 'batch_no', 'expiry_date', 'available_qty', 'unit_sale_price', 'unit_mrp']);
+            ->get([
+                'id',
+                'purchase_item_id',
+                'batch_no',
+                'expiry_date',
+                'available_qty',
+                'unit_sale_price',
+                'unit_mrp',
+                'pack_size',
+                'pack_qty',
+                'pack_mrp',
+                'pack_purchase_price',
+                'pack_sale_price',
+                'sale_tax_type',
+                'tax_percent',
+            ]);
 
         return response()->json([
             'status' => true,
@@ -290,7 +315,13 @@ class PharmacySaleController extends BaseHospitalController
                     'available_qty' => (float) $batch->available_qty,
                     'unit_sale_price' => (float) $batch->unit_sale_price,
                     'unit_mrp' => (float) $batch->unit_mrp,
-                    'tax_percent' => (float) ($batch->purchaseItem?->tax_percent ?? 0),
+                    'tax_percent' => (float) ($batch->tax_percent ?? $batch->purchaseItem?->tax_percent ?? 0),
+                    'pack_size' => max(1, (int) ($batch->pack_size ?? 1)),
+                    'available_packs' => ((float) $batch->available_qty) / max(1, (int) ($batch->pack_size ?? 1)),
+                    'pack_mrp' => (float) ($batch->pack_mrp ?? 0),
+                    'pack_purchase_price' => (float) ($batch->pack_purchase_price ?? 0),
+                    'pack_sale_price' => (float) ($batch->pack_sale_price ?? 0),
+                    'sale_tax_type' => $batch->sale_tax_type ?? 'exclusive',
                 ];
             })->values(),
         ]);
@@ -421,7 +452,13 @@ class PharmacySaleController extends BaseHospitalController
             abort(403);
         }
 
-        $bill->load(['items.medicine', 'items.stockBatch', 'patient']);
+        $bill->load([
+            'items.medicine.unit',
+            'items.stockBatch',
+            'patient',
+            'opdPrescription.doctor',
+            'ipdPrescription.doctor',
+        ]);
         $hospital = Hospital::query()->find($this->hospital_id);
         $printTemplate = HeaderFooter::query()->where('type', 'pharmacy_bill')->first();
 

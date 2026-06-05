@@ -39,10 +39,15 @@ class MedicineUnitController extends BaseHospitalController
     {
         $data = MedicineUnit::select('*');
         return DataTables::of($data)
+            ->addColumn('apply_frequency_badge', function ($row) {
+                return $row->apply_frequency
+                    ? '<span class="badge bg-success">Days × Freq</span>'
+                    : '<span class="badge bg-warning text-dark">1 Pack</span>';
+            })
             ->addColumn('actions', function ($row) {
                 return view('hospital.settings.pharmacy.medicine-unit.partials.actions', compact('row'))->render();
             })
-            ->rawColumns(['actions'])
+            ->rawColumns(['apply_frequency_badge', 'actions'])
             ->make(true);
     }
 
@@ -69,8 +74,9 @@ class MedicineUnitController extends BaseHospitalController
         MedicineUnit::updateOrCreate(
             ['id' => $request->id],
             [
-                'hospital_id' => $this->hospital_id,
-                'name' => $request->name,
+                'hospital_id'      => $this->hospital_id,
+                'name'             => $request->name,
+                'apply_frequency'  => $request->has('apply_frequency'),
             ]
         );
 

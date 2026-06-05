@@ -80,7 +80,9 @@ $(document).ready(function () {
 
     const batchOptionLabel = function (batch) {
         const expiry = batch.expiry_date ? ' EXP ' + batch.expiry_date : ' No-EXP';
-        return batch.batch_no + ' | Avl ' + batch.available_qty + expiry;
+        const packSize = parseInt(batch.pack_size || 1, 10) || 1;
+        const packs = packSize > 1 ? ' (' + (parseFloat(batch.available_packs || 0)).toFixed(2) + ' packs x ' + packSize + ')' : '';
+        return batch.batch_no + ' | Avl ' + batch.available_qty + packs + expiry;
     };
 
     const saleRowHtml = function (index, item) {
@@ -272,7 +274,7 @@ $(document).ready(function () {
 
             (response.batches || []).forEach(function (batch) {
                 batchSelect.append(
-                    '<option value="' + batch.id + '" data-price="' + batch.unit_sale_price + '" data-mrp="' + batch.unit_mrp + '" data-tax="' + (batch.tax_percent || 0) + '">' +
+                    '<option value="' + batch.id + '" data-price="' + batch.unit_sale_price + '" data-mrp="' + batch.unit_mrp + '" data-tax="' + (batch.tax_percent || 0) + '" data-pack-size="' + (batch.pack_size || 1) + '">' +
                     batchOptionLabel(batch) +
                     '</option>'
                 );

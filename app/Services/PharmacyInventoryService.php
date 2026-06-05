@@ -44,13 +44,13 @@ class PharmacyInventoryService
             $estimatedTotal = 0.0;
 
             foreach ($items as $item) {
-                $qty = (float) Arr::get($item, 'quantity_purchased', 0);
+                $pack = $this->normalizePurchasePack($item);
+                $qty = $pack['base_qty'];
                 if ($qty <= 0) {
                     throw new RuntimeException('Purchase item quantity must be greater than zero.');
                 }
 
-                $estRate = (float) Arr::get($item, 'unit_purchase_price', 0);
-                $lineEst = round($qty * $estRate, 2);
+                $lineEst = round($pack['pack_qty'] * $pack['pack_rate'], 2);
 
                 $bill->items()->create([
                     'medicine_id'        => (int) Arr::get($item, 'medicine_id'),
@@ -59,7 +59,11 @@ class PharmacyInventoryService
                     'quantity_free'       => 0,
                     'quantity_received'   => 0,
                     'total_quantity'      => $qty,
-                    'unit_purchase_price' => $estRate,
+                    'pack_size'           => '1 x ' . $pack['pack_size'],
+                    'pack_size_qty'       => $pack['pack_size'],
+                    'pack_qty'            => $pack['pack_qty'],
+                    'pack_purchase_price' => $pack['pack_rate'],
+                    'unit_purchase_price' => $pack['unit_rate'],
                     'unit_sale_price'     => 0,
                     'unit_mrp'            => 0,
                     'tax_percent'         => 0,
@@ -197,6 +201,9 @@ class PharmacyInventoryService
                 $packSalePrice     = (float) Arr::get($grnItem, 'unit_sale_price', 0);     // represents pack sale price
                 $packMrp           = (float) Arr::get($grnItem, 'unit_mrp', $packSalePrice); // represents pack MRP
                 $taxPercent        = (float) Arr::get($grnItem, 'tax_percent', 0);
+                if ($taxPercent > 100) {
+                    $taxPercent = 100;
+                }
 
                 $purchaseTaxType = Arr::get($grnItem, 'purchase_tax_type', 'inclusive');
                 $saleTaxType     = Arr::get($grnItem, 'sale_tax_type', 'inclusive');
@@ -416,13 +423,13 @@ class PharmacyInventoryService
             $estimatedTotal = 0.0;
 
             foreach ($items as $item) {
-                $qty = (float) Arr::get($item, 'quantity_purchased', 0);
+                $pack = $this->normalizePurchasePack($item);
+                $qty = $pack['base_qty'];
                 if ($qty <= 0) {
                     throw new \RuntimeException('Purchase item quantity must be greater than zero.');
                 }
 
-                $estRate = (float) Arr::get($item, 'unit_purchase_price', 0);
-                $lineEst = round($qty * $estRate, 2);
+                $lineEst = round($pack['pack_qty'] * $pack['pack_rate'], 2);
 
                 $bill->items()->create([
                     'medicine_id'        => (int) Arr::get($item, 'medicine_id'),
@@ -431,7 +438,11 @@ class PharmacyInventoryService
                     'quantity_free'       => 0,
                     'quantity_received'   => 0,
                     'total_quantity'      => $qty,
-                    'unit_purchase_price' => $estRate,
+                    'pack_size'           => '1 x ' . $pack['pack_size'],
+                    'pack_size_qty'       => $pack['pack_size'],
+                    'pack_qty'            => $pack['pack_qty'],
+                    'pack_purchase_price' => $pack['pack_rate'],
+                    'unit_purchase_price' => $pack['unit_rate'],
                     'unit_sale_price'     => 0,
                     'unit_mrp'            => 0,
                     'tax_percent'         => 0,
@@ -861,6 +872,40 @@ class PharmacyInventoryService
             'entry_at' => now(),
             'created_by' => auth()->id(),
         ]);
+    }
+
+    protected function normalizePurchasePack(array $item): array
+    {
+        $packSize = (int) Arr::get($item, 'pack_size_qty', Arr::get($item, 'pack_size', 1));
+        if ($packSize < 1) {
+            $packSize = 1;
+        }
+
+        $packQty = (float) Arr::get($item, 'pack_qty', 0);
+        $baseQty = (float) Arr::get($item, 'quantity_purchased', 0);
+
+        if ($packQty > 0) {
+            $baseQty = $packQty * $packSize;
+        } elseif ($baseQty > 0) {
+            $packQty = $baseQty / $packSize;
+        }
+
+        $packRate = (float) Arr::get($item, 'pack_purchase_price', 0);
+        $unitRate = (float) Arr::get($item, 'unit_purchase_price', 0);
+
+        if ($packRate > 0) {
+            $unitRate = $packRate / $packSize;
+        } else {
+            $packRate = $unitRate * $packSize;
+        }
+
+        return [
+            'pack_size' => $packSize,
+            'pack_qty' => $packQty,
+            'base_qty' => $baseQty,
+            'pack_rate' => $packRate,
+            'unit_rate' => $unitRate,
+        ];
     }
 
     protected function resolvePaymentStatus(float $netTotal, float $paidAmount): string

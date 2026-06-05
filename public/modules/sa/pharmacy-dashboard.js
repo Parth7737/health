@@ -215,6 +215,16 @@
     function focusLastMedicineRow() {
         var body = document.getElementById('poItemBody');
         if (!body) return;
+
+        // Reset horizontal scroll of the table wrap container in PO modal
+        var modal = document.getElementById('newPOModal');
+        if (modal) {
+            var scrollContainer = modal.querySelector('.table-wrap');
+            if (scrollContainer) {
+                scrollContainer.scrollLeft = 0;
+            }
+        }
+
         var lastTr = body.querySelector('tr:last-child');
         if (!lastTr) return;
         var select = lastTr.querySelector('select.po-medicine');
@@ -336,6 +346,16 @@
                         setTimeout(function () {
                             focusLastMedicineRow();
                         }, 50);
+                    }
+                }
+            } else if (active.classList.contains('po-pack-size')) {
+                var row = active.closest('tr');
+                if (row) {
+                    var qtyInput = row.querySelector('.po-qty');
+                    if (qtyInput) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        qtyInput.focus();
                     }
                 }
             } else if (active.classList.contains('po-qty')) {
@@ -2586,9 +2606,11 @@
             var selected = String(batch.id) === String(item.batch_id) ? ' selected' : '';
             var taxPercent = toNumber(batch.tax_percent || 0);
             var inclusivePrice = toNumber(batch.unit_sale_price) * (1 + taxPercent / 100);
+            var packSize = parseInt(batch.pack_size || 1, 10) || 1;
+            var packInfo = packSize > 1 ? ' (' + (toNumber(batch.available_qty) / packSize).toFixed(2) + ' packs x ' + packSize + ')' : '';
             return '<option value="' + batch.id + '"' + selected +
-                ' data-price="' + inclusivePrice.toFixed(2) + '" data-mrp="' + batch.unit_mrp + '" data-tax="' + batch.tax_percent + '" data-available="' + batch.available_qty + '">' +
-                escapeHtml(batch.batch_no || '-') + ' | Exp ' + escapeHtml(batch.expiry_date || 'NA') + ' | ' + batch.available_qty +
+                ' data-price="' + inclusivePrice.toFixed(2) + '" data-mrp="' + batch.unit_mrp + '" data-tax="' + batch.tax_percent + '" data-available="' + batch.available_qty + '" data-pack-size="' + packSize + '">' +
+                escapeHtml(batch.batch_no || '-') + ' | Exp ' + escapeHtml(batch.expiry_date || 'NA') + ' | ' + batch.available_qty + packInfo +
                 '</option>';
         }).join('');
     }
@@ -3375,12 +3397,21 @@
             .join('');
     }
 
+    function poMedicineDefaultPackSize(medicineId) {
+        var medicine = (window.poMedicines || []).find(function (m) {
+            return String(m.id) === String(medicineId);
+        });
+        return Math.max(1, parseInt(medicine && medicine.default_pack_size, 10) || 1);
+    }
+
     function buildPORow() {
         var i = poRowIdx++;
         return '<tr data-idx="' + i + '">' +
             '<td><select class="form-control select2 ph-grid-input po-medicine" name="items[' + i + '][medicine_id]"><option value="">Select</option>' + poMedicineOptions() + '</select></td>' +
-            '<td><input type="number" min="1" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][quantity_purchased]" value="" placeholder="1"></td>' +
-            '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price po-price" name="items[' + i + '][unit_purchase_price]" value="0" placeholder="0"></td>' +
+            '<td><input type="number" min="1" step="1" class="form-control ph-grid-input ph-grid-input-qty po-pack-size" name="items[' + i + '][pack_size_qty]" value="1" style="width:70px"></td>' +
+            '<td><input type="number" min="0.01" step="0.01" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][pack_qty]" value="" placeholder="1"></td>' +
+            '<td><input type="number" min="0.01" step="0.01" class="form-control ph-grid-input ph-grid-input-qty po-units" name="items[' + i + '][quantity_purchased]" value="" readonly></td>' +
+            '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price po-price" name="items[' + i + '][pack_purchase_price]" value="0" placeholder="0"><input type="hidden" class="po-unit-price" name="items[' + i + '][unit_purchase_price]" value="0"></td>' +
             '<td><span class="po-line-amt fw-700 fs-12">₹0</span></td>' +
             '<td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest(\'tr\').remove(); recalcPOTotal();">✕</button></td></tr>';
     }
@@ -3394,10 +3425,17 @@
             })
             .join('');
 
+        var packSize = parseInt(item.pack_size_qty, 10) || 1;
+        var packQty = parseFloat(item.pack_qty) || ((parseFloat(item.quantity_purchased) || 0) / packSize);
+        var packRate = parseFloat(item.pack_purchase_price) || ((parseFloat(item.unit_purchase_price) || 0) * packSize);
+        var baseUnits = packQty * packSize;
+
         return '<tr data-idx="' + i + '">' +
             '<td><select class="form-control select2 ph-grid-input po-medicine" name="items[' + i + '][medicine_id]"><option value="">Select</option>' + optionsHtml + '</select></td>' +
-            '<td><input type="number" min="1" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][quantity_purchased]" value="' + item.quantity_purchased + '" placeholder="1"></td>' +
-            '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price po-price" name="items[' + i + '][unit_purchase_price]" value="' + item.unit_purchase_price + '" placeholder="0"></td>' +
+            '<td><input type="number" min="1" step="1" class="form-control ph-grid-input ph-grid-input-qty po-pack-size" name="items[' + i + '][pack_size_qty]" value="' + packSize + '" style="width:70px"></td>' +
+            '<td><input type="number" min="0.01" step="0.01" class="form-control ph-grid-input ph-grid-input-qty po-qty" name="items[' + i + '][pack_qty]" value="' + packQty + '" placeholder="1"></td>' +
+            '<td><input type="number" min="0.01" step="0.01" class="form-control ph-grid-input ph-grid-input-qty po-units" name="items[' + i + '][quantity_purchased]" value="' + baseUnits.toFixed(2) + '" readonly></td>' +
+            '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input ph-grid-input-price po-price" name="items[' + i + '][pack_purchase_price]" value="' + packRate.toFixed(2) + '" placeholder="0"><input type="hidden" class="po-unit-price" name="items[' + i + '][unit_purchase_price]" value="' + (packRate / packSize).toFixed(4) + '"></td>' +
             '<td><span class="po-line-amt fw-700 fs-12">₹' + (item.quantity_purchased * item.unit_purchase_price).toFixed(2) + '</span></td>' +
             '<td><button class="btn btn-danger btn-xs" type="button" onclick="this.closest(\'tr\').remove(); recalcPOTotal();">✕</button></td></tr>';
     }
@@ -3441,9 +3479,16 @@
     function recalcPOTotal() {
         var total = 0;
         window.$('#poItemBody tr').each(function () {
-            var qty = parseFloat(window.$(this).find('.po-qty').val()) || 0;
-            var price = parseFloat(window.$(this).find('.po-price').val()) || 0;
-            var lineAmt = qty * price;
+            var $row = window.$(this);
+            var packSize = parseInt($row.find('.po-pack-size').val(), 10) || 1;
+            if (packSize < 1) packSize = 1;
+            var packQty = parseFloat($row.find('.po-qty').val()) || 0;
+            var packPrice = parseFloat($row.find('.po-price').val()) || 0;
+            var baseUnits = packQty * packSize;
+            var unitPrice = packSize > 0 ? packPrice / packSize : 0;
+            var lineAmt = packQty * packPrice;
+            $row.find('.po-units').val(baseUnits ? baseUnits.toFixed(2) : '');
+            $row.find('.po-unit-price').val(unitPrice.toFixed(4));
             window.$(this).find('.po-line-amt').text('₹' + lineAmt.toFixed(2));
             total += lineAmt;
         });
@@ -3459,7 +3504,17 @@
             recalcPOTotal();
         });
 
-        window.$(document).on('input', '.po-qty, .po-price', recalcPOTotal);
+        window.$(document).on('input', '.po-pack-size, .po-qty, .po-price', recalcPOTotal);
+
+        window.$(document).on('change', 'select.po-medicine', function () {
+            var tr = this.closest('tr');
+            if (!tr) return;
+            var packInput = tr.querySelector('.po-pack-size');
+            if (packInput && (!packInput.value || parseInt(packInput.value, 10) <= 1)) {
+                packInput.value = poMedicineDefaultPackSize(this.value);
+            }
+            recalcPOTotal();
+        });
 
         window.$(document).on('select2:close', '#po_supplier_id', function () {
             setTimeout(function () {
@@ -3475,9 +3530,9 @@
             setTimeout(function () {
                 var tr = selectEl.closest('tr');
                 if (tr) {
-                    var qtyInput = tr.querySelector('.po-qty');
-                    if (qtyInput) {
-                        qtyInput.focus();
+                    var packInput = tr.querySelector('.po-pack-size');
+                    if (packInput) {
+                        packInput.focus();
                     }
                 }
             }, 50);
@@ -3650,9 +3705,9 @@
             if (!url) { toast('Error', 'Route not found.', 'error'); return; }
             var btn = this;
             if (typeof Swal !== 'undefined') {
-                Swal.fire({ title: 'Approve PO?', text: 'This will add stock to inventory.', icon: 'question', showCancelButton: true, confirmButtonText: 'Yes, approve' })
+                Swal.fire({ title: 'Approve PO?', text: 'This will approve the Purchase Order. Stock will be added when generating the GRN.', icon: 'question', showCancelButton: true, confirmButtonText: 'Yes, approve' })
                     .then(function (r) { if (r.isConfirmed) { doApprove(url, btn); } });
-            } else if (confirm('Approve this PO? Stock will be added to inventory.')) {
+            } else if (confirm('Approve this PO? Stock will be added when generating the GRN.')) {
                 doApprove(url, btn);
             }
         });
@@ -4369,11 +4424,11 @@
         body.innerHTML = po.items.map(function (item, idx) {
             var defaultPackSize = item.default_pack_size || 1;
             var estPrice = item.unit_purchase_price || 0;
-            var packPurPrice = estPrice * defaultPackSize;
+            var packPurPrice = item.pack_purchase_price || (estPrice * defaultPackSize);
             var packSalePrice = packPurPrice * (1 + profitPercent / 100);
             var packMrp = isSaleIsMrp ? packSalePrice : (packPurPrice * 1.5);
             var medicineVat = item.vat !== undefined ? item.vat : 18;
-            var initialPacks = (item.remaining_qty / defaultPackSize);
+            var initialPacks = item.remaining_pack_qty || (item.remaining_qty / defaultPackSize);
 
             return '<tr data-remaining="' + item.remaining_qty + '" data-est-price="' + estPrice + '">' +
                 '<input type="hidden" name="items[' + idx + '][purchase_item_id]" value="' + item.purchase_item_id + '">' +
@@ -4439,6 +4494,10 @@
 
             var packPrice = parseFloat($row.find('.grn-pack-price').val()) || 0;
             var taxPercent = parseFloat($row.find('.grn-tax').val()) || 0;
+            if (taxPercent > 100) {
+                taxPercent = 100;
+                $row.find('.grn-tax').val(100);
+            }
             var purTaxType = 'inclusive'; // Force purchase tax strictly inclusive
 
             var lineSub = 0;
@@ -4511,11 +4570,14 @@
         // Universal inputs change recalculation
         window.$(document).on('input change', '.grn-pack-size, .grn-received-qty, .grn-free-qty, .grn-rejected-qty, .grn-pack-price, .grn-pack-sale-price, .grn-pack-mrp, .grn-tax, #grn_gst_type', updateGRNAcceptedTotal);
 
-        // Recalculate purchase pack price, sale pack price, and MRP on pack size change (received units stay same)
-        window.$(document).on('change', '.grn-pack-size', function () {
+        window.$(document).on('input change', '.grn-pack-size', function () {
             var $row = window.$(this).closest('tr');
             var packSize = parseInt(window.$(this).val(), 10) || 1;
             if (packSize < 1) packSize = 1;
+
+            var remainingUnits = parseFloat($row.attr('data-remaining')) || 0;
+            var recdPacks = remainingUnits / packSize;
+            $row.find('.grn-received-qty').val(recdPacks.toFixed(2));
 
             var estPrice = parseFloat($row.attr('data-est-price')) || 0;
             var packPurPrice = estPrice * packSize;

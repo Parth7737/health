@@ -9,6 +9,10 @@ class MedicineUnit extends Model
 {
     protected $guarded = [];
 
+    protected $casts = [
+        'apply_frequency' => 'boolean',
+    ];
+
     protected static function booted()
     {
         static::addGlobalScope(new HospitalScope);

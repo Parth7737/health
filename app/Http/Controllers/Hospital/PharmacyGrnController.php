@@ -90,17 +90,21 @@ class PharmacyGrnController extends BaseHospitalController
                     'supplier_state_id' => $po->supplier?->state_id,
                     'date'     => optional($po->bill_date)->format('d-m-Y'),
                     'items'    => $po->items->map(function ($item) {
+                        $packSize = max(1, (int) ($item->pack_size_qty ?: ($item->medicine?->default_pack_size ?? 1)));
                         $remaining = max(0, (float) $item->total_quantity - (float) $item->quantity_received);
                         return [
                             'purchase_item_id'    => $item->id,
                             'medicine_id'         => $item->medicine_id,
                             'medicine_name'       => $item->medicine?->name ?? '—',
                             'ordered_qty'         => (float) $item->total_quantity,
+                            'ordered_pack_qty'    => (float) ($item->pack_qty ?: ((float) $item->total_quantity / $packSize)),
                             'already_received'    => (float) $item->quantity_received,
                             'remaining_qty'       => $remaining,
+                            'remaining_pack_qty'  => $remaining / $packSize,
                             'unit_purchase_price' => (float) $item->unit_purchase_price,
+                            'pack_purchase_price' => (float) ($item->pack_purchase_price ?: ((float) $item->unit_purchase_price * $packSize)),
                             'vat'                 => (float) ($item->medicine?->vat ?? 0),
-                            'default_pack_size'   => (int) ($item->medicine?->default_pack_size ?? 1),
+                            'default_pack_size'   => $packSize,
                         ];
                     })->filter(fn ($i) => $i['remaining_qty'] > 0)->values(),
                 ];
@@ -128,7 +132,8 @@ class PharmacyGrnController extends BaseHospitalController
             'items.*.purchase_item_id'    => 'required|integer',
             'items.*.batch_no'            => 'required|string|max:100',
             'items.*.expiry_date'         => 'nullable|date',
-            'items.*.quantity_received'   => 'required|numeric|min:1',
+            'items.*.pack_size'           => 'required|integer|min:1',
+            'items.*.quantity_received'   => 'required|numeric|min:0.0001',
             'items.*.quantity_free'       => 'nullable|numeric|min:0',
             'items.*.quantity_rejected'   => 'nullable|numeric|min:0',
             'items.*.unit_purchase_price' => 'required|numeric|min:1',

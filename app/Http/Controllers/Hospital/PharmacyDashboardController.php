@@ -71,7 +71,17 @@ class PharmacyDashboardController extends BaseHospitalController
     public function index()
     {
         $medicineCategories = MedicineCategory::query()->select('id', 'name')->orderBy('name')->get();
-        $medicines = Medicine::query()->select('id', 'name', 'medicine_unit_id')->orderBy('name')->get();
+        $medicines = Medicine::query()
+            ->with('unit:id,name')
+            ->select('id', 'name', 'medicine_unit_id', 'default_pack_size')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($medicine) => [
+                'id' => $medicine->id,
+                'name' => $medicine->name,
+                'unit' => $medicine->unit?->name,
+                'default_pack_size' => max(1, (int) ($medicine->default_pack_size ?? 1)),
+            ]);
         $suppliers = PharmacySupplier::query()->select('id', 'name', 'phone')->orderBy('name')->get();
         $hospitalStateId = Hospital::where('id', $this->hospital_id)->first()?->state_id;
 
@@ -343,6 +353,7 @@ class PharmacyDashboardController extends BaseHospitalController
             'patient:id,patient_id,mrn,name,gender,age_years,age_months,blood_group,known_allergies',
             'doctor:id,first_name,last_name',
             'items.medicine:id,name,medicine_unit_id',
+            'items.medicine.unit:id,name,apply_frequency',
             'items.dosage:id,dosage',
             'items.frequency:id,frequency,no_of_medicine',
             'items.route:id,route',
@@ -368,9 +379,21 @@ class PharmacyDashboardController extends BaseHospitalController
             ->map(function ($item) use ($dispensedQtys) {
                 $batches = $this->availableBatchesForMedicine((int) $item->medicine_id);
                 $availableQty = (float) $batches->sum('available_qty');
-                $prescribedQty = max(1, (float) ($item->no_of_day ?? 1));
-                $frequencyQty = max(1, (float) ($item->frequency?->no_of_medicine ?? 1));
-                $totalPrescribed = $prescribedQty * $frequencyQty;
+
+                // Determine if frequency multiplication should apply.
+                // apply_frequency = true  → countable units (Tab, Cap): qty = days × no_of_medicine
+                // apply_frequency = false → whole-pack units (Cream, Syrup, Powder): qty = 1 pack
+                $applyFrequency = (bool) ($item->medicine?->unit?->apply_frequency ?? true);
+
+                if ($applyFrequency) {
+                    $prescribedQty   = max(1, (float) ($item->no_of_day ?? 1));
+                    $frequencyQty    = max(1, (float) ($item->frequency?->no_of_medicine ?? 1));
+                    $totalPrescribed = $prescribedQty * $frequencyQty;
+                } else {
+                    // Non-countable medicine: dispense 1 pack regardless of days/frequency.
+                    $totalPrescribed = 1;
+                }
+
                 $alreadyDispensed = (float) ($dispensedQtys[(int) $item->medicine_id] ?? 0);
                 $remainingQty = max(0.0, $totalPrescribed - $alreadyDispensed);
                 $firstBatch = $batches->first();

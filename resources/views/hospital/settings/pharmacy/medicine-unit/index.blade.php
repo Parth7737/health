@@ -22,6 +22,7 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Name</th>
+                                    <th>Freq. Calc</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>

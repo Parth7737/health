@@ -87,8 +87,10 @@
                             <thead class="table-secondary">
                             <tr>
                                 <th style="min-width:150px">Medicine <span class="text-danger">*</span></th>
-                                <th style="min-width:60px">Qty <span class="text-danger">*</span></th>
-                                <th style="min-width:85px">Est. Rate ₹</th>
+                                <th style="min-width:70px">Pack Size</th>
+                                <th style="min-width:60px">Packs <span class="text-danger">*</span></th>
+                                <th style="min-width:70px">Units</th>
+                                <th style="min-width:85px">Pack Rate</th>
                                 <th style="min-width:85px" class="text-end">Est. Amount</th>
                                 <th style="width:36px"></th>
                             </tr>

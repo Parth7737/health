@@ -98,8 +98,9 @@
             <tr>
                 <th>#</th>
                 <th>Medicine</th>
-                <th class="text-end">Ordered Qty</th>
-                <th class="text-end">Est. Rate</th>
+                <th class="text-end">Packs</th>
+                <th class="text-end">Units</th>
+                <th class="text-end">Pack Rate</th>
                 <th class="text-end">Line Total</th>
             </tr>
             </thead>
@@ -108,8 +109,14 @@
                 <tr>
                     <td>{{ $loop->iteration }}</td>
                     <td>{{ $item->medicine?->name ?? '-' }}</td>
+                    @php
+                        $packSize = max(1, (int) ($item->pack_size_qty ?: 1));
+                        $packQty = (float) ($item->pack_qty ?: ((float) $item->quantity_purchased / $packSize));
+                        $packRate = (float) ($item->pack_purchase_price ?: ((float) $item->unit_purchase_price * $packSize));
+                    @endphp
+                    <td class="text-end">{{ $fmtQty($packQty) }} x {{ $packSize }}</td>
                     <td class="text-end">{{ $fmtQty($item->quantity_purchased) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
-                    <td class="text-end">{{ number_format((float) $item->unit_purchase_price, 2) }}</td>
+                    <td class="text-end">{{ number_format($packRate, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->line_total, 2) }}</td>
                 </tr>
             @empty

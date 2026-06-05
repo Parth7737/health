@@ -68,6 +68,14 @@ class PharmacyStockController extends BaseHospitalController
                     return (string) $row->expiry_date;
                 }
             })
+            ->editColumn('unit_sale_price', function ($row) {
+                $taxPercent = (float) ($row->tax_percent ?? 0);
+                $unitSalePrice = (float) ($row->unit_sale_price ?? 0);
+                if ($row->sale_tax_type === 'inclusive') {
+                    return round($unitSalePrice * (1 + $taxPercent / 100), 2);
+                }
+                return round($unitSalePrice, 2);
+            })
             ->addColumn('actions', function ($row) {
                 if (!auth()->user()->can('edit-pharmacy-bad-stock')) {
                     return '-';
@@ -120,7 +128,7 @@ class PharmacyStockController extends BaseHospitalController
                     (string) $row->available_qty,
                     (string) ($row->medicine?->min_level ?? 0),
                     (string) $row->unit_mrp,
-                    (string) $row->unit_sale_price,
+                    (string) ($row->sale_tax_type === 'inclusive' ? round($row->unit_sale_price * (1 + $row->tax_percent / 100), 2) : $row->unit_sale_price),
                     (string) $row->status,
                 ]);
             }

@@ -26,6 +26,7 @@ $(document).ready(function() {
                 }
             },
             { data: 'name', name: 'name' },
+            { data: 'apply_frequency_badge', name: 'apply_frequency', orderable: false, searchable: false },
             { data: 'actions', name: 'actions', orderable: false, searchable: false }
         ],
         dom: "fBrtip",

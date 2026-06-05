@@ -68,7 +68,7 @@ class PharmacyPurchaseController extends BaseHospitalController
                 'supplier',
                 'createdBy:id,name',
                 'approvedBy:id,name',
-                'items.medicine',
+                'items.medicine.unit',
             ])->findOrFail($request->id);
 
             if ($bill->hospital_id !== $this->hospital_id) {
@@ -79,11 +79,21 @@ class PharmacyPurchaseController extends BaseHospitalController
         }
 
         $bill      = null;
-        $medicines = Medicine::query()->select('id', 'name', 'unit')->orderBy('name')->get();
+        $medicines = Medicine::query()
+            ->with('unit:id,name')
+            ->select('id', 'name', 'medicine_unit_id', 'default_pack_size')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($medicine) => [
+                'id' => $medicine->id,
+                'name' => $medicine->name,
+                'unit' => $medicine->unit?->name,
+                'default_pack_size' => max(1, (int) ($medicine->default_pack_size ?? 1)),
+            ]);
         $suppliers = PharmacySupplier::query()->select('id', 'name', 'phone')->orderBy('name')->get();
 
         if ($request->id) {
-            $bill = PharmacyPurchaseBill::with('items.medicine')->findOrFail($request->id);
+            $bill = PharmacyPurchaseBill::with('items.medicine.unit')->findOrFail($request->id);
             if ($bill->hospital_id !== $this->hospital_id) {
                 abort(403);
             }
@@ -100,7 +110,10 @@ class PharmacyPurchaseController extends BaseHospitalController
             'notes'                       => 'nullable|string',
             'items'                       => 'required|array|min:1',
             'items.*.medicine_id'         => 'required|exists:medicines,id',
-            'items.*.quantity_purchased'  => 'required|numeric|min:1',
+            'items.*.quantity_purchased'  => 'nullable|numeric|min:0.01',
+            'items.*.pack_size_qty'       => 'nullable|integer|min:1',
+            'items.*.pack_qty'            => 'nullable|numeric|min:0.01',
+            'items.*.pack_purchase_price' => 'nullable|numeric|min:0',
             'items.*.unit_purchase_price' => 'nullable|numeric|min:0',
         ]);
 
@@ -143,7 +156,10 @@ class PharmacyPurchaseController extends BaseHospitalController
             'notes'                       => 'nullable|string',
             'items'                       => 'required|array|min:1',
             'items.*.medicine_id'         => 'required|exists:medicines,id',
-            'items.*.quantity_purchased'  => 'required|numeric|min:1',
+            'items.*.quantity_purchased'  => 'nullable|numeric|min:0.01',
+            'items.*.pack_size_qty'       => 'nullable|integer|min:1',
+            'items.*.pack_qty'            => 'nullable|numeric|min:0.01',
+            'items.*.pack_purchase_price' => 'nullable|numeric|min:0',
             'items.*.unit_purchase_price' => 'nullable|numeric|min:0',
         ]);
 
@@ -221,7 +237,7 @@ class PharmacyPurchaseController extends BaseHospitalController
             abort(403);
         }
 
-        $bill->load(['items.medicine', 'supplier']);
+        $bill->load(['items.medicine.unit', 'supplier']);
         $hospital = Hospital::query()->find($this->hospital_id);
         $printTemplate = HeaderFooter::query()->where('type', 'pharmacy_bill')->first();
 
@@ -233,7 +249,7 @@ class PharmacyPurchaseController extends BaseHospitalController
      */
     public function getDetails($id)
     {
-        $bill = PharmacyPurchaseBill::with('items.medicine')->findOrFail($id);
+        $bill = PharmacyPurchaseBill::with('items.medicine.unit')->findOrFail($id);
         if ($bill->hospital_id !== $this->hospital_id) {
             return response()->json(['status' => false, 'message' => 'Unauthorized'], 403);
         }
@@ -252,6 +268,9 @@ class PharmacyPurchaseController extends BaseHospitalController
                 'id' => $item->id,
                 'medicine_id' => $item->medicine_id,
                 'medicine_name' => $item->medicine?->name ?? '—',
+                'pack_size_qty' => (int) ($item->pack_size_qty ?: 1),
+                'pack_qty' => (float) ($item->pack_qty ?: 0),
+                'pack_purchase_price' => (float) ($item->pack_purchase_price ?: 0),
                 'quantity_purchased' => (float) $item->quantity_purchased,
                 'unit_purchase_price' => (float) $item->unit_purchase_price,
             ]),

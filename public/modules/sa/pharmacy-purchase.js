@@ -48,7 +48,7 @@ $(document).ready(function () {
     /* ─── Medicine options HTML ─── */
     const medicineOptions = () =>
         (window.purchaseMedicines || [])
-            .map(m => `<option value="${m.id}" data-unit="${m.unit || ''}">${m.name}${m.unit ? ' [' + m.unit + ']' : ''}</option>`)
+            .map(m => `<option value="${m.id}" data-unit="${m.unit || ''}" data-pack-size="${m.default_pack_size || 1}">${m.name}${m.unit ? ' [' + m.unit + ']' : ''}</option>`)
             .join('');
 
     /* ─── Build a new item row ─── */
@@ -62,8 +62,10 @@ $(document).ready(function () {
               <option value="">Select</option>${medicineOptions()}
             </select>
           </td>
-          <td><input type="number" step="1" min="1" class="form-control form-control-sm item-qty" name="items[${i}][quantity_purchased]" value="1" ></td>
-          <td><input type="number" step="0.01" min="0" class="form-control form-control-sm item-price" name="items[${i}][unit_purchase_price]" value="0" ></td>
+          <td><input type="number" step="1" min="1" class="form-control form-control-sm item-pack-size" name="items[${i}][pack_size_qty]" value="1" ></td>
+          <td><input type="number" step="0.01" min="0.01" class="form-control form-control-sm item-qty" name="items[${i}][pack_qty]" value="1" ></td>
+          <td><input type="number" step="0.01" min="0.01" class="form-control form-control-sm item-units" name="items[${i}][quantity_purchased]" value="1" readonly></td>
+          <td><input type="number" step="0.01" min="0" class="form-control form-control-sm item-price" name="items[${i}][pack_purchase_price]" value="0" ><input type="hidden" class="item-unit-price" name="items[${i}][unit_purchase_price]" value="0"></td>
           <td class="text-end"><span class="item-amount fw-semibold">₹0.00</span></td>
           <td><button type="button" class="btn btn-danger btn-sm remove-item">×</button></td>
         </tr>`;
@@ -73,9 +75,14 @@ $(document).ready(function () {
     function recalcSummary() {
         let total = 0;
         $('#purchase-items-body tr').each(function () {
-            const qty = parseFloat($(this).find('.item-qty').val()) || 0;
-            const price = parseFloat($(this).find('.item-price').val()) || 0;
-            const lineAmt = qty * price;
+            const packSize = Math.max(1, parseInt($(this).find('.item-pack-size').val(), 10) || 1);
+            const packQty = parseFloat($(this).find('.item-qty').val()) || 0;
+            const packPrice = parseFloat($(this).find('.item-price').val()) || 0;
+            const baseUnits = packQty * packSize;
+            const unitPrice = packPrice / packSize;
+            const lineAmt = packQty * packPrice;
+            $(this).find('.item-units').val(baseUnits ? baseUnits.toFixed(2) : '');
+            $(this).find('.item-unit-price').val(unitPrice.toFixed(4));
             $(this).find('.item-amount').text('₹' + lineAmt.toFixed(2));
             total += lineAmt;
         });
@@ -150,7 +157,18 @@ $(document).ready(function () {
     });
 
     /* ─── Live recalc triggers ─── */
-    $(document).on('input', '.item-qty,.item-price', function () {
+    $(document).on('input', '.item-pack-size,.item-qty,.item-price', function () {
+        recalcSummary();
+    });
+
+    $(document).on('change', '.item-medicine', function () {
+        const selected = this.options[this.selectedIndex];
+        const packSize = parseInt(selected && selected.dataset.packSize, 10) || 1;
+        const row = $(this).closest('tr');
+        const input = row.find('.item-pack-size');
+        if (!input.val() || parseInt(input.val(), 10) <= 1) {
+            input.val(packSize);
+        }
         recalcSummary();
     });
 

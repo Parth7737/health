@@ -70,6 +70,18 @@
     box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2) !important;
   }
 
+  /* Focus styling for checkboxes in modals */
+  #newPOModal input[type="checkbox"]:focus,
+  #newPOModal input[type="checkbox"]:focus-visible,
+  #grnModal input[type="checkbox"]:focus,
+  #grnModal input[type="checkbox"]:focus-visible,
+  #dispenseModal input[type="checkbox"]:focus,
+  #dispenseModal input[type="checkbox"]:focus-visible {
+    outline: 2px solid #1976d2 !important;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.25) !important;
+  }
+
   /* Fix modal content scrolling when there are many items */
   .modal-overlay .modal {
     max-height: 90vh !important;
@@ -424,8 +436,8 @@
                         <div class="form-group">
                             <label class="form-label">Counselling Given</label>
                             <div class="d-flex gap-12">
-                                <label class="form-check"><input type="checkbox" checked><span class="form-check-label">Dosage instructions</span></label>
-                                <label class="form-check"><input type="checkbox" checked><span class="form-check-label">Side effects</span></label>
+                                <label class="form-check"><input type="checkbox"><span class="form-check-label">Dosage instructions</span></label>
+                                <label class="form-check"><input type="checkbox"><span class="form-check-label">Side effects</span></label>
                                 <label class="form-check"><input type="checkbox"><span class="form-check-label">Storage</span></label>
                             </div>
                         </div>
@@ -435,15 +447,15 @@
                         <div class="ph-bill-row"><span>Drugs Total:</span><span class="fw-700" id="dispenseSubtotal">₹0.00</span></div>
                         <div class="ph-bill-row mt-4 d-flex justify-content-between align-center">
                             <span>Discount:</span>
-                            <div class="d-flex gap-4 align-center" style="width: 170px;">
-                                <input class="form-control ph-grid-input" type="number" min="0" max="100" step="0.1" id="dispenseDiscountPercent" placeholder="%" style="width: 65px; text-align: right;" value="0">
+                            <div class="d-flex gap-4 align-center">
+                                <input class="form-control ph-grid-input" type="number" min="0" max="100" step="0.1" id="dispenseDiscountPercent" placeholder="%" style="width: 48px; text-align: right;" value="0">
                                 <span class="fs-10 text-muted">%</span>
-                                <input class="form-control ph-grid-input" type="number" min="0" step="0.01" name="discount_amount" id="dispenseDiscount" placeholder="₹" style="width: 80px; text-align: right;" value="0">
+                                <input class="form-control ph-grid-input" type="number" min="0" step="0.01" name="discount_amount" id="dispenseDiscount" placeholder="₹" style="width: 65px; text-align: right;" value="0">
                             </div>
                         </div>
                         <div class="ph-bill-row mt-4 d-flex justify-content-between align-center">
                             <span>Round Off:</span>
-                            <input class="form-control ph-grid-input" type="number" step="0.01" name="round_off" id="dispenseRoundOff" placeholder="₹" style="width: 80px; text-align: right; margin-left: auto;" value="0">
+                            <input class="form-control ph-grid-input" type="number" step="0.01" name="round_off" id="dispenseRoundOff" placeholder="₹" style="width: 65px; text-align: right; margin-left: auto;" value="0">
                         </div>
                         <div class="ph-bill-total"><span>Net Payable:</span><span class="fw-700 text-primary" id="dispenseNet">₹0.00</span></div>
                         <div class="ph-bill-row mt-8 d-flex justify-content-between align-center">
@@ -676,7 +688,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="hims-table">
-                        <thead><tr><th>Drug Name <span class="req">*</span></th><th>Qty <span class="req">*</span></th><th>Est. Rate ₹</th><th>Est. Amount</th><th></th></tr></thead>
+                        <thead><tr><th>Drug Name <span class="req">*</span></th><th>Pack Size</th><th>Packs <span class="req">*</span></th><th>Units</th><th>Pack Rate</th><th>Est. Amount</th><th></th></tr></thead>
                         <tbody id="poItemBody"></tbody>
                     </table>
                 </div>
@@ -718,4 +730,3 @@ window.poMedicines = @json($medicines);
 window.hospitalStateId = {{ $hospitalStateId ?? 'null' }};
 </script>
 @endpush
-
