@@ -203,17 +203,28 @@
     <table class="items-table">
         <thead>
             <tr>
-                <th style="width:5%;">SN</th>
-                <th>Medicine</th>
-                <th style="width:15%;">Batch / Expiry</th>
-                <th style="width:10%;" class="text-end">Qty</th>
-                <th style="width:12%;" class="text-end">Rate ₹</th>
-                <th style="width:12%;" class="text-end">Disc %</th>
-                <th style="width:15%;" class="text-end">Amount ₹</th>
+                <th style="width:3%;">SN</th>
+                <th>Product</th>
+                <th style="width:10%;">Pack</th>
+                <th style="width:10%;">Mfg</th>
+                <th class="text-end" style="width:10%;">Qty</th>
+                <th class="text-end" style="width:12%;">MRP</th>
+                <th style="width:12%;">Batch</th>
+                <th style="width:8%;">Exp</th>
+                <th class="text-end" style="width:8%;">Disc %</th>
+                <th class="text-end" style="width:8%;">GST</th>
+                <th class="text-end" style="width:12%;">Amount ₹</th>
             </tr>
         </thead>
         <tbody>
             @forelse($bill->items as $item)
+                @php
+                    $packSize = $item->stockBatch?->pack_size ?? ($item->medicine?->default_pack_size ?? 1);
+                    $packMrp = $item->stockBatch?->pack_mrp ?? 0;
+                    if ($packMrp <= 0) {
+                        $packMrp = (float) $item->unit_mrp * $packSize;
+                    }
+                @endphp
                 <tr>
                     <td>{{ $loop->iteration }}</td>
                     <td>
@@ -222,25 +233,18 @@
                             <div style="font-size: 8.5px; color: #dc2626;">Substituted: {{ $item->substitution_note ?: 'Yes' }}</div>
                         @endif
                     </td>
-                    <td>
-                        <span style="font-family: monospace; font-size: 9px;">{{ $item->batch_no ?: '-' }}</span>
-                        @if($item->expiry_date)
-                            <br><small style="color:#4b5563">Exp: {{ optional($item->expiry_date)->format('m/y') }}</small>
-                        @endif
-                    </td>
+                    <td>{{ $packSize }} {{ $item->medicine?->unit?->name }}</td>
+                    <td>{{ $item->medicine?->company ?? '-' }}</td>
                     <td class="text-end">{{ rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') }}</td>
-                    @php
-                        $qty = (float) $item->quantity;
-                        $lineTotal = (float) $item->line_total;
-                        $discAmt = (float) ($item->discount_amount ?? 0);
-                        $unitPriceInclusive = $qty > 0 ? ($lineTotal + $discAmt) / $qty : 0.0;
-                    @endphp
-                    <td class="text-end">{{ number_format($unitPriceInclusive, 2) }}</td>
-                    <td class="text-end">{{ number_format((float) $item->discount_percent, 2) }}</td>
+                    <td class="text-end">{{ number_format($packMrp, 2) }}</td>
+                    <td><span style="font-family: monospace; font-size: 9px;">{{ $item->batch_no ?: '-' }}</span></td>
+                    <td>{{ $item->expiry_date ? $item->expiry_date->format('m-y') : '-' }}</td>
+                    <td class="text-end">{{ number_format((float) $item->discount_percent, 2) }}%</td>
+                    <td class="text-end">{{ number_format((float) $item->tax_percent, 0) }}%</td>
                     <td class="text-end">{{ number_format((float) $item->line_total, 2) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="empty">No sale items found.</td></tr>
+                <tr><td colspan="11" class="empty">No sale items found.</td></tr>
             @endforelse
         </tbody>
     </table>
@@ -256,14 +260,24 @@
 
         <table class="totals-table">
             <tbody>
+                <tr><td>Subtotal</td><td class="text-end">{{ number_format($bill->subtotal, 2) }}</td></tr>
+                @if($bill->discount_amount > 0)
+                    <tr><td>Discount</td><td class="text-end">{{ number_format((float) $bill->discount_amount, 2) }}</td></tr>
+                @endif
+                @if($bill->round_off != 0)
+                    <tr><td>Round Off</td><td class="text-end">{{ number_format((float) $bill->round_off, 2) }}</td></tr>
+                @endif
                 @php
-                    $subtotalInclusive = (float) $bill->net_total + (float) $bill->discount_amount;
+                    $totalSavings = (float) $bill->discount_amount + (float) $bill->round_off;
                 @endphp
-                <tr><td>Subtotal</td><td class="text-end">{{ number_format($subtotalInclusive, 2) }}</td></tr>
-                <tr><td>Discount</td><td class="text-end">{{ number_format((float) $bill->discount_amount, 2) }}</td></tr>
-                <tr><td>Net Payable</td><td class="text-end">{{ number_format((float) $bill->net_total, 2) }}</td></tr>
-                <tr><td>Paid Amount</td><td class="text-end">{{ number_format((float) $bill->paid_amount, 2) }}</td></tr>
-                <tr><td>Due Balance</td><td class="text-end">{{ number_format((float) $bill->due_amount, 2) }}</td></tr>
+                @if($totalSavings > 0)
+                    <tr style="color: #16a34a; font-weight: bold;"><td>You Saved</td><td class="text-end">{{ number_format($totalSavings, 2) }}</td></tr>
+                @endif
+                <tr class="table-light fw-bold"><td>Grand Total</td><td class="text-end">{{ number_format((float) $bill->net_total, 2) }}</td></tr>
+                <tr><td>Payment Mode</td><td class="text-end">{{ $bill->payment_mode ?: 'Cash' }}</td></tr>
+                @if($bill->payment_reference)
+                    <tr><td>Payment Ref</td><td class="text-end">{{ $bill->payment_reference }}</td></tr>
+                @endif
             </tbody>
         </table>
     </div>

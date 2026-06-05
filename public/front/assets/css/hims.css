@@ -878,7 +878,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 /* Clip only the inner scrollable body, not the whole modal (prevents Select2 dropdown clipping) */
 .modal-overlay .modal > .modal-header,
 .modal-overlay .modal > .modal-footer { overflow: hidden; }
-.modal-overlay .modal > .modal-body { overflow-y: auto; overflow-x: hidden; }
+.modal-overlay .modal > .modal-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(90vh - 160px);
+}
 /* Ensure Select2 dropdown renders above modal overlay */
 .select2-container--open .select2-dropdown { z-index: 1100 !important; }
 @keyframes modalIn { from{transform:translateY(20px) scale(.97);opacity:0} to{transform:none;opacity:1} }

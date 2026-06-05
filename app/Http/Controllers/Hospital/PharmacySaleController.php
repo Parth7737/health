@@ -200,7 +200,7 @@ class PharmacySaleController extends BaseHospitalController
                     $query->whereNull('valid_till')->orWhere('valid_till', '>=', now()->toDateString());
                 })
                 ->with('items.medicine:id,name')
-                ->findOrFail($id);
+                ->find($id);
         } else {
             $prescription = IpdPrescription::query()
                 ->where('hospital_id', $this->hospital_id)
@@ -208,7 +208,14 @@ class PharmacySaleController extends BaseHospitalController
                     $query->whereNull('valid_till')->orWhere('valid_till', '>=', now()->toDateString());
                 })
                 ->with('items.medicine:id,name')
-                ->findOrFail($id);
+                ->find($id);
+        }
+
+        if (!$prescription) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Prescription not found or has expired. Please check the prescription and try again.',
+            ], 422);
         }
 
         if ($request->filled('patient_id') && (int) $request->patient_id !== (int) $prescription->patient_id) {
@@ -295,7 +302,10 @@ class PharmacySaleController extends BaseHospitalController
             'bill_date' => 'required|date',
             'patient_id' => 'nullable|exists:patients,id',
             'discount_amount' => 'nullable|numeric|min:0',
+            'round_off' => 'nullable|numeric',
             'paid_amount' => 'nullable|numeric|min:0',
+            'payment_mode' => 'required|string|max:50',
+            'payment_reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
             'prescription_type' => 'nullable|in:opd,ipd',
             'prescription_id' => 'nullable|integer',
@@ -336,8 +346,9 @@ class PharmacySaleController extends BaseHospitalController
         }
 
         $headerDiscount = (float) ($request->discount_amount ?? 0);
+        $roundOff = (float) ($request->round_off ?? 0);
         $beforeHeaderDiscount = max(0, $subtotal - $itemDiscountTotal + $taxTotal);
-        $netTotal = max(0, $beforeHeaderDiscount - $headerDiscount);
+        $netTotal = max(0, $beforeHeaderDiscount - $headerDiscount + $roundOff);
         $paidAmount = (float) ($request->paid_amount ?? 0);
 
         if ($paidAmount > $netTotal + 0.0001) {
@@ -366,6 +377,9 @@ class PharmacySaleController extends BaseHospitalController
             'patient_id' => $request->patient_id,
             'bill_date' => $request->bill_date,
             'discount_amount' => $request->discount_amount,
+            'round_off' => $request->round_off,
+            'payment_mode' => $request->payment_mode,
+            'payment_reference' => $request->payment_reference,
             'paid_amount' => $request->paid_amount,
             'notes' => $request->notes,
             'items' => $request->items,
@@ -407,7 +421,7 @@ class PharmacySaleController extends BaseHospitalController
             abort(403);
         }
 
-        $bill->load(['items.medicine', 'patient']);
+        $bill->load(['items.medicine', 'items.stockBatch', 'patient']);
         $hospital = Hospital::query()->find($this->hospital_id);
         $printTemplate = HeaderFooter::query()->where('type', 'pharmacy_bill')->first();
 

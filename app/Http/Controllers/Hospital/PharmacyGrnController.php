@@ -78,7 +78,7 @@ class PharmacyGrnController extends BaseHospitalController
      */
     public function approvedPOs(Request $request)
     {
-        $pos = PharmacyPurchaseBill::with(['items.medicine:id,name,medicine_unit_id,vat', 'supplier:id,name,state_id'])
+        $pos = PharmacyPurchaseBill::with(['items.medicine:id,name,medicine_unit_id,vat,default_pack_size', 'supplier:id,name,state_id'])
             ->whereIn('status', ['approved', 'partially_received'])
             ->latest('id')
             ->get()
@@ -100,6 +100,7 @@ class PharmacyGrnController extends BaseHospitalController
                             'remaining_qty'       => $remaining,
                             'unit_purchase_price' => (float) $item->unit_purchase_price,
                             'vat'                 => (float) ($item->medicine?->vat ?? 0),
+                            'default_pack_size'   => (int) ($item->medicine?->default_pack_size ?? 1),
                         ];
                     })->filter(fn ($i) => $i['remaining_qty'] > 0)->values(),
                 ];

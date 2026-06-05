@@ -2400,13 +2400,19 @@
             });
         }
 
-        ['dispenseDiscount', 'dispensePaid'].forEach(function (id) {
+        ['dispenseDiscountPercent', 'dispenseDiscount', 'dispenseRoundOff'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el && !el.dataset.bound) {
                 el.dataset.bound = '1';
                 el.addEventListener('input', recalcDispenseTotals);
             }
         });
+
+        var pmEl = document.getElementById('dispensePaymentMode');
+        if (pmEl && !pmEl.dataset.bound) {
+            pmEl.dataset.bound = '1';
+            pmEl.addEventListener('change', recalcDispenseTotals);
+        }
 
         // Close dropdowns on clicking outside
         if (!document.body.dataset.autocompleteBound) {
@@ -2682,12 +2688,68 @@
             subtotal += lineTotal(item);
         });
 
-        var discount = toNumber(document.getElementById('dispenseDiscount') && document.getElementById('dispenseDiscount').value);
-        var paid = toNumber(document.getElementById('dispensePaid') && document.getElementById('dispensePaid').value);
-        var net = Math.max(0, subtotal - discount);
+        var discPercentEl = document.getElementById('dispenseDiscountPercent');
+        var discAmtEl = document.getElementById('dispenseDiscount');
+        var roundOffEl = document.getElementById('dispenseRoundOff');
+        var netEl = document.getElementById('dispenseNet');
+        var paidEl = document.getElementById('dispensePaid');
+        var pmEl = document.getElementById('dispensePaymentMode');
+        var refRowEl = document.getElementById('dispensePaymentRefRow');
+        var refEl = document.getElementById('dispensePaymentRef');
+
+        var discPercent = parseFloat(discPercentEl ? discPercentEl.value : 0) || 0;
+        var discAmt = parseFloat(discAmtEl ? discAmtEl.value : 0) || 0;
+
+        if (document.activeElement && document.activeElement.id === 'dispenseDiscount') {
+            if (subtotal > 0) {
+                discPercent = (discAmt / subtotal) * 100;
+                if (discPercentEl) {
+                    discPercentEl.value = discPercent.toFixed(1);
+                }
+            } else {
+                if (discPercentEl) discPercentEl.value = '0';
+                discPercent = 0;
+            }
+        } else {
+            discAmt = (subtotal * discPercent) / 100;
+            if (discAmtEl) {
+                discAmtEl.value = discAmt.toFixed(2);
+            }
+        }
+
+        if (discAmt > subtotal) {
+            discAmt = subtotal;
+            if (discAmtEl) discAmtEl.value = discAmt.toFixed(2);
+            if (discPercentEl) discPercentEl.value = '100';
+            discPercent = 100;
+        }
+
+        var netBeforeRound = Math.max(0, subtotal - discAmt);
+        var netRounded = Math.round(netBeforeRound);
+        var roundOff = netRounded - netBeforeRound;
+
+        if (roundOffEl && document.activeElement !== roundOffEl) {
+            roundOffEl.value = roundOff.toFixed(2);
+        } else if (roundOffEl) {
+            var userRoundOff = parseFloat(roundOffEl.value) || 0;
+            netRounded = Math.max(0, Math.round(netBeforeRound + userRoundOff));
+        }
+
+        if (netEl) netEl.textContent = formatCurrency(netRounded);
+        if (paidEl) paidEl.value = netRounded.toFixed(2);
+
         setText('dispenseSubtotal', formatCurrency(subtotal));
-        setText('dispenseNet', formatCurrency(net));
-        setText('dispenseDue', formatCurrency(Math.max(0, net - paid)));
+
+        if (pmEl && refRowEl) {
+            var mode = pmEl.value;
+            if (mode === 'Cash') {
+                refRowEl.style.setProperty('display', 'none', 'important');
+                if (refEl) refEl.required = false;
+            } else {
+                refRowEl.style.setProperty('display', 'flex', 'important');
+                if (refEl) refEl.required = true;
+            }
+        }
     }
 
     function loadWalkInMedicineOptions() {
@@ -4165,12 +4227,26 @@
             return;
         }
 
+        var pmEl = document.getElementById('dispensePaymentMode');
+        var refEl = document.getElementById('dispensePaymentRef');
+        var paymentMode = pmEl ? pmEl.value : 'Cash';
+        var paymentRef = refEl ? refEl.value.trim() : '';
+
+        if (paymentMode !== 'Cash' && !paymentRef) {
+            toast('Required Field', 'Please enter payment reference for ' + paymentMode + '.', 'warning');
+            if (refEl) refEl.focus();
+            return;
+        }
+
         var payload = {
             patient_id: document.getElementById('dispensePatientId') ? document.getElementById('dispensePatientId').value : '',
             prescription_type: document.getElementById('dispensePrescriptionType') ? document.getElementById('dispensePrescriptionType').value : '',
             prescription_id: document.getElementById('dispensePrescriptionId') ? document.getElementById('dispensePrescriptionId').value : '',
             notes: document.getElementById('dispenseNotes') ? document.getElementById('dispenseNotes').value : '',
             discount_amount: toNumber(document.getElementById('dispenseDiscount') && document.getElementById('dispenseDiscount').value),
+            round_off: toNumber(document.getElementById('dispenseRoundOff') && document.getElementById('dispenseRoundOff').value),
+            payment_mode: paymentMode,
+            payment_reference: paymentRef,
             paid_amount: toNumber(document.getElementById('dispensePaid') && document.getElementById('dispensePaid').value),
             items: items
         };
@@ -4287,28 +4363,29 @@
             }
         }
 
-        var defaultPackSize = 1;
         var profitPercent = parseFloat(document.getElementById('grn_profit_percent') ? document.getElementById('grn_profit_percent').value : 30) || 0;
         var isSaleIsMrp = document.getElementById('grn_sale_is_mrp') ? document.getElementById('grn_sale_is_mrp').checked : false;
 
         body.innerHTML = po.items.map(function (item, idx) {
+            var defaultPackSize = item.default_pack_size || 1;
             var estPrice = item.unit_purchase_price || 0;
             var packPurPrice = estPrice * defaultPackSize;
             var packSalePrice = packPurPrice * (1 + profitPercent / 100);
             var packMrp = isSaleIsMrp ? packSalePrice : (packPurPrice * 1.5);
             var medicineVat = item.vat !== undefined ? item.vat : 18;
+            var initialPacks = (item.remaining_qty / defaultPackSize);
 
             return '<tr data-remaining="' + item.remaining_qty + '" data-est-price="' + estPrice + '">' +
                 '<input type="hidden" name="items[' + idx + '][purchase_item_id]" value="' + item.purchase_item_id + '">' +
-                '<input type="hidden" class="grn-received-packs-hidden" name="items[' + idx + '][quantity_received]" value="' + (item.remaining_qty / defaultPackSize) + '">' +
+                '<input type="hidden" class="grn-received-packs-hidden" name="items[' + idx + '][quantity_received]" value="' + initialPacks.toFixed(4) + '">' +
                 '<input type="hidden" class="grn-free-packs-hidden" name="items[' + idx + '][quantity_free]" value="0">' +
                 '<input type="hidden" class="grn-rejected-packs-hidden" name="items[' + idx + '][quantity_rejected]" value="0">' +
                 '<td class="fw-700 fs-12" style="min-width:120px">' + escapeHtml(item.medicine_name) + '</td>' +
                 '<td class="fw-700 text-primary">' + item.remaining_qty + '</td>' +
                 '<td><input type="number" min="1" step="1" class="form-control ph-grid-input grn-pack-size" name="items[' + idx + '][pack_size]" value="' + defaultPackSize + '" style="width:60px"></td>' +
-                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input grn-received-qty" value="' + item.remaining_qty + '" style="width:70px"></td>' +
-                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input grn-free-qty" value="0" style="width:50px"></td>' +
-                '<td><input type="number" min="0" step="1" class="form-control ph-grid-input grn-rejected-qty" value="0" style="width:50px"></td>' +
+                '<td><input type="number" min="0" step="0.0001" class="form-control ph-grid-input grn-received-qty" value="' + initialPacks.toFixed(2) + '" style="width:70px"></td>' +
+                '<td><input type="number" min="0" step="0.0001" class="form-control ph-grid-input grn-free-qty" value="0" style="width:50px"></td>' +
+                '<td><input type="number" min="0" step="0.0001" class="form-control ph-grid-input grn-rejected-qty" value="0" style="width:50px"></td>' +
                 '<td><input class="form-control ph-grid-input ph-grid-input-batch" name="items[' + idx + '][batch_no]" placeholder="Batch" required style="width:90px"></td>' +
                 '<td><input type="month" class="form-control ph-grid-input grn-expiry" name="items[' + idx + '][expiry_date]" style="width:115px"></td>' +
                 '<td><input type="number" step="0.01" min="0" class="form-control ph-grid-input grn-pack-price" name="items[' + idx + '][unit_purchase_price]" value="' + packPurPrice.toFixed(2) + '" style="width:80px"></td>' +
@@ -4336,25 +4413,29 @@
             var packSize = parseInt($row.find('.grn-pack-size').val(), 10) || 1;
             if (packSize < 1) packSize = 1;
 
-            var recdUnits = parseFloat($row.find('.grn-received-qty').val()) || 0;
-            var freeUnits = parseFloat($row.find('.grn-free-qty').val()) || 0;
-            var rejUnits = parseFloat($row.find('.grn-rejected-qty').val()) || 0;
+            var recdPacks = parseFloat($row.find('.grn-received-qty').val()) || 0;
+            var freePacks = parseFloat($row.find('.grn-free-qty').val()) || 0;
+            var rejPacks = parseFloat($row.find('.grn-rejected-qty').val()) || 0;
 
+            var recdUnits = recdPacks * packSize;
             if (recdUnits > remainingUnits) {
                 recdUnits = remainingUnits;
-                $row.find('.grn-received-qty').val(recdUnits);
+                recdPacks = recdUnits / packSize;
+                $row.find('.grn-received-qty').val(recdPacks.toFixed(2));
             }
-            if (rejUnits > recdUnits) {
-                rejUnits = recdUnits;
-                $row.find('.grn-rejected-qty').val(rejUnits);
+            if (rejPacks > recdPacks) {
+                rejPacks = recdPacks;
+                $row.find('.grn-rejected-qty').val(rejPacks.toFixed(2));
             }
 
+            var rejUnits = rejPacks * packSize;
+            var freeUnits = freePacks * packSize;
             var acceptedUnits = Math.max(0, recdUnits - rejUnits);
 
             // Sync hidden inputs for backend submission (expects packs)
-            $row.find('.grn-received-packs-hidden').val((recdUnits / packSize).toFixed(4));
-            $row.find('.grn-free-packs-hidden').val((freeUnits / packSize).toFixed(4));
-            $row.find('.grn-rejected-packs-hidden').val((rejUnits / packSize).toFixed(4));
+            $row.find('.grn-received-packs-hidden').val(recdPacks.toFixed(4));
+            $row.find('.grn-free-packs-hidden').val(freePacks.toFixed(4));
+            $row.find('.grn-rejected-packs-hidden').val(rejPacks.toFixed(4));
 
             var packPrice = parseFloat($row.find('.grn-pack-price').val()) || 0;
             var taxPercent = parseFloat($row.find('.grn-tax').val()) || 0;
@@ -4381,7 +4462,7 @@
                 lineTot = lineSub + lineTax;
             }
 
-            $row.find('.grn-accepted').text(acceptedUnits);
+            $row.find('.grn-accepted').text(acceptedUnits.toFixed(2));
             $row.find('.grn-tax-amt').text('₹' + lineTax.toFixed(2));
             $row.find('.grn-line-total').text('₹' + lineTot.toFixed(2));
 
@@ -4549,7 +4630,6 @@
                 { data: 'discount_amount' },
                 { data: 'net_total' },
                 { data: 'paid_amount' },
-                { data: 'due_amount' },
                 {
                     data: 'actions',
                     orderable: false,
@@ -4666,11 +4746,13 @@
                     '</table>' +
                     '<div style="display:flex; justify-content:flex-end; margin-top:12px;">' +
                     '<div class="ph-bill-preview" style="width: 250px;">' +
-                    '<div class="ph-bill-row"><span>Subtotal:</span><span class="fw-700">₹' + subtotalInclusive.toFixed(2) + '</span></div>' +
+                    '<div class="ph-bill-row"><span>Subtotal:</span><span class="fw-700">₹' + (bill.subtotal != null ? parseFloat(bill.subtotal) : (bill.net_total + bill.discount_amount)).toFixed(2) + '</span></div>' +
                     '<div class="ph-bill-row mt-4"><span>Discount:</span><span>₹' + bill.discount_amount.toFixed(2) + '</span></div>' +
+                    (bill.round_off ? '<div class="ph-bill-row mt-4"><span>Round Off:</span><span>₹' + parseFloat(bill.round_off).toFixed(2) + '</span></div>' : '') +
                     '<div class="ph-bill-total"><span>Net Payable:</span><span class="fw-700 text-primary">₹' + bill.net_total.toFixed(2) + '</span></div>' +
                     '<div class="ph-bill-row mt-8"><span>Paid Amount:</span><span>₹' + bill.paid_amount.toFixed(2) + '</span></div>' +
-                    '<div class="ph-bill-row mt-4"><span>Due Amount:</span><span class="fw-700 text-danger">₹' + bill.due_amount.toFixed(2) + '</span></div>' +
+                    '<div class="ph-bill-row mt-4"><span>Payment Mode:</span><span>' + escapeHtml(bill.payment_mode || 'Cash') + '</span></div>' +
+                    (bill.payment_reference ? '<div class="ph-bill-row mt-4"><span>Payment Ref:</span><span>' + escapeHtml(bill.payment_reference) + '</span></div>' : '') +
                     '</div>' +
                     '</div>' +
                     '<div class="mt-8 text-muted" style="margin-top:12px;"><b>Notes:</b> ' + escapeHtml(bill.notes) + '</div>' +

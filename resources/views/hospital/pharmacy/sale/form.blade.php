@@ -272,33 +272,48 @@
                     <small id="sum-before-discount">Rs 0.00</small>
                 </div>
 
-                <!-- Header Discount Input -->
-                <div class="mb-3">
-                    <label class="form-label mb-2 small fw-bold">Header Discount</label>
-                    <input type="number" step="0.01" min="0" class="form-control form-control-sm text-end" name="discount_amount" value="0" id="header_discount_amount">
+                <!-- Header Discount Input (Percent and Flat) -->
+                <div class="mb-2">
+                    <label class="form-label mb-1 small fw-bold">Header Discount</label>
+                    <div class="d-flex gap-2">
+                        <input type="number" step="0.1" min="0" max="100" class="form-control form-control-sm text-end" id="header_discount_percent" value="0" placeholder="%" style="width: 40%;">
+                        <input type="number" step="0.01" min="0" class="form-control form-control-sm text-end" name="discount_amount" value="0" id="header_discount_amount" placeholder="Flat ₹" style="width: 60%;">
+                    </div>
+                </div>
+
+                <!-- Round Off Input -->
+                <div class="mb-2">
+                    <label class="form-label mb-1 small fw-bold">Round Off</label>
+                    <input type="number" step="0.01" class="form-control form-control-sm text-end" name="round_off" value="0" id="header_round_off">
                 </div>
 
                 <!-- Net Total (Highlighted) -->
-                <div class="bg-primary text-white p-2 rounded mb-3">
-                    <div class="d-flex justify-content-between">
+                <div class="bg-primary text-white p-2 rounded mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
                         <span class="fw-bold">Net Total</span>
                         <strong id="sum-net-total" style="font-size: 1.1rem;">Rs 0.00</strong>
                     </div>
                 </div>
 
-                <!-- Paid Amount Input -->
-                <div class="mb-3">
-                    <label class="form-label mb-2 small fw-bold">Paid Amount</label>
-                    <input type="number" step="0.01" min="0" class="form-control form-control-sm text-end" name="paid_amount" value="0" id="paid_amount">
+                <!-- Payment Mode Dropdown -->
+                <div class="mb-2">
+                    <label class="form-label mb-1 small fw-bold">Payment Mode <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm" name="payment_mode" id="sale_payment_mode" required>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Card">Card</option>
+                        <option value="Online">Online</option>
+                    </select>
                 </div>
 
-                <!-- Due Amount -->
-                <div class="bg-info bg-opacity-10 p-2 rounded">
-                    <div class="d-flex justify-content-between">
-                        <span class="fw-bold text-white">Due</span>
-                        <strong id="sum-due" class="text-white" style="font-size: 1.1rem;">Rs 0.00</strong>
-                    </div>
+                <!-- Payment Reference Input -->
+                <div class="mb-2" id="sale_payment_ref_row" style="display: none;">
+                    <label class="form-label mb-1 small fw-bold">Payment Reference</label>
+                    <input type="text" class="form-control form-control-sm" name="payment_reference" id="sale_payment_reference" placeholder="Txn ID / Ref No">
                 </div>
+
+                <!-- Hidden Paid Amount to sync with Net Total -->
+                <input type="hidden" name="paid_amount" id="paid_amount" value="0">
             </div>
         </div>
     </div>

@@ -24,7 +24,6 @@ $(document).ready(function () {
             { data: 'tax_amount', name: 'tax_amount', render: currency },
             { data: 'net_total', name: 'net_total', render: function (value) { return '<strong>' + currency(value) + '</strong>'; } },
             { data: 'paid_amount', name: 'paid_amount', render: currency },
-            { data: 'due_amount', name: 'due_amount', render: currency },
             { data: 'payment_status', name: 'payment_status' },
             { data: 'actions', name: 'actions', orderable: false, searchable: false }
         ],
@@ -186,16 +185,51 @@ $(document).ready(function () {
             taxTotal += parseFloat($row.attr('data-line-tax')) || 0;
         });
 
-        const headerDiscount = parseFloat($('#header_discount_amount').val()) || 0;
-        let paid = parseFloat($('#paid_amount').val()) || 0;
-        const beforeDiscount = Math.max(0, subtotal - itemDiscount + taxTotal);
-        const netTotal = Math.max(0, beforeDiscount - headerDiscount);
-        if (paid > netTotal) {
-            paid = netTotal;
-            $('#paid_amount').val(netTotal.toFixed(2));
+        const $discPercentEl = $('#header_discount_percent');
+        const $discAmtEl = $('#header_discount_amount');
+        const $roundOffEl = $('#header_round_off');
+        const $netTotalEl = $('#sum-net-total');
+        const $paidAmountEl = $('#paid_amount');
+        const $pmEl = $('#sale_payment_mode');
+        const $refRowEl = $('#sale_payment_ref_row');
+        const $refEl = $('#sale_payment_reference');
+
+        let discPercent = parseFloat($discPercentEl.val()) || 0;
+        let discAmt = parseFloat($discAmtEl.val()) || 0;
+
+        if (document.activeElement && document.activeElement.id === 'header_discount_amount') {
+            if (subtotal > 0) {
+                discPercent = (discAmt / subtotal) * 100;
+                $discPercentEl.val(discPercent.toFixed(1));
+            } else {
+                $discPercentEl.val('0');
+                discPercent = 0;
+            }
+        } else {
+            discAmt = (subtotal * discPercent) / 100;
+            $discAmtEl.val(discAmt.toFixed(2));
         }
-        $('#paid_amount').attr('max', netTotal.toFixed(2));
-        const due = Math.max(0, netTotal - paid);
+
+        if (discAmt > subtotal) {
+            discAmt = subtotal;
+            $discAmtEl.val(discAmt.toFixed(2));
+            $discPercentEl.val('100');
+            discPercent = 100;
+        }
+
+        const beforeDiscount = Math.max(0, subtotal - itemDiscount + taxTotal);
+        const netBeforeRound = Math.max(0, beforeDiscount - discAmt);
+        let netRounded = Math.round(netBeforeRound);
+        let roundOff = netRounded - netBeforeRound;
+
+        if ($roundOffEl.length && document.activeElement !== $roundOffEl[0]) {
+            $roundOffEl.val(roundOff.toFixed(2));
+        } else if ($roundOffEl.length) {
+            const userRoundOff = parseFloat($roundOffEl.val()) || 0;
+            netRounded = Math.max(0, Math.round(netBeforeRound + userRoundOff));
+        }
+
+        $paidAmountEl.val(netRounded.toFixed(2));
 
         $('#sum-subtotal').text(currency(subtotal));
         $('#sum-item-discount').text(currency(itemDiscount));
@@ -203,8 +237,18 @@ $(document).ready(function () {
         if ($('#sum-before-discount').length) {
             $('#sum-before-discount').text(currency(beforeDiscount));
         }
-        $('#sum-net-total').text(currency(netTotal));
-        $('#sum-due').text(currency(due));
+        $netTotalEl.text(currency(netRounded));
+
+        if ($pmEl.length && $refRowEl.length) {
+            const mode = $pmEl.val();
+            if (mode === 'Cash') {
+                $refRowEl.hide();
+                $refEl.prop('required', false);
+            } else {
+                $refRowEl.show();
+                $refEl.prop('required', true);
+            }
+        }
     }
 
     function appendSaleRow(item) {
@@ -401,7 +445,8 @@ $(document).ready(function () {
         }
     });
 
-    $(document).on('input', '.item-qty, .item-price, .item-mrp, .item-tax, #header_discount_amount, #paid_amount', recalcSummary);
+    $(document).on('input', '.item-qty, .item-price, .item-mrp, .item-tax, #header_discount_percent, #header_discount_amount, #header_round_off', recalcSummary);
+    $(document).on('change', '#sale_payment_mode', recalcSummary);
 
     $(document).on('keydown', '#savedata input, #savedata select, #savedata textarea', function (event) {
         if (event.key !== 'Enter') {
@@ -452,6 +497,16 @@ $(document).ready(function () {
 
     $(document).on('submit', '#savedata', function (event) {
         event.preventDefault();
+
+        const paymentMode = $('#sale_payment_mode').val() || 'Cash';
+        const paymentRef = ($('#sale_payment_reference').val() || '').trim();
+
+        if (paymentMode !== 'Cash' && !paymentRef) {
+            sendmsg('error', 'Please enter payment reference for ' + paymentMode + '.');
+            $('#sale_payment_reference').focus();
+            return;
+        }
+
         loader();
 
         csrftoken().then(function (token) {

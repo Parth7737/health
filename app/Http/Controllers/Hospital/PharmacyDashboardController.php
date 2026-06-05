@@ -350,12 +350,15 @@ class PharmacyDashboardController extends BaseHospitalController
         ];
 
         $prescription = $type === 'opd'
-            ? OpdPrescription::query()->where('hospital_id', $this->hospital_id)->where(function ($query) {
-                $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
-            })->with($with)->findOrFail($id)
-            : IpdPrescription::query()->where('hospital_id', $this->hospital_id)->where(function ($query) {
-                $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
-            })->with($with)->findOrFail($id);
+            ? OpdPrescription::query()->where('hospital_id', $this->hospital_id)->with($with)->find($id)
+            : IpdPrescription::query()->where('hospital_id', $this->hospital_id)->with($with)->find($id);
+
+        if (!$prescription) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Prescription not found or has expired. Please check the prescription and try again.',
+            ], 404);
+        }
 
         $dispensedQtys = $this->getAlreadyDispensedQty($type, $id);
 
@@ -483,7 +486,10 @@ class PharmacyDashboardController extends BaseHospitalController
             'prescription_type' => 'nullable|in:opd,ipd',
             'prescription_id' => 'nullable|integer',
             'discount_amount' => 'nullable|numeric|min:0',
+            'round_off' => 'nullable|numeric',
             'paid_amount' => 'nullable|numeric|min:0',
+            'payment_mode' => 'required|string|max:50',
+            'payment_reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.medicine_id' => 'required|exists:medicines,id',
@@ -515,7 +521,11 @@ class PharmacyDashboardController extends BaseHospitalController
                 ->where(function ($query) {
                     $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
                 })
-                ->findOrFail($prescriptionId);
+                ->find($prescriptionId);
+
+            if (!$sourcePrescription) {
+                return response()->json(['status' => false, 'message' => 'OPD Prescription not found or has expired.'], 404);
+            }
         }
 
         if ($prescriptionType === 'ipd' && $prescriptionId) {
@@ -524,7 +534,11 @@ class PharmacyDashboardController extends BaseHospitalController
                 ->where(function ($query) {
                     $query->whereNull('valid_till')->orWhereDate('valid_till', '>=', now()->toDateString());
                 })
-                ->findOrFail($prescriptionId);
+                ->find($prescriptionId);
+
+            if (!$sourcePrescription) {
+                return response()->json(['status' => false, 'message' => 'IPD Prescription not found or has expired.'], 404);
+            }
         }
 
         $payload = [
@@ -532,6 +546,9 @@ class PharmacyDashboardController extends BaseHospitalController
             'patient_id' => $sourcePrescription?->patient_id ?: ($request->input('patient_id') ?: null),
             'bill_date' => now()->toDateString(),
             'discount_amount' => (float) $request->input('discount_amount', 0),
+            'round_off' => (float) $request->input('round_off', 0),
+            'payment_mode' => $request->input('payment_mode'),
+            'payment_reference' => $request->input('payment_reference'),
             'paid_amount' => (float) $request->input('paid_amount', 0),
             'notes' => $request->input('notes'),
             'items' => collect($request->input('items', []))->filter(fn ($item) => (float) ($item['quantity'] ?? 0) > 0)->values()->all(),
@@ -553,7 +570,7 @@ class PharmacyDashboardController extends BaseHospitalController
 
             return $total + $taxable + ($taxable * $taxPercent / 100);
         }, 0.0);
-        $payable = max(0, $payable - (float) $payload['discount_amount']);
+        $payable = max(0, $payable - (float) $payload['discount_amount'] + (float) $payload['round_off']);
 
         if ((float) $payload['paid_amount'] > $payable + 0.0001) {
             return response()->json([

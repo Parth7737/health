@@ -481,6 +481,8 @@ class PharmacyInventoryService
                 'bill_date' => $billDate,
                 'is_from_prescription' => (bool) Arr::get($payload, 'is_from_prescription', false),
                 'notes' => Arr::get($payload, 'notes'),
+                'payment_mode' => Arr::get($payload, 'payment_mode'),
+                'payment_reference' => Arr::get($payload, 'payment_reference'),
                 'created_by' => auth()->id(),
             ]);
 
@@ -650,13 +652,15 @@ class PharmacyInventoryService
             }
 
             $extraDiscount = (float) Arr::get($payload, 'discount_amount', 0);
-            $netTotal = round(max(0, ($subtotal - $discountTotal) + $taxTotal - $extraDiscount), 2);
-            $paidAmount = (float) Arr::get($payload, 'paid_amount', 0);
-            $dueAmount = max(0, round($netTotal - $paidAmount, 2));
+            $roundOff = (float) Arr::get($payload, 'round_off', 0);
+            $netTotal = round(max(0, ($subtotal - $discountTotal) + $taxTotal - $extraDiscount + $roundOff), 2);
+            $paidAmount = $netTotal;
+            $dueAmount = 0.00;
 
             $saleBill->update([
                 'subtotal' => round($subtotal, 2),
                 'discount_amount' => round($discountTotal + $extraDiscount, 2),
+                'round_off' => round($roundOff, 2),
                 'tax_amount' => round($taxTotal, 2),
                 'total_cgst' => round($totalCgst, 2),
                 'total_sgst' => round($totalSgst, 2),
@@ -664,7 +668,7 @@ class PharmacyInventoryService
                 'net_total' => $netTotal,
                 'paid_amount' => $paidAmount,
                 'due_amount' => $dueAmount,
-                'payment_status' => $this->resolvePaymentStatus($netTotal, $paidAmount),
+                'payment_status' => 'paid',
             ]);
 
             if (!empty($payload['patient_id']) && (bool) Arr::get($payload, 'create_patient_charge', true)) {

@@ -69,6 +69,16 @@
     outline: 2px solid #1976d2 !important;
     box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2) !important;
   }
+
+  /* Fix modal content scrolling when there are many items */
+  .modal-overlay .modal {
+    max-height: 90vh !important;
+  }
+  .modal-overlay .modal > .modal-body {
+    max-height: calc(90vh - 160px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
 </style>
 @endpush
 
@@ -308,7 +318,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="hims-table display table-striped" id="allBillsTable">
-                        <thead><tr><th>Bill No</th><th>Date</th><th>Patient</th><th>Items</th><th>Subtotal ₹</th><th>Discount ₹</th><th>Net Total ₹</th><th>Paid ₹</th><th>Due ₹</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Bill No</th><th>Date</th><th>Patient</th><th>Items</th><th>Subtotal ₹</th><th>Discount ₹</th><th>Net Total ₹</th><th>Paid ₹</th><th>Actions</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -423,10 +433,33 @@
                     <div class="ph-bill-preview">
                         <div class="fw-700 fs-12 mb-8 text-primary">💳 Pharmacy Bill</div>
                         <div class="ph-bill-row"><span>Drugs Total:</span><span class="fw-700" id="dispenseSubtotal">₹0.00</span></div>
-                        <div class="ph-bill-row mt-4"><span>Discount:</span><input class="form-control ph-grid-input ph-grid-input-price" type="number" min="0" step="0.01" name="discount_amount" id="dispenseDiscount" value="0"></div>
+                        <div class="ph-bill-row mt-4 d-flex justify-content-between align-center">
+                            <span>Discount:</span>
+                            <div class="d-flex gap-4 align-center" style="width: 170px;">
+                                <input class="form-control ph-grid-input" type="number" min="0" max="100" step="0.1" id="dispenseDiscountPercent" placeholder="%" style="width: 65px; text-align: right;" value="0">
+                                <span class="fs-10 text-muted">%</span>
+                                <input class="form-control ph-grid-input" type="number" min="0" step="0.01" name="discount_amount" id="dispenseDiscount" placeholder="₹" style="width: 80px; text-align: right;" value="0">
+                            </div>
+                        </div>
+                        <div class="ph-bill-row mt-4 d-flex justify-content-between align-center">
+                            <span>Round Off:</span>
+                            <input class="form-control ph-grid-input" type="number" step="0.01" name="round_off" id="dispenseRoundOff" placeholder="₹" style="width: 80px; text-align: right; margin-left: auto;" value="0">
+                        </div>
                         <div class="ph-bill-total"><span>Net Payable:</span><span class="fw-700 text-primary" id="dispenseNet">₹0.00</span></div>
-                        <div class="ph-bill-row mt-8"><span>Paid:</span><input class="form-control ph-grid-input ph-grid-input-price" type="number" min="0" step="0.01" name="paid_amount" id="dispensePaid" value="0"></div>
-                        <div class="ph-bill-row mt-4"><span>Due:</span><span class="fw-700" id="dispenseDue">₹0.00</span></div>
+                        <div class="ph-bill-row mt-8 d-flex justify-content-between align-center">
+                            <span>Payment Mode: <span class="req">*</span></span>
+                            <select class="form-control ph-grid-input" name="payment_mode" id="dispensePaymentMode" style="width: 130px;" required>
+                                <option value="Cash">Cash</option>
+                                <option value="UPI">UPI</option>
+                                <option value="Card">Card</option>
+                                <option value="Online">Online</option>
+                            </select>
+                        </div>
+                        <div class="ph-bill-row mt-4 d-flex justify-content-between align-center" id="dispensePaymentRefRow" style="display: none;">
+                            <span>Payment Ref:</span>
+                            <input class="form-control ph-grid-input" type="text" name="payment_reference" id="dispensePaymentRef" placeholder="Txn Ref No" style="width: 130px;">
+                        </div>
+                        <input type="hidden" name="paid_amount" id="dispensePaid" value="0">
                         <input type="hidden" id="dispenseTax" value="0">
                     </div>
                 </div>
@@ -525,9 +558,9 @@
                                 <th>Drug Name</th>
                                 <th>Rem. (Units)</th>
                                 <th>Pack Size <span class="req">*</span></th>
-                                <th>Recd. Qty (Units) <span class="req">*</span></th>
-                                <th>Free Qty (Units)</th>
-                                <th>Rej. Qty (Units)</th>
+                                <th>Recd. Qty (Packs) <span class="req">*</span></th>
+                                <th>Free Qty (Packs)</th>
+                                <th>Rej. Qty (Packs)</th>
                                 <th>Batch No. <span class="req">*</span></th>
                                 <th>Expiry</th>
                                 <th>Pack Pur. Rate ₹ <span class="req">*</span></th>

@@ -122,11 +122,20 @@
                     <td>{{ $item->batch_no ?: '-' }}</td>
                     <td>{{ optional($item->expiry_date)->format('M-Y') ?? '-' }}</td>
                     <td class="text-end">{{ $item->pack_size }}</td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_ordered) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_received) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_free) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_rejected) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
-                    <td class="text-end">{{ $fmtQty($item->quantity_accepted) }} <small class="text-muted">({{ $item->medicine?->unit?->name ?? '-' }})</small></td>
+                    @php
+                        $pSize = $item->pack_size ?: 1;
+                        $ordPacks = $item->quantity_ordered / $pSize;
+                        $recdPacks = $item->pack_qty;
+                        $freePacks = $item->quantity_free / $pSize;
+                        $rejPacks = $item->quantity_rejected / $pSize;
+                        $accPacks = $item->quantity_accepted / $pSize;
+                        $medUnit = $item->medicine?->unit?->name ?? 'Units';
+                    @endphp
+                    <td class="text-end">{{ $fmtQty($ordPacks) }} packs <br><small class="text-muted">({{ $fmtQty($item->quantity_ordered) }} {{ $medUnit }})</small></td>
+                    <td class="text-end">{{ $fmtQty($recdPacks) }} packs <br><small class="text-muted">({{ $fmtQty($item->quantity_received) }} {{ $medUnit }})</small></td>
+                    <td class="text-end">{{ $fmtQty($freePacks) }} packs <br><small class="text-muted">({{ $fmtQty($item->quantity_free) }} {{ $medUnit }})</small></td>
+                    <td class="text-end">{{ $fmtQty($rejPacks) }} packs <br><small class="text-muted">({{ $fmtQty($item->quantity_rejected) }} {{ $medUnit }})</small></td>
+                    <td class="text-end">{{ $fmtQty($accPacks) }} packs <br><small class="text-muted">({{ $fmtQty($item->quantity_accepted) }} {{ $medUnit }})</small></td>
                     <td class="text-end">{{ number_format((float) $item->pack_purchase_price, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->pack_sale_price, 2) }}</td>
                     <td class="text-end">{{ number_format((float) $item->pack_mrp, 2) }}</td>

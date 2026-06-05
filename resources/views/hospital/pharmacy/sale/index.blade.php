@@ -118,7 +118,6 @@
                                 <th>Tax</th>
                                 <th>Net Total</th>
                                 <th>Paid</th>
-                                <th>Due</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
