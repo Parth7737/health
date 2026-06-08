@@ -246,6 +246,11 @@ class IpdPrescriptionController extends BaseHospitalController
                 ],
             ]);
 
+            $savedPrescription = IpdPrescription::find((int) ($context['prescription_id'] ?? 0));
+            if ($savedPrescription) {
+                resolve(\App\Services\Clinical\RxValidationEngine::class)->validate($savedPrescription);
+            }
+
             return response()->json([
                 'status' => true,
                 'message' => 'Prescription saved successfully.',

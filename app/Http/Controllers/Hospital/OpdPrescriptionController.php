@@ -251,6 +251,11 @@ class OpdPrescriptionController extends BaseHospitalController
                 ],
             ]);
 
+            $savedPrescription = OpdPrescription::where('opd_patient_id', $opdPatient->id)->first();
+            if ($savedPrescription) {
+                resolve(\App\Services\Clinical\RxValidationEngine::class)->validate($savedPrescription);
+            }
+
             return response()->json([
                 'status' => true,
                 'message' => 'Prescription saved successfully.',

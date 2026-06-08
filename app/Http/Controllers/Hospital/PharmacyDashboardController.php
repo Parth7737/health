@@ -13,6 +13,7 @@ use App\Models\PharmacySaleBill;
 use App\Models\PharmacySupplier;
 use App\Models\PharmacyStockBatch;
 use App\Models\Hospital;
+use App\Models\RxValidationLog;
 use App\Services\PharmacyInventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +66,8 @@ class PharmacyDashboardController extends BaseHospitalController
             'billPrint' => route('hospital.pharmacy.sale.print', ['bill' => '__ID__']),
             'patientSearch' => route('hospital.pharmacy.dispense.patient-search'),
             'prescriptionSearch' => route('hospital.pharmacy.dispense.prescription-search'),
+            'rxValidationsLoad' => route('hospital.pharmacy.rx-validations-load'),
+            'rxValidationAction' => route('hospital.pharmacy.rx-validations.action', ['log' => '__ID__']),
         ];
     }
 
@@ -904,4 +907,77 @@ class PharmacyDashboardController extends BaseHospitalController
 
         return response()->json(['items' => $results]);
     }
+
+    /**
+     * Load all pharmacy Rx validations.
+     */
+    public function loadRxValidations(Request $request)
+    {
+        $logs = RxValidationLog::query()
+            ->with(['patient:id,name,patient_id', 'medicine:id,name', 'actionBy:id,name'])
+            ->orderByRaw("CASE WHEN status = 'pending' THEN 0 WHEN status = 'escalated' THEN 1 ELSE 2 END")
+            ->latest('id')
+            ->get();
+
+        $payload = $logs->map(function ($log) {
+            $rxNo = '-';
+            if ($log->prescription_type === 'opd') {
+                $rx = OpdPrescription::find($log->prescription_id);
+                $rxNo = $rx ? ($rx->prescription_no ?: 'OPD-RX-' . $rx->id) : '-';
+            } elseif ($log->prescription_type === 'ipd') {
+                $rx = IpdPrescription::find($log->prescription_id);
+                $rxNo = $rx ? ($rx->prescription_no ?: 'IPD-RX-' . $rx->id) : '-';
+            }
+
+            return [
+                'id' => $log->id,
+                'patient_name' => $log->patient?->name ?? 'Unknown',
+                'patient_uhid' => $log->patient?->patient_id ?? '-',
+                'prescription_type' => strtoupper($log->prescription_type),
+                'rx_no' => $rxNo,
+                'medicine_name' => $log->medicine?->name ?? 'Unknown',
+                'validation_type' => $log->validation_type,
+                'severity' => $log->severity,
+                'message' => $log->message,
+                'status' => $log->status,
+                'action_by_name' => $log->actionBy?->name ?? '-',
+                'action_note' => $log->action_note ?? '-',
+                'action_at' => $log->action_at ? Carbon::parse($log->action_at)->format('d-m-Y H:i') : '-',
+            ];
+        });
+
+        return response()->json($payload);
+    }
+
+    /**
+     * Perform action on a pharmacy Rx validation log (Approve/Reject/Escalate).
+     */
+    public function actionRxValidation(Request $request, $id)
+    {
+        $log = RxValidationLog::find($id);
+        if (!$log) {
+            return response()->json(['status' => false, 'message' => 'Validation log not found.'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => 'required|in:approved,rejected,escalated',
+            'action_note' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        $log->status = $request->input('status');
+        $log->action_note = $request->input('action_note');
+        $log->action_by = auth()->id() ?: null;
+        $log->action_at = now();
+        $log->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Clinical warning response updated successfully.'
+        ]);
+    }
 }
+

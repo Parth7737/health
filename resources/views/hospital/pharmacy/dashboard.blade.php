@@ -192,7 +192,13 @@
             </div>
 
             <div id="rxValidatePane" class="ph-pane ph-hidden">
-                <div id="rxValidateList"></div>
+                <div class="ph-toolbar mb-12">
+                    <div class="fw-700 fs-14">🛡️ Clinical Rx Validation & Drug Safety Logs</div>
+                    <button class="btn btn-secondary btn-xs" type="button" onclick="loadRxValidation()">🔄 Refresh Logs</button>
+                </div>
+                <div id="rxValidateList">
+                    <div class="text-muted text-center" style="padding: 30px;">Loading clinical alerts...</div>
+                </div>
             </div>
 
             <div id="inventoryPane" class="ph-pane ph-hidden">

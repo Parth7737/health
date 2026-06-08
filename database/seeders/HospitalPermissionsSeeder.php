@@ -47,6 +47,8 @@ class HospitalPermissionsSeeder extends Seeder
 
             //Pharmacy
             'Medicine' => 'medicine',
+            'Medicine Interactions' => 'medicine-interaction',
+            'Medicine Allergy Mapping' => 'medicine-allergy-mapping',
             'Medicine Category' => 'medicine-category',
             'Medicine Dosage' => 'medicine-dosage',
             'Medicine Unit' => 'medicine-unit',

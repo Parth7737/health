@@ -1271,28 +1271,151 @@
         if (!list) {
             return;
         }
-        var rxList = [
-            { rx: 'RX-2024-1853', patient: 'Sunita Rawat', drug: 'Tab. Warfarin 5mg', issue: 'HIGH RISK: Warfarin - INR not checked today. Check before dispensing.', type: 'safety' },
-            { rx: 'RX-2024-1854', patient: 'Rajesh Sharma', drug: 'Inj. Insulin 20u', issue: 'Dose seems high for body weight (60 kg) - verify with prescribing doctor.', type: 'dose' },
-            { rx: 'RX-2024-1855', patient: 'Meena Bisht', drug: 'Tab. Clarithromycin 500mg', issue: 'Drug interaction: Patient on Amlodipine + Clarithromycin (QTc prolongation risk).', type: 'interaction' }
-        ];
 
-        list.innerHTML = rxList
-            .map(function (r) {
-                var label = r.type === 'safety' ? '⚠️ Safety' : r.type === 'dose' ? '💊 Dose' : '🔄 Interaction';
-                return '' +
-                    '<div style="background:var(--warning-light);border:1.5px solid rgba(245,124,0,.2);border-radius:10px;padding:14px;margin-bottom:10px">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:start;gap:12px">' +
-                    '<div><div class="d-flex align-center gap-8 mb-4"><span class="badge badge-orange">' + label + '</span><span class="fw-700 fs-13">' + r.patient + ' - ' + r.rx + '</span></div>' +
-                    '<div class="fs-12 mb-4"><b>Drug:</b> ' + r.drug + '</div><div class="fs-12 text-muted">' + r.issue + '</div></div>' +
-                    '<div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px">' +
-                    '<button class="btn btn-success btn-xs" onclick="approveRx(this)">✅ Approve</button>' +
-                    '<button class="btn btn-danger btn-xs" onclick="rejectRx(this)">❌ Reject</button>' +
-                    '<button class="btn btn-secondary btn-xs" onclick="showToast(\'Escalate\',\'Escalated to senior pharmacist\',\'info\')">↗ Escalate</button>' +
-                    '</div></div></div>';
+        var url = typeof window.route === 'function' ? window.route('rxValidationsLoad') : '';
+        if (!url) {
+            list.innerHTML = '<div class="text-danger text-center py-20">Rx validation loading route is not available.</div>';
+            return;
+        }
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken() || ''
+            }
+        })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
+            .then(function (data) {
+                if (!data || !data.length) {
+                    list.innerHTML = '<div class="text-success text-center" style="padding: 40px; font-size: 14px;">' +
+                        '🎉 <b>All Clean!</b> No clinical validation warnings or drug interactions found on active prescriptions.' +
+                        '</div>';
+                    return;
+                }
+
+                list.innerHTML = data.map(function (log) {
+                    var severityColor = 'var(--text-light)';
+                    var severityBg = 'var(--surface-3)';
+                    var cardBorder = 'var(--border-light)';
+                    var cardBg = 'var(--surface-1)';
+
+                    if (log.severity === 'critical') {
+                        severityColor = '#ffffff';
+                        severityBg = '#d32f2f';
+                        cardBorder = '#ef5350';
+                        cardBg = '#ffebee';
+                    } else if (log.severity === 'major') {
+                        severityColor = '#ffffff';
+                        severityBg = '#e65100';
+                        cardBorder = '#ffb74d';
+                        cardBg = '#fff3e0';
+                    } else if (log.severity === 'moderate') {
+                        severityColor = '#333333';
+                        severityBg = '#fbc02d';
+                        cardBorder = '#fff176';
+                        cardBg = '#fffde7';
+                    } else if (log.severity === 'minor' || log.severity === 'info') {
+                        severityColor = '#ffffff';
+                        severityBg = '#0288d1';
+                        cardBorder = '#4fc3f7';
+                        cardBg = '#e1f5fe';
+                    }
+
+                    var badgeLabel = log.validation_type === 'dose' ? '💊 Dose Limit' :
+                                     log.validation_type === 'interaction' ? '🔄 Drug Interaction' :
+                                     log.validation_type === 'allergy' ? '⚠️ Allergy Warning' :
+                                     log.validation_type === 'high_risk' ? '🚨 High Risk Drug' :
+                                     log.validation_type === 'pregnancy' ? '🤰 Pregnancy' : '🛡️ Safety Alert';
+
+                    var actionHtml = '';
+                    if (log.status === 'pending') {
+                        actionHtml = '' +
+                            '<div style="display:flex; gap:12px; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,0.08); flex-wrap: wrap;">' +
+                            '  <input class="form-control ph-grid-input rx-action-note" data-log-id="' + log.id + '" placeholder="Override justification / action remarks..." style="max-width: 320px; font-size: 12px; padding: 5px 10px; background:#fff;" type="text">' +
+                            '  <button class="btn btn-success btn-xs" onclick="resolveRxAlert(' + log.id + ', \'approved\', this)">✅ Approve Override</button>' +
+                            '  <button class="btn btn-danger btn-xs" onclick="resolveRxAlert(' + log.id + ', \'rejected\', this)">❌ Cancel/Reject Rx</button>' +
+                            '  <button class="btn btn-warning btn-xs" onclick="resolveRxAlert(' + log.id + ', \'escalated\', this)">↗ Escalate</button>' +
+                            '</div>';
+                    } else {
+                        var statusBadgeClass = log.status === 'approved' ? 'badge-green' : (log.status === 'rejected' ? 'badge-red' : 'badge-orange');
+                        var statusLabel = log.status === 'approved' ? 'Override Approved' : (log.status === 'rejected' ? 'Rejected/Flagged' : 'Escalated');
+                        actionHtml = '' +
+                            '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,0.08); font-size: 11px; color: var(--text-muted);">' +
+                            '  <div><b>Resolution Status:</b> <span class="badge ' + statusBadgeClass + '">' + statusLabel + '</span></div>' +
+                            '  <div>By <b>' + escapeHtml(log.action_by_name) + '</b> on ' + escapeHtml(log.action_at) + '</div>' +
+                            '</div>' +
+                            '<div style="margin-top:6px; font-size: 11px; color: var(--text-light); background:rgba(0,0,0,0.03); padding:6px 10px; border-radius:6px;">' +
+                            '  <b>Remarks/Justification:</b> ' + escapeHtml(log.action_note) +
+                            '</div>';
+                    }
+
+                    return '' +
+                        '<div style="background:' + cardBg + '; border:1.5px solid ' + cardBorder + '; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.02); transition: transform 0.2s;" class="rx-alert-card">' +
+                        '  <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">' +
+                        '    <div style="flex-grow:1;">' +
+                        '      <div class="d-flex align-center gap-8 mb-6" style="flex-wrap: wrap;">' +
+                        '        <span class="badge" style="background:' + severityBg + '; color:' + severityColor + '; font-weight:700; font-size:10px;">' + badgeLabel + '</span>' +
+                        '        <span class="fw-700 fs-13" style="color:#2c3e50;">' + escapeHtml(log.patient_name) + ' (' + escapeHtml(log.patient_uhid) + ')</span>' +
+                        '        <span style="font-size:11px; color:var(--text-muted);">| Rx: <b>' + escapeHtml(log.rx_no) + '</b> (' + escapeHtml(log.prescription_type) + ')</span>' +
+                        '      </div>' +
+                        '      <div class="fs-12 mb-6"><b>Prescribed Drug:</b> <span class="fw-700 text-primary">' + escapeHtml(log.medicine_name) + '</span></div>' +
+                        '      <div class="fs-12" style="line-height:1.4; color:#333;">' + escapeHtml(log.message) + '</div>' +
+                        '    </div>' +
+                        '  </div>' +
+                        '  ' + actionHtml +
+                        '</div>';
+                }).join('');
             })
-            .join('');
+            .catch(function (err) {
+                list.innerHTML = '<div class="text-danger text-center py-20">Failed to load clinical alerts. ' + escapeHtml(err.message || err) + '</div>';
+            });
     }
+
+    window.resolveRxAlert = function (logId, status, btn) {
+        var card = btn.closest('.rx-alert-card');
+        var noteInput = card ? card.querySelector('.rx-action-note') : null;
+        var actionNote = noteInput ? noteInput.value.trim() : '';
+
+        if (status !== 'approved' && !actionNote) {
+            toast('Note Required', 'Please provide a remark/justification for this action.', 'warning');
+            if (noteInput) noteInput.focus();
+            return;
+        }
+
+        var url = typeof window.route === 'function' ? window.route('rxValidationAction', { log: logId }) : '';
+        if (!url) {
+            toast('Error', 'Action endpoint not found.', 'error');
+            return;
+        }
+
+        if (typeof window.loader === 'function') { window.loader(); }
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken() || ''
+            },
+            body: JSON.stringify({
+                status: status,
+                action_note: actionNote || 'Override Approved.'
+            })
+        })
+            .then(function (res) { return res.ok ? res.json() : res.json().then(function (data) { return Promise.reject(data); }); })
+            .then(function (data) {
+                if (typeof window.loader === 'function') { window.loader('hide'); }
+                toast('Success', 'Alert response saved successfully.', 'success');
+                loadRxValidation();
+                loadDashboardCounts();
+            })
+            .catch(function (err) {
+                if (typeof window.loader === 'function') { window.loader('hide'); }
+                toast('Error', err.message || 'Unable to update clinical alert status.', 'error');
+            });
+    };
 
     function getCsrfToken() {
         var tokenMeta = document.querySelector('meta[name="csrf-token"]');
@@ -4250,6 +4373,10 @@
             if (allBillsWasInit && allBillsTable) {
                 allBillsTable.ajax.reload();
             }
+        }
+
+        if (paneId === 'rxValidatePane') {
+            loadRxValidation();
         }
     };
 

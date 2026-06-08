@@ -74,6 +74,17 @@ class MedicineController extends BaseHospitalController
             'vat' => 'nullable|integer',
             'image' => 'nullable|string',
             'description' => 'nullable|string',
+            'is_high_risk' => 'nullable|boolean',
+            'requires_rx' => 'nullable|boolean',
+            'min_dose' => 'nullable|numeric|min:0',
+            'max_dose' => 'nullable|numeric|min:0',
+            'max_daily_dose' => 'nullable|numeric|min:0',
+            'dose_unit' => 'nullable|string|max:50',
+            'weight_based_dose' => 'nullable|boolean',
+            'dose_per_kg' => 'nullable|numeric|min:0',
+            'pregnancy_risk' => 'nullable|in:safe,caution,moderate,high_risk,contraindicated',
+            'renal_adjustment_required' => 'nullable|boolean',
+            'liver_adjustment_required' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -95,6 +106,17 @@ class MedicineController extends BaseHospitalController
                 'vat' => $request->vat,
                 'image' => $request->image,
                 'description' => $request->description,
+                'is_high_risk' => $request->has('is_high_risk') ? (bool) $request->is_high_risk : false,
+                'requires_rx' => $request->has('requires_rx') ? (bool) $request->requires_rx : false,
+                'min_dose' => $request->min_dose,
+                'max_dose' => $request->max_dose,
+                'max_daily_dose' => $request->max_daily_dose,
+                'dose_unit' => $request->dose_unit,
+                'weight_based_dose' => $request->has('weight_based_dose') ? (bool) $request->weight_based_dose : false,
+                'dose_per_kg' => $request->dose_per_kg,
+                'pregnancy_risk' => $request->pregnancy_risk,
+                'renal_adjustment_required' => $request->has('renal_adjustment_required') ? (bool) $request->renal_adjustment_required : false,
+                'liver_adjustment_required' => $request->has('liver_adjustment_required') ? (bool) $request->liver_adjustment_required : false,
             ]
         );
 

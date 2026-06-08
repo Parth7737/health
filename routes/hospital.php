@@ -377,6 +377,8 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::get('bill/{bill}/view', 'PharmacyDashboardController@viewBill')->name('bill.view');
             Route::get('dispense/patient-search', 'PharmacyDashboardController@patientSearch')->name('dispense.patient-search');
             Route::get('dispense/prescription-search', 'PharmacyDashboardController@prescriptionSearchSuggestions')->name('dispense.prescription-search');
+            Route::post('rx-validations/load', 'PharmacyDashboardController@loadRxValidations')->name('rx-validations-load');
+            Route::post('rx-validations/{log}/action', 'PharmacyDashboardController@actionRxValidation')->name('rx-validations.action');
             Route::resource('sale', 'PharmacySaleController')->only(['index', 'store']);
             Route::post('sale/load', 'PharmacySaleController@loaddata')->name('sale-load');
             Route::post('sale/show-form', 'PharmacySaleController@showform')->name('sale.showform');
@@ -676,6 +678,22 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
                 Route::post('load-medicine', 'MedicineController@loaddata')->name('medicine-load');  
                 Route::post('show-medicine-form', 'MedicineController@showform')->name('medicine.showform');
             });
+            
+            Route::middleware(['permission:view-medicine-interaction'])->group(function () {
+                // Drug Interaction
+                Route::resource('medicine-interaction', 'MedicineInteractionController');
+                Route::post('load-medicine-interaction', 'MedicineInteractionController@loaddata')->name('medicine-interaction-load');
+                Route::post('show-medicine-interaction-form', 'MedicineInteractionController@showform')->name('medicine-interaction.showform');
+            });
+
+            
+            // Medicine Allergy Mapping
+            Route::middleware(['permission:view-medicine-allergy-mapping'])->group(function () {
+                Route::resource('medicine-allergy-mapping', 'MedicineAllergyMappingController');
+                Route::post('load-medicine-allergy-mapping', 'MedicineAllergyMappingController@loaddata')->name('medicine-allergy-mapping-load');
+                Route::post('show-medicine-allergy-mapping-form', 'MedicineAllergyMappingController@showform')->name('medicine-allergy-mapping.showform');
+            });
+
             // Medicine Category
             Route::middleware(['permission:view-medicine-category'])->group(function () {
                 Route::resource('medicine-category', 'MedicineCategoryController');

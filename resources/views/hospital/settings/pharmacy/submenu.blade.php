@@ -5,6 +5,12 @@
             @can('view-medicine')
                 <a class="nav-link {{ request()->routeIs('hospital.settings.pharmacy.medicine.index') ? 'active' : '' }}" href="{{ route('hospital.settings.pharmacy.medicine.index') }}">Medicines</a>
             @endcan
+            @can('view-medicine-interaction')
+                <a class="nav-link {{ request()->routeIs('hospital.settings.pharmacy.medicine-interaction.index') ? 'active' : '' }}" href="{{ route('hospital.settings.pharmacy.medicine-interaction.index') }}">Medicine Interactions</a>
+            @endcan
+            @can('view-medicine-allergy-mapping')
+                <a class="nav-link {{ request()->routeIs('hospital.settings.pharmacy.medicine-allergy-mapping.index') ? 'active' : '' }}" href="{{ route('hospital.settings.pharmacy.medicine-allergy-mapping.index') }}">Medicine Allergy Mappings</a>
+            @endcan
             @can('view-medicine-category')
                 <a class="nav-link {{ request()->routeIs('hospital.settings.pharmacy.medicine-category.index') ? 'active' : '' }}" href="{{ route('hospital.settings.pharmacy.medicine-category.index') }}">Medicine Categories</a>
             @endcan
