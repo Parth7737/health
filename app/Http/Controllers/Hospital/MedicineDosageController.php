@@ -40,6 +40,9 @@ class MedicineDosageController extends BaseHospitalController
     {
         $data = MedicineDosage::select('*')->with('unit');
         return DataTables::of($data)
+            ->editColumn('dosage', function ($row) {
+                return $row->dosage . ($row->postfix ? ' ' . $row->postfix : '');
+            })
             ->addColumn('actions', function ($row) {
                 return view('hospital.settings.pharmacy.medicine-dosage.partials.actions', compact('row'))->render();
             })
@@ -64,17 +67,20 @@ class MedicineDosageController extends BaseHospitalController
             'medicine_unit_id' => 'required|exists:medicine_units,id',
             'dosage' => [
                 'required',
+                'numeric',
                 function ($attribute, $value, $fail) use ($request) {
                     $exists = MedicineDosage::where('medicine_unit_id', $request->medicine_unit_id)
                         ->where('dosage', $value)
+                        ->where('postfix', $request->postfix)
                         ->when($request->id, function ($q) use ($request) {
                             return $q->where('id', '!=', $request->id);
                         })->exists();
                     if ($exists) {
-                        $fail('The dosage for this unit already exists.');
+                        $fail('The dosage for this unit and postfix already exists.');
                     }
                 }
             ],
+            'postfix' => 'nullable|string|max:50',
         ]);
 
         if ($validator->fails()) {
@@ -87,6 +93,7 @@ class MedicineDosageController extends BaseHospitalController
                 'hospital_id' => $this->hospital_id,
                 'medicine_unit_id' => $request->medicine_unit_id,
                 'dosage' => $request->dosage,
+                'postfix' => $request->postfix,
             ]
         );
 

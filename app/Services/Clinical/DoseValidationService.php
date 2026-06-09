@@ -97,15 +97,6 @@ class DoseValidationService
                         )
                     ];
                 }
-            } else {
-                return [
-                    'type' => 'dose',
-                    'severity' => 'minor',
-                    'message' => sprintf(
-                        "Weight-based dosing requires patient weight. Please record weight to verify dose of %s.",
-                        $medicine->name
-                    )
-                ];
             }
         }
 

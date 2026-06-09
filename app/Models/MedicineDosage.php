@@ -28,4 +28,9 @@ class MedicineDosage extends Model
     {
         return $this->belongsTo(MedicineUnit::class, 'medicine_unit_id');
     }
+
+    public function getFormattedDosageAttribute()
+    {
+        return $this->dosage . ($this->postfix ? ' ' . $this->postfix : '');
+    }
 }

@@ -61,7 +61,8 @@
             var html = '<option value="">Select Dosage</option>';
             $.each(dosages || [], function (_, dosage) {
                 var isSelected = selectedValue && String(selectedValue) === String(dosage.id);
-                html += '<option value="' + dosage.id + '"' + (isSelected ? ' selected' : '') + '>' + escapeHtml(dosage.dosage) + '</option>';
+                var label = escapeHtml(dosage.dosage) + (dosage.postfix ? ' ' + escapeHtml(dosage.postfix) : '');
+                html += '<option value="' + dosage.id + '"' + (isSelected ? ' selected' : '') + '>' + label + '</option>';
             });
 
             var $dosage = $el('dosage');
@@ -237,6 +238,7 @@
                 dataType: 'json',
                 data: {
                 medicine_unit_id: unitId || '',
+                medicine_id: medicineId || '',
                 _token: settings.getCsrfToken()
                 }
             }).done(function (response) {

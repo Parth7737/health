@@ -13,6 +13,7 @@ use App\Models\HeaderFooter;
 use App\Models\OpdPatient;
 use App\Models\OpdPrescription;
 use App\Services\PatientTimelineService;
+use App\Services\Clinical\RxValidationEngine;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -253,7 +254,7 @@ class OpdPrescriptionController extends BaseHospitalController
 
             $savedPrescription = OpdPrescription::where('opd_patient_id', $opdPatient->id)->first();
             if ($savedPrescription) {
-                resolve(\App\Services\Clinical\RxValidationEngine::class)->validate($savedPrescription);
+                resolve(RxValidationEngine::class)->validate($savedPrescription);
             }
 
             return response()->json([
@@ -280,7 +281,7 @@ class OpdPrescriptionController extends BaseHospitalController
             ->with([
                 'items.medicine:id,name,medicine_category_id,medicine_unit_id',
                 'items.category:id,name',
-                'items.dosage:id,dosage',
+                'items.dosage:id,dosage,postfix',
                 'items.instruction:id,instruction',
                 'items.route:id,route',
                 'items.frequency:id,frequency',
@@ -346,7 +347,7 @@ class OpdPrescriptionController extends BaseHospitalController
             ->with([
                 'items.medicine:id,name,medicine_category_id,medicine_unit_id',
                 'items.category:id,name',
-                'items.dosage:id,dosage',
+                'items.dosage:id,dosage,postfix',
                 'items.instruction:id,instruction',
                 'items.route:id,route',
                 'items.frequency:id,frequency',
@@ -410,7 +411,7 @@ class OpdPrescriptionController extends BaseHospitalController
         $dosages = MedicineDosage::query()
             ->whereIn('medicine_unit_id', $medicineUnitIds->all())
             ->orderBy('dosage')
-            ->get(['id', 'medicine_unit_id', 'dosage']);
+            ->get(['id', 'medicine_unit_id', 'dosage', 'postfix']);
 
         return response()->json($dosages);
     }

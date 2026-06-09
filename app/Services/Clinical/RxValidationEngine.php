@@ -134,18 +134,29 @@ class RxValidationEngine
             ->delete();
 
         foreach ($alerts as $alert) {
-            RxValidationLog::create([
-                'hospital_id' => $hospitalId,
-                'patient_id' => $patientId,
-                'prescription_id' => $prescription->id,
-                'prescription_type' => $type,
-                'prescription_item_id' => $alert['prescription_item_id'] ?? null,
-                'medicine_id' => $alert['medicine_id'] ?? ($alert['interact_medicine_id'] ?? 0),
-                'validation_type' => $alert['type'],
-                'severity' => $alert['severity'],
-                'message' => $alert['message'],
-                'status' => 'pending'
-            ]);
+            $medicineId = $alert['medicine_id'] ?? ($alert['interact_medicine_id'] ?? 0);
+
+            $exists = RxValidationLog::where('prescription_id', $prescription->id)
+                ->where('prescription_type', $type)
+                ->where('medicine_id', $medicineId)
+                ->where('validation_type', $alert['type'])
+                ->where('message', $alert['message'])
+                ->exists();
+
+            if (!$exists) {
+                RxValidationLog::create([
+                    'hospital_id' => $hospitalId,
+                    'patient_id' => $patientId,
+                    'prescription_id' => $prescription->id,
+                    'prescription_type' => $type,
+                    'prescription_item_id' => $alert['prescription_item_id'] ?? null,
+                    'medicine_id' => $medicineId,
+                    'validation_type' => $alert['type'],
+                    'severity' => $alert['severity'],
+                    'message' => $alert['message'],
+                    'status' => 'pending'
+                ]);
+            }
         }
 
         return $alerts;

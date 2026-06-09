@@ -66,7 +66,7 @@
                     <tr>
                         <td>{{ $item->category?->name ?? '-' }}</td>
                         <td>{{ $item->medicine?->name ?? '-' }}</td>
-                        <td>{{ $item->dosage?->dosage ?? '-' }}</td>
+                        <td>{{ $item->dosage?->formatted_dosage ?? '-' }}</td>
                         <td>{{ $item->instruction?->instruction ?? '-' }}</td>
                         <td>{{ $item->frequency?->frequency ?? '-' }}</td>
                         <td>{{ $item->no_of_day ?? '-' }}</td>

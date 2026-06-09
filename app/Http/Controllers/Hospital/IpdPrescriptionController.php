@@ -271,7 +271,7 @@ class IpdPrescriptionController extends BaseHospitalController
             ->load([
                 'items.medicine:id,name,medicine_category_id,medicine_unit_id',
                 'items.category:id,name',
-                'items.dosage:id,dosage',
+                'items.dosage:id,dosage,postfix',
                 'items.instruction:id,instruction',
                 'items.route:id,route',
                 'items.frequency:id,frequency',
@@ -324,7 +324,7 @@ class IpdPrescriptionController extends BaseHospitalController
             ->load([
                 'items.medicine:id,name,medicine_category_id,medicine_unit_id',
                 'items.category:id,name',
-                'items.dosage:id,dosage',
+                'items.dosage:id,dosage,postfix',
                 'items.instruction:id,instruction',
                 'items.route:id,route',
                 'items.frequency:id,frequency',
@@ -389,7 +389,7 @@ class IpdPrescriptionController extends BaseHospitalController
         $dosages = MedicineDosage::query()
             ->whereIn('medicine_unit_id', $medicineUnitIds->all())
             ->orderBy('dosage')
-            ->get(['id', 'medicine_unit_id', 'dosage']);
+            ->get(['id', 'medicine_unit_id', 'dosage', 'postfix']);
 
         return response()->json($dosages);
     }

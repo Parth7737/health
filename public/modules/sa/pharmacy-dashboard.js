@@ -1324,10 +1324,10 @@
                     }
 
                     var badgeLabel = log.validation_type === 'dose' ? '💊 Dose Limit' :
-                                     log.validation_type === 'interaction' ? '🔄 Drug Interaction' :
-                                     log.validation_type === 'allergy' ? '⚠️ Allergy Warning' :
-                                     log.validation_type === 'high_risk' ? '🚨 High Risk Drug' :
-                                     log.validation_type === 'pregnancy' ? '🤰 Pregnancy' : '🛡️ Safety Alert';
+                        log.validation_type === 'interaction' ? '🔄 Drug Interaction' :
+                            log.validation_type === 'allergy' ? '⚠️ Allergy Warning' :
+                                log.validation_type === 'high_risk' ? '🚨 High Risk Drug' :
+                                    log.validation_type === 'pregnancy' ? '🤰 Pregnancy' : '🛡️ Safety Alert';
 
                     var actionHtml = '';
                     if (log.status === 'pending') {
@@ -1384,7 +1384,7 @@
             return;
         }
 
-        var url = typeof window.route === 'function' ? window.route('rxValidationAction', { log: logId }) : '';
+        var url = typeof window.route === 'function' ? window.route('rxValidationAction').replace('__ID__', String(logId)) : '';
         if (!url) {
             toast('Error', 'Action endpoint not found.', 'error');
             return;

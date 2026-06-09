@@ -315,7 +315,7 @@
                                         $selectedCategoryId = $item?->medicine_category_id;
                                         $selectedUnitId = $item?->medicine_unit_id;
                                         $dosageOptions = $selectedUnitId
-                                            ? App\Models\MedicineDosage::query()->where('medicine_unit_id', $selectedUnitId)->orderBy('dosage')->get(['id', 'dosage'])
+                                            ? App\Models\MedicineDosage::query()->where('medicine_unit_id', $selectedUnitId)->orderBy('dosage')->get(['id', 'dosage', 'postfix'])
                                             : collect([]);
                                         $selectedMedicine = $medicineMap->get($selectedMedicineId);
                                         $selectedInstruction = $instructionMap->get($item?->medicine_instruction_id);
@@ -323,9 +323,9 @@
                                         $selectedFrequency = $frequencyMap->get($item?->medicine_frequency_id);
                                         $selectedDosage = $dosageOptions->firstWhere('id', $selectedDosageId);
                                     @endphp
-                                    <tr class="prescription-item-row" data-row-id="{{ $loop->iteration }}" data-medicine-id="{{ $selectedMedicineId }}" data-category-id="{{ $selectedCategoryId }}" data-dosage-id="{{ $selectedDosageId }}" data-instruction-id="{{ $item?->medicine_instruction_id }}" data-route-id="{{ $item?->medicine_route_id }}" data-frequency-id="{{ $item?->medicine_frequency_id }}" data-days="{{ $item?->no_of_day }}">
+                                    <tr class="prescription-item-row" data-row-id="{{ $loop->iteration }}" data-medicine-id="{{ $selectedMedicineId }}" data-category-id="{{ $selectedCategoryId }}" data-medicine-unit-id="{{ $selectedUnitId }}" data-dosage-id="{{ $selectedDosageId }}" data-instruction-id="{{ $item?->medicine_instruction_id }}" data-route-id="{{ $item?->medicine_route_id }}" data-frequency-id="{{ $item?->medicine_frequency_id }}" data-days="{{ $item?->no_of_day }}">
                                         <td>{{ $selectedMedicine?->name ?? '-' }}</td>
-                                        <td>{{ $selectedDosage?->dosage ?? '-' }}</td>
+                                        <td>{{ $selectedDosage?->formatted_dosage ?? '-' }}</td>
                                         <td>{{ $selectedInstruction?->instruction ?? '-' }}</td>
                                         <td>{{ $selectedRoute?->route ?? '-' }}</td>
                                         <td>{{ $selectedFrequency?->frequency ?? '-' }}</td>

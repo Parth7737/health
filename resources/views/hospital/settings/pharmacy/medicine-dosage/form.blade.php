@@ -17,7 +17,11 @@
         </div>
         <div class="col-md-12 mt-2">
             <label class="form-label">Dosage</label>
-            <input type="text" name="dosage" id="dosage" value="{{ @$data->dosage }}" class="form-control">
+            <input type="number" step="any" name="dosage" id="dosage" value="{{ @$data->dosage }}" class="form-control">
+        </div>
+        <div class="col-md-12 mt-2">
+            <label class="form-label">Postfix Unit</label>
+            <input type="text" name="postfix" id="postfix" value="{{ @$data->postfix }}" class="form-control" placeholder="e.g. ml, mg, drops">
         </div>
     </div>
     <div class="modal-footer">
