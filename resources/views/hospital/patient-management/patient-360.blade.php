@@ -178,6 +178,18 @@
                             title="{{ e($patient360NewOrderBlockedReason ?? 'New orders are not allowed.') }}"
                         @endif
                     >+ New Order</button>
+                    @can('edit-patient-management')
+                        <button
+                            type="button"
+                            class="btn btn-warning btn-sm"
+                            id="patient360EditProfileBtn"
+                            onclick="openModal('editProfileModal')"
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="bottom"
+                            data-bs-title="Edit patient profile — in form: Alt+N / Alt+B"
+                            aria-keyshortcuts="Alt+N Alt+B"
+                        >Edit Profile</button>
+                    @endcan
                     @if($isIpdActive && $activeIpdAllocation)
                         @can('edit-patient-management')
                             @if($p360HasSchemePayer)
@@ -408,7 +420,15 @@
                         <div class="card-body-sm">
                             <div class="mb-3">
                                 <div class="fw-600 fs-12 mb-2">Known Allergies</div>
-                                <div class="fs-12 text-muted">{{ $patient->known_allergies ?: '-' }}</div>
+                                @if(!empty($patientAllergyNames))
+                                    <div class="p360-allergy-tags">
+                                        @foreach($patientAllergyNames as $allergyName)
+                                            <span class="badge badge-danger">{{ $allergyName }}</span>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <div class="fs-12 text-muted">-</div>
+                                @endif
                             </div>
                             <div class="mb-3">
                                 <div class="fw-600 fs-12 mb-2">Chronic Conditions</div>
@@ -993,11 +1013,447 @@
     </div>
 </div>
 
+@can('edit-patient-management')
+@php
+    $selectedStateName = $patient->state ?: '';
+    $selectedStateId = '';
+    $matchedState = null;
+    if ($selectedStateName) {
+        $matchedState = \App\Models\IndianState::where('name', $selectedStateName)->first();
+        if ($matchedState) {
+            $selectedStateId = $matchedState->id;
+        }
+    }
+
+    $selectedDistrictName = $patient->district ?: '';
+    $selectedDistrictId = '';
+    $districtsForState = collect();
+    if ($selectedStateId) {
+        $districtsForState = \App\Models\IndianDistrict::where('state_id', $selectedStateId)->orderBy('name')->get();
+        if ($selectedDistrictName) {
+            $matchedDistrict = $districtsForState->firstWhere('name', $selectedDistrictName);
+            if ($matchedDistrict) {
+                $selectedDistrictId = $matchedDistrict->id;
+            }
+        }
+    }
+
+    $patientChronicConditions = is_array($patient->chronic_conditions) 
+        ? $patient->chronic_conditions 
+        : (is_string($patient->chronic_conditions) 
+            ? json_decode($patient->chronic_conditions, true) 
+            : []);
+    if (!is_array($patientChronicConditions)) {
+        $patientChronicConditions = [];
+    }
+
+    $selectedAllergyIds = collect((array) ($patient->allergy_id ?? []))
+        ->filter(fn ($id) => $id !== null && $id !== '')
+        ->map(fn ($id) => (int) $id)
+        ->filter(fn ($id) => $id > 0)
+        ->values()
+        ->all();
+    if ($selectedAllergyIds === [] && filled($patient->known_allergies)) {
+        $legacyAllergyNames = collect(explode(',', (string) $patient->known_allergies))
+            ->map(fn ($name) => trim($name))
+            ->filter()
+            ->values()
+            ->all();
+        if ($legacyAllergyNames !== []) {
+            $selectedAllergyIds = \App\Models\Allergy::query()
+                ->whereIn('name', $legacyAllergyNames)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+    }
+@endphp
+<div class="modal-overlay hidden" id="editProfileModal" role="dialog" aria-modal="true" aria-labelledby="editProfileModalTitle" onclick="if(event.target===this)closeModal('editProfileModal')">
+    <div class="modal modal-xl">
+        <div class="modal-header">
+            <div class="modal-title" id="editProfileModalTitle">📝 Edit Patient Profile</div>
+            <button type="button" class="modal-close" onclick="closeModal('editProfileModal')">✕</button>
+        </div>
+        <form id="editProfileForm" novalidate>
+            @csrf
+            <div class="modal-body">
+                <div class="steps-bar" id="editSteps">
+                    <div class="step-item active" id="editStep1"><div class="step-circle">1</div><div class="step-info"><div class="step-name">Personal Info</div></div></div>
+                    <div class="step-line"></div>
+                    <div class="step-item" id="editStep2"><div class="step-circle">2</div><div class="step-info"><div class="step-name">Contact &amp; Address</div></div></div>
+                    <div class="step-line"></div>
+                    <div class="step-item" id="editStep3"><div class="step-circle">3</div><div class="step-info"><div class="step-name">Medical History</div></div></div>
+                    <div class="step-line"></div>
+                    <div class="step-item" id="editStep4"><div class="step-circle">4</div><div class="step-info"><div class="step-name">Confirm &amp; Save</div></div></div>
+                </div>
+                <div id="editProfileKeyboardHints" style="margin:10px 0 14px;padding:10px 12px;border:1px dashed var(--border-light);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
+                    Keyboard: <b>Tab</b> cycles inside this dialog (won’t jump to the page behind) · Shift+Tab same · <b>Enter</b> on the <b>last field of the step</b> (above the footer) goes to next step · Alt+N / Alt+B · Space on radios/checkboxes · Dates: DD-MM-YYYY or Down/Enter for calendar · <b>Confirm:</b> Tab to summary, then to <b>Save Changes</b> — Enter or Space to submit
+                </div>
+
+                <div id="editProfileAlert" class="alert alert-danger d-none" role="alert"></div>
+
+                <div class="reg-pane" id="editPane1" data-edit-pane="1">
+                    <div class="form-row cols-3">
+                        <div class="form-group">
+                            <label class="form-label">Title</label>
+                            <select class="form-control" name="title" id="edit_title">
+                                <option value="">Select</option>
+                                <option value="Mr." @selected($patient->title == 'Mr.')>Mr.</option>
+                                <option value="Mrs." @selected($patient->title == 'Mrs.')>Mrs.</option>
+                                <option value="Ms." @selected($patient->title == 'Ms.')>Ms.</option>
+                                <option value="Dr." @selected($patient->title == 'Dr.')>Dr.</option>
+                                <option value="Baby" @selected($patient->title == 'Baby')>Baby</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="grid-column:span 2">
+                            <label class="form-label">Full Name <span class="req">*</span></label>
+                            <input type="text" class="form-control" name="name" id="edit_name" value="{{ $patient->name }}" placeholder="Patient's full name"/>
+                        </div>
+                    </div>
+                    <div class="form-row cols-4">
+                        <div class="form-group">
+                            <label class="form-label">Date of Birth <span class="req">*</span></label>
+                            <input type="text" class="form-control" name="date_of_birth" id="edit_dob" value="{{ $patient->date_of_birth }}"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Age (Auto)</label>
+                            <input type="text" class="form-control" name="age_years" id="edit_age" value="{{ $patient->age_years }}" placeholder="Auto-calculated" readonly/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Gender <span class="req">*</span></label>
+                            <select class="form-control" name="gender" id="edit_gender">
+                                <option value="">Select</option>
+                                <option value="Male" @selected($patient->gender == 'Male')>Male</option>
+                                <option value="Female" @selected($patient->gender == 'Female')>Female</option>
+                                <option value="Other" @selected($patient->gender == 'Other')>Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Blood Group</label>
+                            <select class="form-control" name="blood_group" id="edit_blood">
+                                <option value="">Unknown</option>
+                                @foreach(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as $bg)
+                                    <option value="{{ $bg }}" @selected($patient->blood_group == $bg)>{{ $bg }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row cols-3">
+                        <div class="form-group">
+                            <label class="form-label">Aadhaar Number</label>
+                            <input type="text" class="form-control" name="aadhar_no" id="edit_aadhaar" value="{{ $patient->aadhar_no }}" placeholder="XXXX XXXX XXXX" maxlength="20"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ayushman Bharat ID</label>
+                            <input type="text" class="form-control" name="ayushman_bharat_id" id="edit_ab" value="{{ $patient->ayushman_bharat_id }}" placeholder="AB-PMJAY ID"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Marital Status</label>
+                            <select class="form-control" name="marital_status" id="edit_marital_status">
+                                <option value="">Select</option>
+                                @foreach(['Single', 'Married', 'Widowed', 'Divorced'] as $ms)
+                                    <option value="{{ $ms }}" @selected($patient->marital_status == $ms)>{{ $ms }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row cols-3">
+                        <div class="form-group">
+                            <label class="form-label">Religion</label>
+                            <select class="form-control" name="religion_id" id="edit_religion">
+                                <option value="">Select Religion</option>
+                                @foreach(($religions ?? []) as $religion)
+                                    <option value="{{ $religion->id }}" @selected($patient->religion_id == $religion->id)>{{ $religion->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Occupation</label>
+                            <input type="text" class="form-control" name="occupation" id="edit_occupation" value="{{ $patient->occupation }}" placeholder="Farmer / Govt. Employee etc."/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Category</label>
+                            <select class="form-control select2" name="patient_category_id" id="edit_category">
+                                <option value="">Select Category</option>
+                                @foreach(($categories ?? []) as $category)
+                                    <option value="{{ $category->id }}" @selected($patient->patient_category_id == $category->id)>{{ $category->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reg-pane" id="editPane2" data-edit-pane="2" style="display:none" inert>
+                    <div class="form-row cols-3">
+                        <div class="form-group">
+                            <label class="form-label">Mobile Number <span class="req">*</span></label>
+                            <input type="tel" class="form-control" name="phone" id="edit_phone" value="{{ $patient->phone }}" placeholder="10-digit mobile"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Alternate Phone</label>
+                            <input type="tel" class="form-control" name="alternate_phone" id="edit_alt_phone" value="{{ $patient->alternate_phone }}" placeholder="Alternate contact"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email" id="edit_email" value="{{ $patient->email }}" placeholder="email@example.com"/>
+                        </div>
+                    </div>
+                    <div class="form-row cols-2-1">
+                        <div class="form-group">
+                            <label class="form-label">Address</label>
+                            <textarea class="form-control" name="address" id="edit_address" rows="2" placeholder="House No, Street, Village/Colony...">{{ $patient->address }}</textarea>
+                        </div>
+                        <div>
+                            <div class="form-group">
+                                <label class="form-label">Pin Code</label>
+                                <input type="text" class="form-control" name="pin_code" id="edit_pin" value="{{ $patient->pin_code }}" placeholder="248001"/>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row cols-3">
+                        <div class="form-group">
+                            <label class="form-label">State</label>
+                            <select class="form-control select2" name="state" id="edit_state" data-district-url="{{ route('hospital.patient-management.load-districts') }}">
+                                <option value="">Select State</option>
+                                @foreach(($states ?? []) as $state)
+                                    <option value="{{ $state->name }}" data-state-id="{{ $state->id }}" @selected($selectedStateName == $state->name)>{{ $state->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">District</label>
+                            <select class="form-control select2" name="district" id="edit_district">
+                                <option value="">Select District</option>
+                                @foreach($districtsForState as $district)
+                                    <option value="{{ $district->name }}" @selected($selectedDistrictName == $district->name)>{{ $district->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Nationality</label>
+                            <select class="form-control select2" name="nationality" id="edit_nationality">
+                                <option value="">Select Nationality</option>
+                                <option value="Indian" @selected($patient->nationality == 'Indian')>Indian</option>
+                                <option value="Other" @selected($patient->nationality == 'Other')>Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="border-top:1px solid var(--border-light);padding-top:14px;margin-top:4px">
+                        <div class="fw-700 fs-13 mb-12">👨‍👩‍👦 Emergency Contact</div>
+                        <div class="form-row cols-3">
+                            <div class="form-group">
+                                <label class="form-label">Name</label>
+                                <input type="text" class="form-control" name="emergency_contact_name" id="edit_emergency_name" value="{{ $patient->emergency_contact_name }}" placeholder="Guardian/Relative name"/>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Relation</label>
+                                <select class="form-control" name="emergency_contact_relation" id="edit_emergency_relation">
+                                    <option value="">Select</option>
+                                    @foreach(['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Other'] as $rel)
+                                        <option value="{{ $rel }}" @selected($patient->emergency_contact_relation == $rel)>{{ $rel }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Phone</label>
+                                <input type="tel" class="form-control" name="emergency_contact_phone" id="edit_emergency_phone" value="{{ $patient->emergency_contact_phone }}" placeholder="Emergency contact"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reg-pane" id="editPane3" data-edit-pane="3" style="display:none" inert>
+                    <div class="form-row cols-2">
+                        <div>
+                            <div class="form-group">
+                                <label class="form-label" id="edit_allergies_label">Known Allergies</label>
+                                <select class="form-control select2" name="allergy_id[]" id="edit_allergies" multiple aria-labelledby="edit_allergies_label">
+                                    @foreach(($allergies ?? []) as $allergy)
+                                        <option value="{{ $allergy->id }}" @selected(in_array($allergy->id, $selectedAllergyIds, true))>{{ $allergy->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" id="edit_chronic_conditions_label">Chronic Conditions</label>
+                                <div id="edit_chronic_conditions" role="group" aria-labelledby="edit_chronic_conditions_label" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+                                    @foreach(($diseases ?? []) as $disease)
+                                        <label class="reg-chronic-option">
+                                            <input type="checkbox" name="chronic_conditions[]" value="{{ $disease->name }}" autocomplete="off" @if(in_array($disease->name, $patientChronicConditions)) checked @endif> {{ $disease->name }}
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Past Surgical History</label>
+                                <textarea class="form-control" name="past_surgical_history" id="edit_past_surgery" rows="2" placeholder="Previous surgeries / procedures...">{{ $patient->past_surgical_history }}</textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="form-group">
+                                <label class="form-label">Current Medications</label>
+                                <textarea class="form-control" name="current_medications" id="edit_current_medications" rows="3" placeholder="List ongoing medications...">{{ $patient->current_medications }}</textarea>
+                            </div>
+                            <div class="form-row cols-2">
+                                <div class="form-group">
+                                    <label class="form-label">Smoking</label>
+                                    <select class="form-control" name="smoking_status" id="edit_smoking">
+                                        <option value="Never" @selected($patient->smoking_status == 'Never')>Never</option>
+                                        <option value="Current" @selected($patient->smoking_status == 'Current')>Current</option>
+                                        <option value="Past" @selected($patient->smoking_status == 'Past')>Past</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Alcohol</label>
+                                    <select class="form-control" name="alcohol_status" id="edit_alcohol">
+                                        <option value="Never" @selected($patient->alcohol_status == 'Never')>Never</option>
+                                        <option value="Occasional" @selected($patient->alcohol_status == 'Occasional')>Occasional</option>
+                                        <option value="Regular" @selected($patient->alcohol_status == 'Regular')>Regular</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Family History</label>
+                                <textarea class="form-control" name="family_history" id="edit_family_history" rows="2" placeholder="Family history of relevant diseases...">{{ $patient->family_history }}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Vaccination History</label>
+                                <select class="form-control" name="vaccination_status" id="edit_vaccination">
+                                    <option value="Unknown" @selected($patient->vaccination_status == 'Unknown')>Unknown</option>
+                                    <option value="Up to date" @selected($patient->vaccination_status == 'Up to date')>Up to date</option>
+                                    <option value="Partial" @selected($patient->vaccination_status == 'Partial')>Partial</option>
+                                    <option value="None" @selected($patient->vaccination_status == 'None')>None</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reg-pane" id="editPane4" data-edit-pane="4" style="display:none" inert>
+                    <div class="alert alert-green"><span class="alert-icon">✅</span><div><b>Ready to Save!</b> Please verify patient details before saving changes.</div></div>
+                    <div style="background:var(--surface-2);border:1px solid var(--border-light);border-radius:12px;padding:16px" id="editSummary" tabindex="0" role="region" aria-label="Profile update summary" data-edit-keeps-tabindex="1">
+                        <div class="fw-700 fs-14 mb-12">📋 Profile Summary</div>
+                        <div class="form-row cols-2">
+                            <div id="editSummLeft"></div>
+                            <div id="editSummRight"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="editProfilePrevBtn" type="button" style="display:none">‹ Back</button>
+                <div style="flex:1"></div>
+                <button class="btn btn-secondary" id="editProfileCancelBtn" type="button" onclick="closeModal('editProfileModal')">Cancel</button>
+                <button class="btn btn-primary" id="editProfileNextBtn" type="button">Next ›</button>
+                <button class="btn btn-success" id="editProfileSubmitBtn" type="button" style="display:none">✅ Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endcan
+
 @endsection
 
 @push('styles')
 <link rel="stylesheet" type="text/css" href="{{ asset('public/front/assets/css/gov.css') }}">
 @include('layouts.partials.flatpickr-css')
+<style>
+    #editProfileModal .modal {
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 48px);
+    }
+    #editProfileModal #editProfileForm {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+    }
+    #editProfileModal .modal-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding-bottom: 20px;
+    }
+    #editProfileModal.modal-overlay .modal > .modal-footer,
+    #editProfileModal .modal-footer {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.96);
+        overflow: visible !important;
+    }
+    #editProfileModal .modal-footer .btn-primary:focus,
+    #editProfileModal .modal-footer .btn-primary:focus-visible {
+        box-shadow:
+            inset 0 0 0 2px rgba(255, 255, 255, 0.95),
+            inset 0 0 0 4px rgba(13, 71, 161, 0.95),
+            0 0 0 2px #fff,
+            0 0 0 5px #0d47a1 !important;
+    }
+    #editProfileModal .modal-footer .btn-secondary:focus,
+    #editProfileModal .modal-footer .btn-secondary:focus-visible {
+        box-shadow:
+            inset 0 0 0 2px rgba(255, 255, 255, 0.98),
+            inset 0 0 0 4px rgba(21, 101, 192, 0.85),
+            0 0 0 2px #1565c0,
+            0 0 0 4px #e3f2fd !important;
+    }
+    #editProfileModal .modal-footer .btn-success:focus,
+    #editProfileModal .modal-footer .btn-success:focus-visible {
+        box-shadow:
+            inset 0 0 0 2px rgba(255, 255, 255, 0.95),
+            inset 0 0 0 4px rgba(27, 94, 32, 0.95),
+            0 0 0 2px #fff,
+            0 0 0 5px #1b5e20 !important;
+    }
+    #editSteps.steps-bar .step-item {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+    #editSteps.steps-bar .step-line {
+        flex: 1 1 1rem;
+        min-width: 0.75rem;
+        align-self: center;
+    }
+    #editSteps.steps-bar .step-info {
+        min-width: 0;
+        overflow: hidden;
+    }
+    #editSteps.steps-bar .step-name {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #editProfileModal #editSummary:focus:not(:focus-visible) {
+        outline: none;
+    }
+    #editProfileModal #editSummary:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 3px;
+    }
+    #editProfileModal #edit_chronic_conditions label.reg-chronic-option {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        margin: 0;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        user-select: none;
+    }
+    #editProfileModal #edit_chronic_conditions label.reg-chronic-option:focus-within {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+        border-color: var(--border, #dee2e6);
+        background: var(--primary-light, #e8f2fc);
+    }
+    #editProfileModal #edit_chronic_conditions label.reg-chronic-option input[type="checkbox"] {
+        width: 1rem;
+        height: 1rem;
+        flex-shrink: 0;
+        margin: 0;
+        accent-color: var(--primary);
+    }
+</style>
 @endpush
 
 @push('scripts')
@@ -1108,5 +1564,16 @@ window.Patient360Config = {
     }
 };
 </script>
+@can('edit-patient-management')
+<script>
+window.PatientEditProfileConfig = {
+    routes: {
+        updateProfile: @json(route('hospital.patient-management.update-profile', ['patient' => $patient->id])),
+        loadDistricts: @json(route('hospital.patient-management.load-districts')),
+    },
+};
+</script>
+<script src="{{ asset('public/modules/sa/patient-edit-profile-form.js') }}?v={{ filemtime(public_path('modules/sa/patient-edit-profile-form.js')) }}"></script>
+@endcan
 <script src="{{ asset('public/modules/sa/patient-360.js') }}"></script>
 @endpush

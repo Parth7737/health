@@ -455,11 +455,19 @@ function showToast(title, desc, type, duration) {
    ═══════════════════════════════════════════════════════════════ */
 function openModal(id) {
   const el = document.getElementById(id);
-  if (el) { el.classList.remove('hidden'); document.body.style.overflow='hidden'; }
+  if (el) {
+    el.classList.remove('hidden');
+    el.classList.add('open');
+    document.body.style.overflow='hidden';
+  }
 }
 function closeModal(id) {
   const el = document.getElementById(id);
-  if (el) { el.classList.add('hidden'); document.body.style.overflow=''; }
+  if (el) {
+    el.classList.add('hidden');
+    el.classList.remove('open');
+    document.body.style.overflow='';
+  }
 }
 function confirmDialog(msg, onConfirm) {
   if (confirm(msg)) onConfirm();

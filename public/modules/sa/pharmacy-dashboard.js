@@ -1062,10 +1062,12 @@
 
                         var sourceType = escapeJs(row.source_type || '');
                         var sourceId = parseInt(row.source_id, 10) || 0;
+                        var rxNo = escapeJs(row.rx_no || '');
                         var priority = String(row.priority || '').toLowerCase();
-                        return '<div style="display:flex;gap:3px">' +
+                        return '<div style="display:flex;gap:3px;flex-wrap:wrap">' +
                             '<button class="btn btn-success btn-xs" onclick="openPrescriptionDispense(\'' + sourceType + '\',' + sourceId + ')">✅ Dispense</button>' +
                             '<button class="btn btn-secondary btn-xs" onclick="openPrescriptionDispense(\'' + sourceType + '\',' + sourceId + ')">👁️ View</button>' +
+                            '<button class="btn btn-outline-primary btn-xs" title="View Rx Validation" onclick="viewPrescriptionRxValidation(\'' + sourceType + '\',' + sourceId + ',\'' + rxNo + '\')">🛡️ Rx</button>' +
                             (priority !== 'stat' ? '<button class="btn btn-warning btn-xs" onclick="holdRx(this)">⏸</button>' : '') +
                             '</div>';
                     }
@@ -1205,8 +1207,13 @@
                 var elapsed = parseInt(String(s.elapsed || '0'), 10) || 0;
                 var elapsedText = s.elapsed || (elapsed + ' min');
                 var clickAction = '';
+                var rxValidationAction = '';
                 if (s.prescription_id && s.source_type) {
-                    clickAction = 'openPrescriptionDispense(\'' + escapeJs(s.source_type) + '\', ' + parseInt(s.prescription_id, 10) + ')';
+                    var statRxId = parseInt(s.prescription_id, 10);
+                    var statSourceType = escapeJs(s.source_type);
+                    var statRxNo = escapeJs(s.rx || s.rx_no || '');
+                    clickAction = 'openPrescriptionDispense(\'' + statSourceType + '\', ' + statRxId + ')';
+                    rxValidationAction = 'viewPrescriptionRxValidation(\'' + statSourceType + '\', ' + statRxId + ', \'' + statRxNo + '\')';
                 } else {
                     clickAction = 'dispenseSTAT(this, \'' + escapeJs(s.rx || s.rx_no || '') + '\')';
                 }
@@ -1219,7 +1226,10 @@
                     '<div class="fs-12 text-muted"><b>Ordered by:</b> ' + escapeHtml(s.doctor || s.ordered_by || '-') + ' | <b>Time:</b> ' + escapeHtml(s.time || '-') + '</div></div>' +
                     '<div style="text-align:right;flex-shrink:0"><div style="font-size:20px;font-weight:900;color:' + (elapsed > 15 ? 'var(--danger)' : 'var(--warning)') + '">' + escapeHtml(elapsedText) + '</div>' +
                     '<div class="fs-10 text-muted">elapsed</div>' +
-                    '<button class="btn btn-danger btn-xs mt-8" onclick="' + clickAction + '">🚨 Dispense NOW</button></div></div></div>';
+                    '<div class="d-flex gap-4 mt-8" style="justify-content:flex-end;flex-wrap:wrap">' +
+                    (rxValidationAction ? '<button class="btn btn-outline-primary btn-xs" onclick="' + rxValidationAction + '">🛡️ Rx Validation</button>' : '') +
+                    '<button class="btn btn-danger btn-xs" onclick="' + clickAction + '">🚨 Dispense NOW</button>' +
+                    '</div></div></div></div>';
             })
             .join('');
     }
@@ -1266,11 +1276,206 @@
             });
     }
 
-    function loadRxValidation() {
+    var rxValidateState = {
+        page: 1,
+        perPage: 15,
+        total: 0,
+        lastPage: 1,
+        filtersBound: false
+    };
+
+    function getRxValidationStyle(log) {
+        var severityColor = 'var(--text-light)';
+        var severityBg = 'var(--surface-3)';
+        var cardBorder = 'var(--border-light)';
+        var cardBg = 'var(--surface-1)';
+
+        if (log.severity === 'critical') {
+            severityColor = '#ffffff';
+            severityBg = '#d32f2f';
+            cardBorder = '#ef5350';
+            cardBg = '#ffebee';
+        } else if (log.severity === 'major') {
+            severityColor = '#ffffff';
+            severityBg = '#e65100';
+            cardBorder = '#ffb74d';
+            cardBg = '#fff3e0';
+        } else if (log.severity === 'moderate') {
+            severityColor = '#333333';
+            severityBg = '#fbc02d';
+            cardBorder = '#fff176';
+            cardBg = '#fffde7';
+        } else if (log.severity === 'minor' || log.severity === 'info') {
+            severityColor = '#ffffff';
+            severityBg = '#0288d1';
+            cardBorder = '#4fc3f7';
+            cardBg = '#e1f5fe';
+        }
+
+        return { severityColor: severityColor, severityBg: severityBg, cardBorder: cardBorder, cardBg: cardBg };
+    }
+
+    function getRxValidationBadgeLabel(validationType) {
+        if (validationType === 'dose') return '💊 Dose Limit';
+        if (validationType === 'interaction') return '🔄 Drug Interaction';
+        if (validationType === 'allergy') return '⚠️ Allergy Warning';
+        if (validationType === 'high_risk') return '🚨 High Risk Drug';
+        if (validationType === 'pregnancy') return '🤰 Pregnancy';
+        return '🛡️ Safety Alert';
+    }
+
+    function renderRxValidationCard(log, allowActions) {
+        var style = getRxValidationStyle(log);
+        var badgeLabel = getRxValidationBadgeLabel(log.validation_type);
+        var billBadge = log.has_bill
+            ? '<span class="badge badge-gray fs-10">Bill Created</span>'
+            : '<span class="badge badge-orange fs-10">Awaiting Bill</span>';
+
+        var actionHtml = '';
+        var canAct = allowActions && log.status === 'pending' && !log.has_bill;
+
+        if (canAct) {
+            actionHtml = '' +
+                '<div style="display:flex; gap:12px; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,0.08); flex-wrap: wrap;">' +
+                '  <input class="form-control ph-grid-input rx-action-note" data-log-id="' + log.id + '" placeholder="Override justification / action remarks..." style="max-width: 320px; font-size: 12px; padding: 5px 10px; background:#fff;" type="text">' +
+                '  <button class="btn btn-success btn-xs" onclick="resolveRxAlert(' + log.id + ', \'approved\', this)">✅ Approve Override</button>' +
+                '  <button class="btn btn-danger btn-xs" onclick="resolveRxAlert(' + log.id + ', \'rejected\', this)">❌ Cancel/Reject Rx</button>' +
+                '  <button class="btn btn-warning btn-xs" onclick="resolveRxAlert(' + log.id + ', \'escalated\', this)">↗ Escalate</button>' +
+                '</div>';
+        } else if (log.status !== 'pending') {
+            var statusBadgeClass = log.status === 'approved' ? 'badge-green' : (log.status === 'rejected' ? 'badge-red' : 'badge-orange');
+            var statusLabel = log.status === 'approved' ? 'Override Approved' : (log.status === 'rejected' ? 'Rejected/Flagged' : 'Escalated');
+            actionHtml = '' +
+                '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,0.08); font-size: 11px; color: var(--text-muted);">' +
+                '  <div><b>Resolution Status:</b> <span class="badge ' + statusBadgeClass + '">' + statusLabel + '</span></div>' +
+                '  <div>By <b>' + escapeHtml(log.action_by_name) + '</b> on ' + escapeHtml(log.action_at) + '</div>' +
+                '</div>' +
+                '<div style="margin-top:6px; font-size: 11px; color: var(--text-light); background:rgba(0,0,0,0.03); padding:6px 10px; border-radius:6px;">' +
+                '  <b>Remarks/Justification:</b> ' + escapeHtml(log.action_note) +
+                '</div>';
+        }
+
+        return '' +
+            '<div style="background:' + style.cardBg + '; border:1.5px solid ' + style.cardBorder + '; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.02);" class="rx-alert-card">' +
+            '  <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">' +
+            '    <div style="flex-grow:1;">' +
+            '      <div class="d-flex align-center gap-8 mb-6" style="flex-wrap: wrap;">' +
+            '        <span class="badge" style="background:' + style.severityBg + '; color:' + style.severityColor + '; font-weight:700; font-size:10px;">' + badgeLabel + '</span>' +
+            '        ' + billBadge +
+            '        <span class="fw-700 fs-13" style="color:#2c3e50;">' + escapeHtml(log.patient_name) + ' (' + escapeHtml(log.patient_uhid) + ')</span>' +
+            '        <span style="font-size:11px; color:var(--text-muted);">| Rx: <b>' + escapeHtml(log.rx_no) + '</b> (' + escapeHtml(log.prescription_type) + ')</span>' +
+            '      </div>' +
+            '      <div class="fs-12 mb-6"><b>Prescribed Drug:</b> <span class="fw-700 text-primary">' + escapeHtml(log.medicine_name) + '</span></div>' +
+            '      <div class="fs-12" style="line-height:1.4; color:#333;">' + escapeHtml(log.message) + '</div>' +
+            '    </div>' +
+            '  </div>' +
+            '  ' + actionHtml +
+            '</div>';
+    }
+
+    function renderRxValidationCards(logs, allowActions) {
+        return (logs || []).map(function (log) {
+            return renderRxValidationCard(log, allowActions);
+        }).join('');
+    }
+
+    function formatRxPaginationInfo(page, perPage, total, count) {
+        if (!total || !count) {
+            return 'Showing 0-0 of 0 alerts';
+        }
+        var start = ((page - 1) * perPage) + 1;
+        var end = start + count - 1;
+        return 'Showing ' + start + '-' + end + ' of ' + total + ' alerts';
+    }
+
+    function buildRxPaginationButtons(page, lastPage) {
+        var pages = [];
+        var start = Math.max(1, page - 2);
+        var end = Math.min(lastPage, page + 2);
+
+        pages.push('<button class="pg-btn' + (page <= 1 ? ' disabled' : '') + '" ' + (page <= 1 ? 'disabled' : '') + ' onclick="loadRxValidation(' + (page - 1) + ')">‹</button>');
+
+        for (var cursor = start; cursor <= end; cursor += 1) {
+            pages.push('<button class="pg-btn' + (cursor === page ? ' active' : '') + '" onclick="loadRxValidation(' + cursor + ')">' + cursor + '</button>');
+        }
+
+        pages.push('<button class="pg-btn' + (page >= lastPage ? ' disabled' : '') + '" ' + (page >= lastPage ? 'disabled' : '') + ' onclick="loadRxValidation(' + (page + 1) + ')">›</button>');
+
+        return pages.join('');
+    }
+
+    function renderRxValidationPagination(count) {
+        var pagWrap = document.getElementById('rxValidatePagination');
+        var infoNode = document.getElementById('rxValidatePagInfo');
+        var buttonsNode = document.getElementById('rxValidatePagBtns');
+
+        if (!pagWrap) {
+            return;
+        }
+
+        if (!rxValidateState.total) {
+            pagWrap.style.display = 'none';
+            return;
+        }
+
+        pagWrap.style.display = 'flex';
+        if (infoNode) {
+            infoNode.textContent = formatRxPaginationInfo(rxValidateState.page, rxValidateState.perPage, rxValidateState.total, count);
+        }
+        if (buttonsNode) {
+            buttonsNode.innerHTML = buildRxPaginationButtons(rxValidateState.page, rxValidateState.lastPage);
+        }
+    }
+
+    function getRxValidationFilters() {
+        var searchEl = document.getElementById('rxValidateSearch');
+        var statusEl = document.getElementById('rxValidateStatusFilter');
+        var billEl = document.getElementById('rxValidateBillFilter');
+
+        return {
+            search: searchEl ? String(searchEl.value || '').trim() : '',
+            status: statusEl ? String(statusEl.value || 'all') : 'all',
+            bill_status: billEl ? String(billEl.value || 'unbilled') : 'unbilled'
+        };
+    }
+
+    function bindRxValidationFilters() {
+        if (rxValidateState.filtersBound) {
+            return;
+        }
+
+        var searchEl = document.getElementById('rxValidateSearch');
+        var statusEl = document.getElementById('rxValidateStatusFilter');
+        var billEl = document.getElementById('rxValidateBillFilter');
+        var debounceTimer = null;
+
+        var reload = function () {
+            loadRxValidation(1);
+        };
+
+        if (searchEl) {
+            searchEl.addEventListener('input', function () {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(reload, 350);
+            });
+        }
+        if (statusEl) {
+            statusEl.addEventListener('change', reload);
+        }
+        if (billEl) {
+            billEl.addEventListener('change', reload);
+        }
+
+        rxValidateState.filtersBound = true;
+    }
+
+    window.loadRxValidation = function (page) {
         var list = document.getElementById('rxValidateList');
         if (!list) {
             return;
         }
+
+        bindRxValidationFilters();
 
         var url = typeof window.route === 'function' ? window.route('rxValidationsLoad') : '';
         if (!url) {
@@ -1278,100 +1483,100 @@
             return;
         }
 
+        rxValidateState.page = Math.max(1, parseInt(page, 10) || 1);
+        var filters = getRxValidationFilters();
+
+        list.innerHTML = '<div class="text-muted text-center" style="padding: 30px;">Loading clinical alerts...</div>';
+
         fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': getCsrfToken() || ''
-            }
+            },
+            body: JSON.stringify({
+                page: rxValidateState.page,
+                per_page: rxValidateState.perPage,
+                search: filters.search,
+                status: filters.status,
+                bill_status: filters.bill_status
+            })
         })
             .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
-            .then(function (data) {
-                if (!data || !data.length) {
+            .then(function (payload) {
+                var rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
+                rxValidateState.total = Number(payload.total || rows.length || 0);
+                rxValidateState.page = Number(payload.page || rxValidateState.page);
+                rxValidateState.perPage = Number(payload.per_page || rxValidateState.perPage);
+                rxValidateState.lastPage = Math.max(1, Number(payload.last_page || 1));
+
+                if (!rows.length) {
                     list.innerHTML = '<div class="text-success text-center" style="padding: 40px; font-size: 14px;">' +
-                        '🎉 <b>All Clean!</b> No clinical validation warnings or drug interactions found on active prescriptions.' +
+                        '🎉 <b>All Clean!</b> No clinical validation warnings match your current filters.' +
                         '</div>';
+                    renderRxValidationPagination(0);
                     return;
                 }
 
-                list.innerHTML = data.map(function (log) {
-                    var severityColor = 'var(--text-light)';
-                    var severityBg = 'var(--surface-3)';
-                    var cardBorder = 'var(--border-light)';
-                    var cardBg = 'var(--surface-1)';
-
-                    if (log.severity === 'critical') {
-                        severityColor = '#ffffff';
-                        severityBg = '#d32f2f';
-                        cardBorder = '#ef5350';
-                        cardBg = '#ffebee';
-                    } else if (log.severity === 'major') {
-                        severityColor = '#ffffff';
-                        severityBg = '#e65100';
-                        cardBorder = '#ffb74d';
-                        cardBg = '#fff3e0';
-                    } else if (log.severity === 'moderate') {
-                        severityColor = '#333333';
-                        severityBg = '#fbc02d';
-                        cardBorder = '#fff176';
-                        cardBg = '#fffde7';
-                    } else if (log.severity === 'minor' || log.severity === 'info') {
-                        severityColor = '#ffffff';
-                        severityBg = '#0288d1';
-                        cardBorder = '#4fc3f7';
-                        cardBg = '#e1f5fe';
-                    }
-
-                    var badgeLabel = log.validation_type === 'dose' ? '💊 Dose Limit' :
-                        log.validation_type === 'interaction' ? '🔄 Drug Interaction' :
-                            log.validation_type === 'allergy' ? '⚠️ Allergy Warning' :
-                                log.validation_type === 'high_risk' ? '🚨 High Risk Drug' :
-                                    log.validation_type === 'pregnancy' ? '🤰 Pregnancy' : '🛡️ Safety Alert';
-
-                    var actionHtml = '';
-                    if (log.status === 'pending') {
-                        actionHtml = '' +
-                            '<div style="display:flex; gap:12px; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,0.08); flex-wrap: wrap;">' +
-                            '  <input class="form-control ph-grid-input rx-action-note" data-log-id="' + log.id + '" placeholder="Override justification / action remarks..." style="max-width: 320px; font-size: 12px; padding: 5px 10px; background:#fff;" type="text">' +
-                            '  <button class="btn btn-success btn-xs" onclick="resolveRxAlert(' + log.id + ', \'approved\', this)">✅ Approve Override</button>' +
-                            '  <button class="btn btn-danger btn-xs" onclick="resolveRxAlert(' + log.id + ', \'rejected\', this)">❌ Cancel/Reject Rx</button>' +
-                            '  <button class="btn btn-warning btn-xs" onclick="resolveRxAlert(' + log.id + ', \'escalated\', this)">↗ Escalate</button>' +
-                            '</div>';
-                    } else {
-                        var statusBadgeClass = log.status === 'approved' ? 'badge-green' : (log.status === 'rejected' ? 'badge-red' : 'badge-orange');
-                        var statusLabel = log.status === 'approved' ? 'Override Approved' : (log.status === 'rejected' ? 'Rejected/Flagged' : 'Escalated');
-                        actionHtml = '' +
-                            '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,0.08); font-size: 11px; color: var(--text-muted);">' +
-                            '  <div><b>Resolution Status:</b> <span class="badge ' + statusBadgeClass + '">' + statusLabel + '</span></div>' +
-                            '  <div>By <b>' + escapeHtml(log.action_by_name) + '</b> on ' + escapeHtml(log.action_at) + '</div>' +
-                            '</div>' +
-                            '<div style="margin-top:6px; font-size: 11px; color: var(--text-light); background:rgba(0,0,0,0.03); padding:6px 10px; border-radius:6px;">' +
-                            '  <b>Remarks/Justification:</b> ' + escapeHtml(log.action_note) +
-                            '</div>';
-                    }
-
-                    return '' +
-                        '<div style="background:' + cardBg + '; border:1.5px solid ' + cardBorder + '; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.02); transition: transform 0.2s;" class="rx-alert-card">' +
-                        '  <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">' +
-                        '    <div style="flex-grow:1;">' +
-                        '      <div class="d-flex align-center gap-8 mb-6" style="flex-wrap: wrap;">' +
-                        '        <span class="badge" style="background:' + severityBg + '; color:' + severityColor + '; font-weight:700; font-size:10px;">' + badgeLabel + '</span>' +
-                        '        <span class="fw-700 fs-13" style="color:#2c3e50;">' + escapeHtml(log.patient_name) + ' (' + escapeHtml(log.patient_uhid) + ')</span>' +
-                        '        <span style="font-size:11px; color:var(--text-muted);">| Rx: <b>' + escapeHtml(log.rx_no) + '</b> (' + escapeHtml(log.prescription_type) + ')</span>' +
-                        '      </div>' +
-                        '      <div class="fs-12 mb-6"><b>Prescribed Drug:</b> <span class="fw-700 text-primary">' + escapeHtml(log.medicine_name) + '</span></div>' +
-                        '      <div class="fs-12" style="line-height:1.4; color:#333;">' + escapeHtml(log.message) + '</div>' +
-                        '    </div>' +
-                        '  </div>' +
-                        '  ' + actionHtml +
-                        '</div>';
-                }).join('');
+                list.innerHTML = renderRxValidationCards(rows, true);
+                renderRxValidationPagination(rows.length);
             })
             .catch(function (err) {
                 list.innerHTML = '<div class="text-danger text-center py-20">Failed to load clinical alerts. ' + escapeHtml(err.message || err) + '</div>';
+                renderRxValidationPagination(0);
             });
-    }
+    };
+
+    window.viewPrescriptionRxValidation = function (prescriptionType, prescriptionId, rxNo) {
+        var modalBody = document.getElementById('rxValidationModalBody');
+        var modalTitle = document.getElementById('rxValidationModalTitle');
+        if (!modalBody) {
+            return;
+        }
+
+        var url = typeof window.route === 'function' ? window.route('rxValidationsByPrescription') : '';
+        if (!url) {
+            toast('Error', 'Rx validation route is not available.', 'error');
+            return;
+        }
+
+        if (modalTitle) {
+            modalTitle.textContent = '🛡️ Rx Validation — ' + (rxNo || 'Prescription');
+        }
+        modalBody.innerHTML = '<div class="text-muted text-center">Loading clinical alerts...</div>';
+        openModal('rxValidationModal');
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken() || ''
+            },
+            body: JSON.stringify({
+                prescription_type: prescriptionType,
+                prescription_id: prescriptionId
+            })
+        })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res); })
+            .then(function (payload) {
+                var items = Array.isArray(payload.items) ? payload.items : [];
+                if (!items.length) {
+                    modalBody.innerHTML = '<div class="text-success text-center" style="padding: 24px;">No clinical validation alerts for this prescription.</div>';
+                    return;
+                }
+
+                var billNote = payload.has_bill
+                    ? '<div class="alert alert-orange mb-12" style="padding:8px 12px"><span class="alert-icon">ℹ️</span><div>Pharmacy bill already created — alerts shown for reference only.</div></div>'
+                    : '';
+
+                modalBody.innerHTML = billNote + renderRxValidationCards(items, !payload.has_bill);
+            })
+            .catch(function (err) {
+                modalBody.innerHTML = '<div class="text-danger text-center py-20">Failed to load validation alerts. ' + escapeHtml(err.message || err) + '</div>';
+            });
+    };
 
     window.resolveRxAlert = function (logId, status, btn) {
         var card = btn.closest('.rx-alert-card');
@@ -4973,7 +5178,6 @@
     document.addEventListener('DOMContentLoaded', function () {
         loadDashboardCounts();
         loadDispenseQueue();
-        loadRxValidation();
         loadMARContent();
 
         // Tab scrolling arrows update and setup

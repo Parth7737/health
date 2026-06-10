@@ -192,12 +192,37 @@
             </div>
 
             <div id="rxValidatePane" class="ph-pane ph-hidden">
-                <div class="ph-toolbar mb-12">
-                    <div class="fw-700 fs-14">🛡️ Clinical Rx Validation & Drug Safety Logs</div>
-                    <button class="btn btn-secondary btn-xs" type="button" onclick="loadRxValidation()">🔄 Refresh Logs</button>
+                <div class="ph-toolbar mb-8">
+                    <div>
+                        <div class="fw-700 fs-14">🛡️ Clinical Rx Validation & Drug Safety Logs</div>
+                        <div class="fs-11 text-muted mt-4">Pharmacy reviews clinical alerts <b>before dispensing</b> — Approve Override, Reject/Flag, or Escalate to senior pharmacist.</div>
+                    </div>
+                    <button class="btn btn-secondary btn-xs" type="button" onclick="loadRxValidation(1)">🔄 Refresh</button>
+                </div>
+                <div class="ph-toolbar mb-12 ph-wrap">
+                    <div class="input-group ph-search">
+                        <span class="input-addon">🔍</span>
+                        <input type="text" class="form-control" id="rxValidateSearch" placeholder="Search patient / Rx / drug / alert..." autocomplete="off">
+                    </div>
+                    <select class="form-control ph-small-select" id="rxValidateStatusFilter">
+                        <option value="all">All Status</option>
+                        <option value="pending" selected>Pending</option>
+                        <option value="escalated">Escalated</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                    <select class="form-control ph-small-select" id="rxValidateBillFilter" style="width: 170px;">
+                        <option value="unbilled" selected>Undispensed</option>
+                        <option value="billed">Dispensed</option>
+                        <option value="all">All (Dispensed + Undispensed)</option>
+                    </select>
                 </div>
                 <div id="rxValidateList">
                     <div class="text-muted text-center" style="padding: 30px;">Loading clinical alerts...</div>
+                </div>
+                <div class="d-flex justify-content-between align-center mt-12" id="rxValidatePagination" style="display:none;">
+                    <div class="fs-11 text-muted" id="rxValidatePagInfo"></div>
+                    <div class="d-flex gap-4" id="rxValidatePagBtns"></div>
                 </div>
             </div>
 
@@ -707,6 +732,22 @@
             <button class="btn btn-secondary" type="button" onclick="closeModal('newPOModal')">Cancel</button>
             <button class="btn btn-primary" type="button" id="submitNewPO">📤 Create Purchase Order</button>
 </div>
+    </div>
+</div>
+
+{{-- ─── Rx Validation Popup (Dispense Queue / STAT) ─── --}}
+<div class="modal-overlay hidden" id="rxValidationModal" onclick="if(event.target===this) closeModal('rxValidationModal')">
+    <div class="modal modal-md">
+        <div class="modal-header">
+            <div class="modal-title" id="rxValidationModalTitle">🛡️ Rx Clinical Validation</div>
+            <button class="modal-close" type="button" onclick="closeModal('rxValidationModal')">✕</button>
+        </div>
+        <div class="modal-body" id="rxValidationModalBody">
+            <div class="text-muted text-center">Loading...</div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" type="button" onclick="closeModal('rxValidationModal')">Close</button>
+        </div>
     </div>
 </div>
 

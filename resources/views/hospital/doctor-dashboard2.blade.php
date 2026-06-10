@@ -271,11 +271,19 @@ function openConsult(name) { showToastDoc('Opening EMR for ' + name, 'info'); wi
 
 function closeModal(id) {
   const el = document.getElementById(id);
-  if (el) { el.classList.remove('open'); document.body.style.overflow = ''; }
+  if (el) {
+    el.classList.add('hidden');
+    el.classList.remove('open');
+    document.body.style.overflow = '';
+  }
 }
 function openModal(id) {
   const el = document.getElementById(id);
-  if (el) { el.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  if (el) {
+    el.classList.remove('hidden');
+    el.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
 }
 
 function showToastDoc(msg, type) {

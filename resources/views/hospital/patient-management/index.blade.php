@@ -808,13 +808,12 @@
         <div class="form-row cols-2">
           <div>
             <div class="form-group">
-              <label class="form-label">Known Allergies</label>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px" id="allergyChips">
-              </div>
-              <div class="input-group">
-                <input type="text" class="form-control" id="allergyInput" placeholder="Type allergy and press Enter"/>
-                <button class="btn btn-secondary" id="allergyAddBtn" type="button">+Add</button>
-              </div>
+              <label class="form-label" id="reg_allergies_label">Known Allergies</label>
+              <select class="form-control select2" name="allergy_id[]" id="reg_allergies" multiple aria-labelledby="reg_allergies_label">
+                @foreach(($allergies ?? []) as $allergy)
+                  <option value="{{ $allergy->id }}">{{ $allergy->name }}</option>
+                @endforeach
+              </select>
             </div>
             <div class="form-group">
               @php $diseases = App\Models\Disease::get(); @endphp

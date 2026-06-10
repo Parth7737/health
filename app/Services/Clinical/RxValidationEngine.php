@@ -111,6 +111,102 @@ class RxValidationEngine
                 ];
             }
 
+            // Renal Adjustment Check
+            if ($medicine->renal_adjustment_required) {
+                $hasRenalCondition = false;
+                $renalKeywords = ['renal', 'kidney', 'ckd', 'nephro', 'dialysis'];
+                $chronicConditions = $patient->chronic_conditions ?? [];
+                foreach ($chronicConditions as $condition) {
+                    $conditionLower = strtolower($condition);
+                    foreach ($renalKeywords as $keyword) {
+                        if (str_contains($conditionLower, $keyword)) {
+                            $hasRenalCondition = true;
+                            break 2;
+                        }
+                    }
+                }
+
+                if ($hasRenalCondition) {
+                    $alerts[] = [
+                        'type' => 'high_risk',
+                        'medicine_id' => $medicine->id,
+                        'prescription_item_id' => $item->id,
+                        'severity' => 'major',
+                        'message' => sprintf(
+                            "Renal Dose Adjustment: Patient has a history of renal condition/CKD. '%s' requires renal dose adjustment. Please verify and adjust the dose.",
+                            $medicine->name
+                        )
+                    ];
+                }
+            }
+
+            // Liver Adjustment Check
+            if ($medicine->liver_adjustment_required) {
+                $hasLiverCondition = false;
+                $liverKeywords = ['liver', 'hepatic', 'cirrhosis', 'hepatitis', 'liver failure'];
+                $chronicConditions = $patient->chronic_conditions ?? [];
+                foreach ($chronicConditions as $condition) {
+                    $conditionLower = strtolower($condition);
+                    foreach ($liverKeywords as $keyword) {
+                        if (str_contains($conditionLower, $keyword)) {
+                            $hasLiverCondition = true;
+                            break 2;
+                        }
+                    }
+                }
+
+                if ($hasLiverCondition) {
+                    $alerts[] = [
+                        'type' => 'high_risk',
+                        'medicine_id' => $medicine->id,
+                        'prescription_item_id' => $item->id,
+                        'severity' => 'major',
+                        'message' => sprintf(
+                            "Hepatic Dose Adjustment: Patient has a history of liver/hepatic condition. '%s' requires hepatic dose adjustment. Please verify and adjust the dose.",
+                            $medicine->name
+                        )
+                    ];
+                }
+            }
+
+            // Pregnancy Safety Check
+            if ($medicine->pregnancy_risk && $medicine->pregnancy_risk !== 'safe' && strtolower($patient->gender) === 'female') {
+                $isPregnant = false;
+                $pregnancyKeywords = ['pregnant', 'pregnancy'];
+                $chronicConditions = $patient->chronic_conditions ?? [];
+                foreach ($chronicConditions as $condition) {
+                    $conditionLower = strtolower($condition);
+                    foreach ($pregnancyKeywords as $keyword) {
+                        if (str_contains($conditionLower, $keyword)) {
+                            $isPregnant = true;
+                            break 2;
+                        }
+                    }
+                }
+
+                if ($isPregnant) {
+                    $severityMap = [
+                        'caution' => 'minor',
+                        'moderate' => 'moderate',
+                        'high_risk' => 'major',
+                        'contraindicated' => 'critical',
+                    ];
+                    $severity = $severityMap[$medicine->pregnancy_risk] ?? 'major';
+
+                    $alerts[] = [
+                        'type' => 'pregnancy',
+                        'medicine_id' => $medicine->id,
+                        'prescription_item_id' => $item->id,
+                        'severity' => $severity,
+                        'message' => sprintf(
+                            "Pregnancy Warning: '%s' is classified as '%s' during pregnancy. Patient is pregnant. Please verify safety.",
+                            $medicine->name,
+                            ucfirst(str_replace('_', ' ', $medicine->pregnancy_risk))
+                        )
+                    ];
+                }
+            }
+
             // Dose Validation
             $doseAlert = $this->doseValidator->validate(
                 $medicine,

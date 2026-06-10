@@ -126,4 +126,40 @@ class Patient extends Model
 
         return trim($title . ' ' . $name);
     }
+
+    /**
+     * Allergy labels from master IDs, with legacy free-text fallback.
+     *
+     * @return array<int, string>
+     */
+    public function resolveAllergyNames(): array
+    {
+        $ids = collect((array) ($this->allergy_id ?? []))
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+
+        if ($ids !== []) {
+            return Allergy::query()
+                ->whereIn('id', $ids)
+                ->orderBy('name')
+                ->pluck('name')
+                ->map(fn ($name) => trim((string) $name))
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        if (!filled($this->known_allergies)) {
+            return [];
+        }
+
+        return collect(explode(',', (string) $this->known_allergies))
+            ->map(fn ($name) => trim($name))
+            ->filter()
+            ->values()
+            ->all();
+    }
 }

@@ -75,6 +75,9 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         Route::get('ipd-admissions', 'PatientManagementController@ipdAdmissions')->name('ipd-admissions');
         Route::get('search-patients', 'PatientManagementController@searchPatients')->name('search-patients');
         Route::get('patient-360', 'PatientManagementController@patient360')->name('patient-360');
+        Route::post('patient/{patient}/update-profile', 'PatientManagementController@updateProfile')
+            ->middleware('permission:edit-patient-management')
+            ->name('update-profile');
         Route::get('scheme-preauth/start', 'SchemePreauthController@start')
             ->middleware('permission:edit-patient-management')
             ->name('scheme-preauth.start');
@@ -378,6 +381,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
             Route::get('dispense/patient-search', 'PharmacyDashboardController@patientSearch')->name('dispense.patient-search');
             Route::get('dispense/prescription-search', 'PharmacyDashboardController@prescriptionSearchSuggestions')->name('dispense.prescription-search');
             Route::post('rx-validations/load', 'PharmacyDashboardController@loadRxValidations')->name('rx-validations-load');
+            Route::post('rx-validations/by-prescription', 'PharmacyDashboardController@loadRxValidationsByPrescription')->name('rx-validations-by-prescription');
             Route::post('rx-validations/{log}/action', 'PharmacyDashboardController@actionRxValidation')->name('rx-validations.action');
             Route::resource('sale', 'PharmacySaleController')->only(['index', 'store']);
             Route::post('sale/load', 'PharmacySaleController@loaddata')->name('sale-load');

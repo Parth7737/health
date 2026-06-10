@@ -67,6 +67,7 @@ class PharmacyDashboardController extends BaseHospitalController
             'patientSearch' => route('hospital.pharmacy.dispense.patient-search'),
             'prescriptionSearch' => route('hospital.pharmacy.dispense.prescription-search'),
             'rxValidationsLoad' => route('hospital.pharmacy.rx-validations-load'),
+            'rxValidationsByPrescription' => route('hospital.pharmacy.rx-validations-by-prescription'),
             'rxValidationAction' => route('hospital.pharmacy.rx-validations.action', ['log' => '__ID__']),
         ];
     }
@@ -909,44 +910,108 @@ class PharmacyDashboardController extends BaseHospitalController
     }
 
     /**
-     * Load all pharmacy Rx validations.
+     * Load paginated pharmacy Rx validations with filters.
      */
     public function loadRxValidations(Request $request)
     {
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = min(50, max(5, (int) $request->input('per_page', 15)));
+        $status = strtolower((string) $request->input('status', 'all'));
+        $billStatus = strtolower((string) $request->input('bill_status', 'unbilled'));
+        $search = trim((string) $request->input('search', ''));
+
+        $query = RxValidationLog::query()
+            ->with(['patient:id,name,patient_id', 'medicine:id,name', 'actionBy:id,name'])
+            ->orderByRaw("CASE WHEN status = 'pending' THEN 0 WHEN status = 'escalated' THEN 1 ELSE 2 END")
+            ->latest('id');
+
+        if (in_array($status, ['pending', 'approved', 'rejected', 'escalated'], true)) {
+            $query->where('status', $status);
+        }
+
+        $this->applyRxValidationBillFilter($query, $billStatus);
+
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $query->where(function ($q) use ($like) {
+                $q->whereHas('patient', function ($pq) use ($like) {
+                    $pq->where('name', 'like', $like)
+                        ->orWhere('patient_id', 'like', $like);
+                })
+                    ->orWhereHas('medicine', function ($mq) use ($like) {
+                        $mq->where('name', 'like', $like);
+                    })
+                    ->orWhere('message', 'like', $like)
+                    ->orWhere(function ($rxQ) use ($like) {
+                        $rxQ->where('prescription_type', 'opd')
+                            ->whereExists(function ($sub) use ($like) {
+                                $sub->select(DB::raw(1))
+                                    ->from('opd_prescriptions as op')
+                                    ->whereColumn('op.id', 'rx_validation_logs.prescription_id')
+                                    ->where('op.hospital_id', $this->hospital_id)
+                                    ->where(function ($sq) use ($like) {
+                                        $sq->where('op.prescription_no', 'like', $like)
+                                            ->orWhereRaw("CONCAT('OPD-RX-', DATE_FORMAT(op.created_at, '%y%m'), '-', LPAD(op.id, 5, '0')) LIKE ?", [$like]);
+                                    });
+                            });
+                    })
+                    ->orWhere(function ($rxQ) use ($like) {
+                        $rxQ->where('prescription_type', 'ipd')
+                            ->whereExists(function ($sub) use ($like) {
+                                $sub->select(DB::raw(1))
+                                    ->from('ipd_prescriptions as ip')
+                                    ->whereColumn('ip.id', 'rx_validation_logs.prescription_id')
+                                    ->where('ip.hospital_id', $this->hospital_id)
+                                    ->where(function ($sq) use ($like) {
+                                        $sq->where('ip.prescription_no', 'like', $like)
+                                            ->orWhereRaw("CONCAT('IPD-RX-', DATE_FORMAT(ip.created_at, '%y%m'), '-', LPAD(ip.id, 5, '0')) LIKE ?", [$like]);
+                                    });
+                            });
+                    });
+            });
+        }
+
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+        $items = $this->mapRxValidationLogs($paginator->getCollection());
+
+        return response()->json([
+            'data' => $items,
+            'total' => $paginator->total(),
+            'page' => $paginator->currentPage(),
+            'per_page' => $paginator->perPage(),
+            'last_page' => $paginator->lastPage(),
+        ]);
+    }
+
+    /**
+     * Load Rx validations for a specific prescription (dispense queue / STAT popup).
+     */
+    public function loadRxValidationsByPrescription(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'prescription_type' => 'required|in:opd,ipd',
+            'prescription_id' => 'required|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        $type = strtolower((string) $request->input('prescription_type'));
+        $id = (int) $request->input('prescription_id');
+
         $logs = RxValidationLog::query()
             ->with(['patient:id,name,patient_id', 'medicine:id,name', 'actionBy:id,name'])
+            ->where('prescription_type', $type)
+            ->where('prescription_id', $id)
             ->orderByRaw("CASE WHEN status = 'pending' THEN 0 WHEN status = 'escalated' THEN 1 ELSE 2 END")
             ->latest('id')
             ->get();
 
-        $payload = $logs->map(function ($log) {
-            $rxNo = '-';
-            if ($log->prescription_type === 'opd') {
-                $rx = OpdPrescription::find($log->prescription_id);
-                $rxNo = $rx ? ($rx->prescription_no ?: 'OPD-RX-' . $rx->id) : '-';
-            } elseif ($log->prescription_type === 'ipd') {
-                $rx = IpdPrescription::find($log->prescription_id);
-                $rxNo = $rx ? ($rx->prescription_no ?: 'IPD-RX-' . $rx->id) : '-';
-            }
-
-            return [
-                'id' => $log->id,
-                'patient_name' => $log->patient?->name ?? 'Unknown',
-                'patient_uhid' => $log->patient?->patient_id ?? '-',
-                'prescription_type' => strtoupper($log->prescription_type),
-                'rx_no' => $rxNo,
-                'medicine_name' => $log->medicine?->name ?? 'Unknown',
-                'validation_type' => $log->validation_type,
-                'severity' => $log->severity,
-                'message' => $log->message,
-                'status' => $log->status,
-                'action_by_name' => $log->actionBy?->name ?? '-',
-                'action_note' => $log->action_note ?? '-',
-                'action_at' => $log->action_at ? Carbon::parse($log->action_at)->format('d-m-Y H:i') : '-',
-            ];
-        });
-
-        return response()->json($payload);
+        return response()->json([
+            'items' => $this->mapRxValidationLogs($logs),
+            'has_bill' => $this->isPrescriptionAlreadyBilled($type, $id),
+        ]);
     }
 
     /**
@@ -957,6 +1022,13 @@ class PharmacyDashboardController extends BaseHospitalController
         $log = RxValidationLog::find($id);
         if (!$log) {
             return response()->json(['status' => false, 'message' => 'Validation log not found.'], 404);
+        }
+
+        if ($this->isPrescriptionAlreadyBilled($log->prescription_type, (int) $log->prescription_id)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Pharmacy bill already created for this prescription. Validation is no longer actionable.',
+            ], 422);
         }
 
         $validator = Validator::make($request->all(), [
@@ -978,6 +1050,113 @@ class PharmacyDashboardController extends BaseHospitalController
             'status' => true,
             'message' => 'Clinical warning response updated successfully.'
         ]);
+    }
+
+    private function applyRxValidationBillFilter($query, string $billStatus): void
+    {
+        if ($billStatus === 'all') {
+            return;
+        }
+
+        $billedExists = function ($column) {
+            return function ($sub) use ($column) {
+                $sub->select(DB::raw(1))
+                    ->from('pharmacy_sale_bills')
+                    ->whereColumn('pharmacy_sale_bills.' . $column, 'rx_validation_logs.prescription_id')
+                    ->where('pharmacy_sale_bills.hospital_id', $this->hospital_id);
+            };
+        };
+
+        if ($billStatus === 'unbilled') {
+            $query->where(function ($q) use ($billedExists) {
+                $q->where(function ($opd) use ($billedExists) {
+                    $opd->where('prescription_type', 'opd')
+                        ->whereNotExists($billedExists('opd_prescription_id'));
+                })->orWhere(function ($ipd) use ($billedExists) {
+                    $ipd->where('prescription_type', 'ipd')
+                        ->whereNotExists($billedExists('ipd_prescription_id'));
+                });
+            });
+
+            return;
+        }
+
+        if ($billStatus === 'billed') {
+            $query->where(function ($q) use ($billedExists) {
+                $q->where(function ($opd) use ($billedExists) {
+                    $opd->where('prescription_type', 'opd')
+                        ->whereExists($billedExists('opd_prescription_id'));
+                })->orWhere(function ($ipd) use ($billedExists) {
+                    $ipd->where('prescription_type', 'ipd')
+                        ->whereExists($billedExists('ipd_prescription_id'));
+                });
+            });
+        }
+    }
+
+    private function mapRxValidationLogs($logs): array
+    {
+        $opdIds = $logs->where('prescription_type', 'opd')->pluck('prescription_id')->unique()->filter()->values();
+        $ipdIds = $logs->where('prescription_type', 'ipd')->pluck('prescription_id')->unique()->filter()->values();
+
+        $opdRx = $opdIds->isNotEmpty()
+            ? OpdPrescription::query()->whereIn('id', $opdIds)->get(['id', 'prescription_no', 'created_at'])->keyBy('id')
+            : collect();
+        $ipdRx = $ipdIds->isNotEmpty()
+            ? IpdPrescription::query()->whereIn('id', $ipdIds)->get(['id', 'prescription_no', 'created_at'])->keyBy('id')
+            : collect();
+
+        $billedOpd = $opdIds->isNotEmpty()
+            ? PharmacySaleBill::query()->whereIn('opd_prescription_id', $opdIds)->pluck('opd_prescription_id')->flip()
+            : collect();
+        $billedIpd = $ipdIds->isNotEmpty()
+            ? PharmacySaleBill::query()->whereIn('ipd_prescription_id', $ipdIds)->pluck('ipd_prescription_id')->flip()
+            : collect();
+
+        return $logs->map(function ($log) use ($opdRx, $ipdRx, $billedOpd, $billedIpd) {
+            $type = strtolower((string) $log->prescription_type);
+            $prescription = $type === 'opd'
+                ? $opdRx->get($log->prescription_id)
+                : ($type === 'ipd' ? $ipdRx->get($log->prescription_id) : null);
+
+            $hasBill = $type === 'opd'
+                ? $billedOpd->has($log->prescription_id)
+                : ($type === 'ipd' ? $billedIpd->has($log->prescription_id) : false);
+
+            return [
+                'id' => $log->id,
+                'prescription_type' => strtoupper($type),
+                'prescription_id' => (int) $log->prescription_id,
+                'patient_name' => $log->patient?->name ?? 'Unknown',
+                'patient_uhid' => $log->patient?->patient_id ?? '-',
+                'rx_no' => $this->formatPrescriptionNo($type, (int) $log->prescription_id, $prescription),
+                'medicine_name' => $log->medicine?->name ?? 'Unknown',
+                'validation_type' => $log->validation_type,
+                'severity' => $log->severity,
+                'message' => $log->message,
+                'status' => $log->status,
+                'has_bill' => $hasBill,
+                'action_by_name' => $log->actionBy?->name ?? '-',
+                'action_note' => $log->action_note ?? '-',
+                'action_at' => $log->action_at ? Carbon::parse($log->action_at)->format('d-m-Y H:i') : '-',
+            ];
+        })->values()->all();
+    }
+
+    private function formatPrescriptionNo(string $type, int $id, $prescription = null): string
+    {
+        if (!$prescription) {
+            return '-';
+        }
+
+        if (!empty($prescription->prescription_no)) {
+            return $prescription->prescription_no;
+        }
+
+        $prefix = strtoupper($type) . '-RX-';
+        $suffix = optional($prescription->created_at)->format('ym') . '-' . str_pad((string) $id, 5, '0', STR_PAD_LEFT);
+
+        return $prefix . $suffix;
     }
 }
 

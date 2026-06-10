@@ -313,11 +313,11 @@
                                         $selectedMedicineId = $item?->medicine_id;
                                         $selectedDosageId = $item?->medicine_dosage_id;
                                         $selectedCategoryId = $item?->medicine_category_id;
-                                        $selectedUnitId = $item?->medicine_unit_id;
+                                        $selectedMedicine = $medicineMap->get($selectedMedicineId);
+                                        $selectedUnitId = $selectedMedicine?->medicine_unit_id;
                                         $dosageOptions = $selectedUnitId
                                             ? App\Models\MedicineDosage::query()->where('medicine_unit_id', $selectedUnitId)->orderBy('dosage')->get(['id', 'dosage', 'postfix'])
                                             : collect([]);
-                                        $selectedMedicine = $medicineMap->get($selectedMedicineId);
                                         $selectedInstruction = $instructionMap->get($item?->medicine_instruction_id);
                                         $selectedRoute = $routeMap->get($item?->medicine_route_id);
                                         $selectedFrequency = $frequencyMap->get($item?->medicine_frequency_id);

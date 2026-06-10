@@ -930,6 +930,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   transform: scale(0.96) translateY(12px);
   transition: transform var(--t-md);
 }
+#editProfileModal .modal-xl {
+  max-width: 1120px;
+}
 .modal-overlay.open .modal { transform: scale(1) translateY(0); }
 .modal-overlay .modal.lg  { max-width: 760px; }
 .modal-overlay .modal.xl  { max-width: 1000px; }

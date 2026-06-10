@@ -1456,11 +1456,19 @@ function switchTab(tab) {
 }
 
 function openModal(id) {
-    document.getElementById(id).classList.add('open')
+    const el = document.getElementById(id);
+    if (el) {
+        el.classList.remove('hidden');
+        el.classList.add('open');
+    }
 }
 
 function closeModal(id) {
-    document.getElementById(id).classList.remove('open')
+    const el = document.getElementById(id);
+    if (el) {
+        el.classList.add('hidden');
+        el.classList.remove('open');
+    }
 }
 
 function selectPayMethod(el, m) {

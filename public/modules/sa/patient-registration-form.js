@@ -69,7 +69,7 @@
     emergency_contact_name: 'reg_emergency_name',
     emergency_contact_relation: 'reg_emergency_relation',
     emergency_contact_phone: 'reg_emergency_phone',
-    known_allergies: 'allergyInput',
+    allergy_id: 'reg_allergies',
     chronic_conditions: 'reg_chronic_conditions',
     past_surgical_history: 'reg_past_surgery',
     current_medications: 'reg_current_medications',
@@ -146,9 +146,6 @@
         genToken: document.getElementById('genToken'),
         genFee: document.getElementById('genFee'),
         feeGroup: document.getElementById('regFeeGroup'),
-        allergyInput: document.getElementById('allergyInput'),
-        allergyChips: document.getElementById('allergyChips'),
-        allergyAddBtn: document.getElementById('allergyAddBtn'),
         appointmentDate: document.getElementById('reg_appointment_date'),
       };
     }
@@ -164,21 +161,6 @@
       });
       this.elements.prevBtn?.addEventListener('click', () => this.moveStep(-1));
       this.elements.nextBtn?.addEventListener('click', () => this.moveStep(1));
-      this.elements.allergyAddBtn?.addEventListener('click', () => this.addAllergy());
-      this.elements.allergyChips?.addEventListener('click', (event) => {
-        const chip = event.target.closest('[data-allergy-chip]');
-        if (chip) {
-          chip.remove();
-        }
-      });
-      this.elements.allergyInput?.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter') {
-          return;
-        }
-        event.preventDefault();
-        this.addAllergy();
-      });
-
       document.getElementById('reg_dob')?.addEventListener('change', () => this.calcAge());
       document.getElementById('reg_scheme_newborn')?.addEventListener('change', () => this.syncSchemeNewbornDetailsVisibility());
       document.getElementById('reg_state')?.addEventListener('change', (event) => this.loadRegistrationDistricts(event.target.value));
@@ -476,8 +458,11 @@
       this.clearAllErrors();
       if (!preserveValues) {
         this.elements.form.reset();
-        if (this.elements.allergyChips) {
-          this.elements.allergyChips.innerHTML = '';
+        if (window.jQuery) {
+          const $allergies = jQuery('#reg_allergies');
+          if ($allergies.length) {
+            $allergies.val(null).trigger('change');
+          }
         }
         this.renderStaticOptions();
         this.resetGovSchemeState();
@@ -1500,10 +1485,6 @@
       }
 
       const aid = active.id;
-      if (aid === 'allergyInput' || aid === 'allergyAddBtn') {
-        return;
-      }
-
       const paneFocusables = this.getRegistrationPaneFocusables();
       if (!paneFocusables.length) {
         return;
@@ -1638,26 +1619,25 @@
       ageField.value = `${Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25))} yrs`;
     }
 
-    addAllergy() {
-      const input = this.elements.allergyInput;
-      if (!input) {
-        return;
+    getSelectedAllergyIds() {
+      const select = document.getElementById('reg_allergies');
+      if (!select) {
+        return [];
       }
-      const value = input.value.trim();
-      if (!value) {
-        return;
-      }
-      this.elements.allergyChips.insertAdjacentHTML('beforeend', `<span class="badge badge-red" style="cursor:pointer" data-allergy-chip="1">${value} ✕</span>`);
-      input.value = '';
-      this.clearFieldError('allergyInput');
+      return Array.from(select.selectedOptions)
+        .map((option) => parseInt(option.value, 10))
+        .filter((id) => Number.isFinite(id) && id > 0);
     }
 
-    removeAllergy(element) {
-      element?.remove();
-    }
-
-    getAllergiesText() {
-      return Array.from(document.querySelectorAll('#allergyChips .badge')).map((el) => el.textContent.replace(' ✕', '').trim()).join(', ');
+    getSelectedAllergyNamesText() {
+      const select = document.getElementById('reg_allergies');
+      if (!select) {
+        return '—';
+      }
+      const names = Array.from(select.selectedOptions)
+        .map((option) => String(option.text || '').trim())
+        .filter(Boolean);
+      return names.length ? names.join(', ') : '—';
     }
 
     getChronicConditions() {
@@ -1896,7 +1876,8 @@
         <div class="fs-12 mb-4"><b>Name:</b> ${summary.name}</div>
         <div class="fs-12 mb-4"><b>DOB:</b> ${summary.dob} (${summary.age})</div>
         <div class="fs-12 mb-4"><b>Gender:</b> ${summary.gender}</div>
-        <div class="fs-12 mb-4"><b>Phone:</b> ${summary.phone}</div>`;
+        <div class="fs-12 mb-4"><b>Phone:</b> ${summary.phone}</div>
+        <div class="fs-12 mb-4"><b>Allergies:</b> ${this.escapeHtml(this.getSelectedAllergyNamesText())}</div>`;
       const chargeLines = [];
       if (visitType !== 'IPD') {
         chargeLines.push(`<div class="fs-12 mb-4"><b>Registration Fee:</b> ${this.formatCurrency(summary.fee)}</div>`);
@@ -2024,7 +2005,7 @@
         emergency_contact_name: document.getElementById('reg_emergency_name')?.value || null,
         emergency_contact_relation: document.getElementById('reg_emergency_relation')?.value || null,
         emergency_contact_phone: document.getElementById('reg_emergency_phone')?.value || null,
-        known_allergies: this.getAllergiesText() || null,
+        allergy_id: this.getSelectedAllergyIds(),
         chronic_conditions: this.getChronicConditions(),
         past_surgical_history: document.getElementById('reg_past_surgery')?.value || null,
         current_medications: document.getElementById('reg_current_medications')?.value || null,
@@ -2146,8 +2127,6 @@
   window.regStep = (direction) => controller.moveStep(direction);
   window.submitRegistration = () => controller.submitRegistration();
   window.calcAge = () => controller.calcAge();
-  window.addAllergy = () => controller.addAllergy();
-  window.removeAllergy = (element) => controller.removeAllergy(element);
   window.loadRegistrationDistricts = (stateId) => controller.loadRegistrationDistricts(stateId);
   window.toggleVisitType = (type) => controller.updateVisitType(type);
 })();

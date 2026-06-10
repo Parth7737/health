@@ -13,6 +13,7 @@ use App\Models\MedicineFrequency;
 use App\Models\MedicineInstruction;
 use App\Models\MedicineRoute;
 use App\Services\PatientTimelineService;
+use App\Services\Clinical\RxValidationEngine;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -248,7 +249,7 @@ class IpdPrescriptionController extends BaseHospitalController
 
             $savedPrescription = IpdPrescription::find((int) ($context['prescription_id'] ?? 0));
             if ($savedPrescription) {
-                resolve(\App\Services\Clinical\RxValidationEngine::class)->validate($savedPrescription);
+                resolve(RxValidationEngine::class)->validate($savedPrescription);
             }
 
             return response()->json([

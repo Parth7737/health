@@ -66,8 +66,9 @@ class PatientManagementController extends BaseHospitalController
 
         $states = IndianState::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $schemeTypes = SchemeType::query()->orderBy('name')->get(['id', 'name']);
+        $allergies = Allergy::query()->orderBy('name')->get(['id', 'name']);
 
-        return view('hospital.patient-management.index', compact('departments', 'states', 'schemeTypes'));
+        return view('hospital.patient-management.index', compact('departments', 'states', 'schemeTypes', 'allergies'));
     }
 
     /**
@@ -2263,8 +2264,170 @@ class PatientManagementController extends BaseHospitalController
             'patient360HasSchemePayer' => $patient360HasSchemePayer,
             'schemePreauthRegister' => $schemePreauthRegister,
             'schemePreauthProcedures' => $schemePreauthProcedures,
+            'states' => IndianState::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'religions' => \App\Models\Religion::get(),
+            'categories' => PatientCategory::query()->where('hospital_id', $this->hospital_id)->get(['id', 'name']),
+            'diseases' => \App\Models\Disease::get(),
+            'allergies' => Allergy::query()->orderBy('name')->get(['id', 'name']),
+            'patientAllergyNames' => $patient->resolveAllergyNames(),
         ]);
     }
+
+    public function updateProfile(Request $request, $patientId)
+    {
+        $patient = Patient::query()
+            ->where('hospital_id', $this->hospital_id)
+            ->where('id', $patientId)
+            ->first();
+
+        if (!$patient) {
+            return response()->json(['status' => false, 'message' => 'Patient not found.'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            // Step 1 – Personal
+            'name'                      => 'required|string|max:255',
+            'title'                     => 'nullable|in:Mr.,Mrs.,Ms.,Dr.,Baby',
+            'date_of_birth'             => 'nullable|date_format:Y-m-d',
+            'age_years'                 => 'required|integer|min:0|max:150',
+            'gender'                    => 'required|in:Male,Female,Other',
+            'blood_group'               => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
+            'marital_status'            => 'nullable|string|max:50',
+            'aadhar_no'                 => 'nullable|string|max:20',
+            'ayushman_bharat_id'        => 'nullable|string|max:100',
+            'occupation'                => 'nullable|string|max:100',
+            'category'                  => 'nullable|in:General,OBC,SC,ST,EWS',
+            'patient_category_id'       => [
+                'nullable',
+                Rule::exists('patient_categories', 'id')->where(function ($query) {
+                    $query->where('hospital_id', $this->hospital_id);
+                }),
+            ],
+            'religion_id'               => 'nullable|exists:religions,id',
+            // Step 2 – Contact
+            'phone'                     => 'required|digits_between:7,15',
+            'alternate_phone'           => 'nullable|digits_between:7,15',
+            'email'                     => 'nullable|email|max:255',
+            'address'                   => 'nullable|string|max:500',
+            'pin_code'                  => 'nullable|string|max:10',
+            'district'                  => 'nullable|string|max:100',
+            'state'                     => 'nullable|string|max:100',
+            'nationality'               => 'nullable|string|max:100',
+            'emergency_contact_name'    => 'nullable|string|max:150',
+            'emergency_contact_relation' => 'nullable|string|max:50',
+            'emergency_contact_phone'   => 'nullable|digits_between:7,15',
+            // Step 3 – Medical history
+            'allergy_id'                => 'nullable|array',
+            'allergy_id.*'              => 'nullable|integer|exists:allergies,id',
+            'chronic_conditions'        => 'nullable|array',
+            'chronic_conditions.*'      => 'nullable|string',
+            'past_surgical_history'     => 'nullable|string',
+            'current_medications'       => 'nullable|string',
+            'family_history'            => 'nullable|string',
+            'smoking_status'            => 'nullable|in:Never,Current,Past',
+            'alcohol_status'            => 'nullable|in:Never,Occasional,Regular',
+            'vaccination_status'        => 'nullable|in:Up to date,Partial,Unknown,None',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        // Phone uniqueness: check other patients in this hospital
+        $phoneExists = Patient::query()
+            ->where('phone', $request->phone)
+            ->where('hospital_id', $this->hospital_id)
+            ->where('id', '!=', $patient->id)
+            ->exists();
+
+        if ($phoneExists) {
+            return response()->json([
+                'errors' => [['code' => 'phone', 'message' => 'This phone number is already registered to another patient.']],
+            ], 422);
+        }
+
+        // Phone uniqueness: check other hospitals
+        $existingPhoneOtherHospital = Patient::query()
+            ->where('phone', $request->phone)
+            ->where('hospital_id', '!=', $this->hospital_id)
+            ->exists();
+
+        if ($existingPhoneOtherHospital) {
+            return response()->json([
+                'errors' => [['code' => 'phone', 'message' => 'This phone number is already registered at another hospital.']],
+            ], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($request, $patient) {
+                $selectedPatientCategory = null;
+                if ($request->filled('patient_category_id')) {
+                    $selectedPatientCategory = PatientCategory::query()
+                        ->where('hospital_id', $this->hospital_id)
+                        ->find($request->patient_category_id);
+                }
+
+                $legacyCategory = $request->category;
+                if (!$legacyCategory && $selectedPatientCategory) {
+                    $normalizedCategory = strtoupper(trim((string) $selectedPatientCategory->name));
+                    $legacyCategory = [
+                        'GENERAL' => 'General',
+                        'OBC' => 'OBC',
+                        'SC' => 'SC',
+                        'ST' => 'ST',
+                        'EWS' => 'EWS',
+                    ][$normalizedCategory] ?? 'General';
+                }
+
+                // Apply all fields
+                $patient->title                     = $request->title;
+                $patient->name                      = $request->name;
+                $patient->date_of_birth             = $request->date_of_birth ?: null;
+                $patient->age_years                 = $request->age_years;
+                $patient->gender                    = $request->gender;
+                $patient->blood_group               = $request->blood_group;
+                $patient->marital_status            = $request->marital_status;
+                $patient->aadhar_no                 = $request->aadhar_no;
+                $patient->ayushman_bharat_id        = $request->ayushman_bharat_id;
+                $patient->occupation                = $request->occupation;
+                $patient->patient_category_id       = $selectedPatientCategory?->id;
+                $patient->category                  = $legacyCategory ?: 'General';
+                $patient->religion_id               = $request->religion_id;
+                $patient->phone                     = $request->phone;
+                $patient->alternate_phone           = $request->alternate_phone;
+                $patient->email                     = $request->email;
+                $patient->address                   = $request->address;
+                $patient->pin_code                  = $request->pin_code;
+                $patient->district                  = $this->sanitizeRegistrationSelectText($request->district, ['Select District']);
+                $patient->state                     = $this->sanitizeRegistrationSelectText($request->state, ['Select State']);
+                $patient->nationality               = $this->sanitizeRegistrationSelectText($request->nationality, ['Select Nationality']);
+                $patient->emergency_contact_name    = $request->emergency_contact_name;
+                $patient->emergency_contact_relation = $request->emergency_contact_relation;
+                $patient->emergency_contact_phone   = $request->emergency_contact_phone;
+                $this->applyPatientAllergies($patient, $this->normalizePatientAllergyIds($request));
+                $patient->chronic_conditions        = $request->input('chronic_conditions') ?: null;
+                $patient->past_surgical_history     = $request->past_surgical_history;
+                $patient->current_medications       = $request->current_medications;
+                $patient->family_history            = $request->family_history;
+                $patient->smoking_status            = $request->smoking_status ?: 'Never';
+                $patient->alcohol_status            = $request->alcohol_status ?: 'Never';
+                $patient->vaccination_status        = $request->vaccination_status ?: 'Unknown';
+
+                $patient->save();
+            });
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Profile updated successfully.',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => false,
+                'message' => $e->getMessage() ?: 'Profile update failed. Please try again.',
+            ], 500);
+        }
+    }
+
     public function mrnPreview()
     {
         return response()->json([
@@ -2581,7 +2744,8 @@ class PatientManagementController extends BaseHospitalController
             'emergency_contact_relation' => 'nullable|string|max:50',
             'emergency_contact_phone'   => 'nullable|digits_between:7,15',
             // Step 3 – Medical history
-            'known_allergies'           => 'nullable|string',
+            'allergy_id'                => 'nullable|array',
+            'allergy_id.*'              => 'nullable|integer|exists:allergies,id',
             'chronic_conditions'        => 'nullable|array',
             'chronic_conditions.*'      => 'nullable|string',
             'past_surgical_history'     => 'nullable|string',
@@ -2750,10 +2914,11 @@ class PatientManagementController extends BaseHospitalController
                 $patient->pin_code                  = $request->pin_code;
                 $patient->district                  = $this->sanitizeRegistrationSelectText($request->district, ['Select District']);
                 $patient->state                     = $this->sanitizeRegistrationSelectText($request->state, ['Select State']);
+                $patient->nationality               = $this->sanitizeRegistrationSelectText($request->nationality, ['Select Nationality']);
                 $patient->emergency_contact_name    = $request->emergency_contact_name;
                 $patient->emergency_contact_relation = $request->emergency_contact_relation;
                 $patient->emergency_contact_phone   = $request->emergency_contact_phone;
-                $patient->known_allergies           = $request->known_allergies;
+                $this->applyPatientAllergies($patient, $this->normalizePatientAllergyIds($request));
                 $patient->chronic_conditions        = $request->input('chronic_conditions') ?: null;
                 $patient->past_surgical_history     = $request->past_surgical_history;
                 $patient->current_medications       = $request->current_medications;
@@ -3630,6 +3795,41 @@ class PatientManagementController extends BaseHospitalController
     private function isEmergencyStyleOpdVisit(?string $visitType): bool
     {
         return strtoupper(trim((string) $visitType)) === 'EMERGENCY';
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function normalizePatientAllergyIds(Request $request): array
+    {
+        return collect($request->input('allergy_id', []))
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $allergyIds
+     */
+    private function applyPatientAllergies(Patient $patient, array $allergyIds): void
+    {
+        if ($allergyIds === []) {
+            $patient->allergy_id = null;
+            $patient->known_allergies = null;
+
+            return;
+        }
+
+        $patient->allergy_id = $allergyIds;
+        $patient->known_allergies = Allergy::query()
+            ->whereIn('id', $allergyIds)
+            ->orderBy('name')
+            ->pluck('name')
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->implode(', ') ?: null;
     }
 
     private function sanitizeRegistrationSelectText($value, array $placeholderLabels = []): ?string
