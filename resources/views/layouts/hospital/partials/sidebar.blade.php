@@ -111,6 +111,15 @@
         </li>
         @endcan
 
+        @can('view-nursing-mar')
+        <li class="sidebar-list">
+            <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.nursing.mar.*') ? 'active' : '' }}" href="{{ route('hospital.nursing.mar.index') }}">
+                <span class="nav-icon">👩‍⚕️</span>
+                <span class="nav-label">Nursing MAR</span>
+            </a>
+        </li>
+        @endcan
+
         <li class="sidebar-list"><a class="sidebar-link sidebar-title" href="{{ route('hospital.dashboard') }}"><span class="nav-icon">🔬</span><span class="nav-label">Operation Theatre</span></a></li>
         <li class="sidebar-list"><a class="sidebar-link sidebar-title" href="{{ route('hospital.dashboard') }}"><span class="nav-icon">🩸</span><span class="nav-label">Blood Bank</span></a></li>
         <li class="sidebar-list"><a class="sidebar-link sidebar-title" href="{{ route('hospital.dashboard') }}"><span class="nav-icon">💉</span><span class="nav-label">Vaccine</span></a></li>

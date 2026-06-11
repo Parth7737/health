@@ -39,6 +39,16 @@ class FrequencyController extends BaseHospitalController
     {
         $data = MedicineFrequency::select('*');
         return DataTables::of($data)
+            ->editColumn('schedule_times', function ($row) {
+                if (empty($row->schedule_times) || !is_array($row->schedule_times)) {
+                    return '-';
+                }
+
+                return implode(', ', array_map(
+                    fn (string $time) => $this->formatTime12($time),
+                    $row->schedule_times
+                ));
+            })
             ->addColumn('actions', function ($row) {
                 return view('hospital.settings.pharmacy.frequency.partials.actions', compact('row'))->render();
             })
@@ -60,11 +70,30 @@ class FrequencyController extends BaseHospitalController
     {
         $validator = Validator::make($request->all(), [
             'frequency' => 'required|string|max:255|unique:medicine_frequencies,frequency,' . $request->id . ',id,hospital_id,' . $this->hospital_id,
-            'no_of_medicine' => 'required|integer|min:1',
+            'no_of_medicine' => 'required|integer|min:1|max:12',
+            'schedule_times' => 'required|array|min:1',
+            'schedule_times.*' => 'required|string|max:20',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 422);
+        }
+
+        $normalizedTimes = $this->normalizeScheduleTimes($request->input('schedule_times', []));
+        $expectedCount = (int) $request->input('no_of_medicine');
+
+        if (count($normalizedTimes) !== $expectedCount) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Please provide exactly ' . $expectedCount . ' MAR dose time(s).',
+            ], 422);
+        }
+
+        if (count($normalizedTimes) !== count(array_unique($normalizedTimes))) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Duplicate MAR dose times are not allowed.',
+            ], 422);
         }
 
         MedicineFrequency::updateOrCreate(
@@ -72,7 +101,8 @@ class FrequencyController extends BaseHospitalController
             [
                 'hospital_id' => $this->hospital_id,
                 'frequency' => $request->frequency,
-                'no_of_medicine' => $request->no_of_medicine,
+                'no_of_medicine' => $expectedCount,
+                'schedule_times' => $normalizedTimes,
             ]
         );
 
@@ -87,5 +117,63 @@ class FrequencyController extends BaseHospitalController
         }
         $frequency->delete();
         return response()->json(['status' => true, 'message' => 'Frequency deleted successfully.']);
+    }
+
+    /**
+     * @param array<int, mixed> $times
+     * @return array<int, string>
+     */
+    private function normalizeScheduleTimes(array $times): array
+    {
+        return collect($times)
+            ->map(fn ($time) => $this->parseTimeTo24Hour((string) $time))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function parseTimeTo24Hour(string $time): ?string
+    {
+        $time = trim($time);
+
+        if (preg_match('/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i', $time, $matches)) {
+            $hour = (int) $matches[1];
+            $minute = (int) $matches[2];
+            $period = strtoupper($matches[3]);
+
+            if ($period === 'PM' && $hour !== 12) {
+                $hour += 12;
+            }
+            if ($period === 'AM' && $hour === 12) {
+                $hour = 0;
+            }
+
+            return sprintf('%02d:%02d', $hour, $minute);
+        }
+
+        if (preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+            [$hour, $minute] = array_map('intval', explode(':', $time));
+
+            return sprintf('%02d:%02d', $hour, $minute);
+        }
+
+        return null;
+    }
+
+    private function formatTime12(string $time): string
+    {
+        $normalized = $this->parseTimeTo24Hour($time);
+        if (!$normalized) {
+            return $time;
+        }
+
+        [$hour, $minute] = array_map('intval', explode(':', $normalized));
+        $period = $hour >= 12 ? 'PM' : 'AM';
+        $hour12 = $hour % 12;
+        if ($hour12 === 0) {
+            $hour12 = 12;
+        }
+
+        return sprintf('%d:%02d %s', $hour12, $minute, $period);
     }
 }

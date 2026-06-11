@@ -162,7 +162,6 @@
                     <button class="tab-btn" type="button" onclick="switchPhTab('expiryPane', this)">⚠️ Expiry Alerts <span class="tab-count tab-count-danger" id="phExpiryAlertsTabCount">0</span></button>
                     <button class="tab-btn" type="button" onclick="switchPhTab('grnListPane', this)">📥 GRN Log</button>
                     <button class="tab-btn" type="button" onclick="switchPhTab('poPane', this)">📤 Purchase Orders</button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('marPane', this)">📋 MAR</button>
                 </div>
                 <button class="tabs-scroll-btn scroll-right" type="button" onclick="scrollPharmacyTabs('right')">&rsaquo;</button>
             </div>
@@ -339,11 +338,6 @@
                         <tbody></tbody>
                     </table>
                 </div>
-            </div>
-
-            <div id="marPane" class="ph-pane ph-hidden">
-                <div class="fw-700 fs-14 mb-12">📋 Medication Administration Record — Active IPD Patients</div>
-                <div id="marContent"></div>
             </div>
 
             <div id="allBillsPane" class="ph-pane ph-hidden">

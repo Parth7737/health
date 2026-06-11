@@ -60,6 +60,7 @@ class MedicineInstructionsController extends BaseHospitalController
     {
         $validator = Validator::make($request->all(), [
             'instruction' => 'required|string|max:1000|unique:medicine_instructions,instruction,' . $request->id . ',id,hospital_id,' . $this->hospital_id,
+            'meal_relation' => 'nullable|in:none,before_food,after_food,with_food,empty_stomach',
         ]);
 
         if ($validator->fails()) {
@@ -71,6 +72,7 @@ class MedicineInstructionsController extends BaseHospitalController
             [
                 'hospital_id' => $this->hospital_id,
                 'instruction' => $request->instruction,
+                'meal_relation' => $request->input('meal_relation', 'none'),
             ]
         );
 

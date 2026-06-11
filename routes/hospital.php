@@ -426,6 +426,18 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         });
     });
 
+    // Nursing Station — MAR
+    Route::group(['prefix' => 'nursing', 'as' => 'nursing.'], function () {
+        Route::middleware(['permission:view-nursing-mar'])->group(function () {
+            Route::get('mar', 'NursingMarController@index')->name('mar.index');
+            Route::get('mar/wards', 'NursingMarController@wards')->name('mar.wards');
+            Route::post('mar/load', 'NursingMarController@load')->name('mar.load');
+            Route::post('mar/administer', 'NursingMarController@administer')
+                ->middleware('permission:edit-nursing-mar')
+                ->name('mar.administer');
+        });
+    });
+
     // TPA Management
     Route::group(['prefix' => 'tpa-management', 'as' => 'tpa-management.'], function () {
         Route::middleware(['permission:view-tpa'])->group(function () {

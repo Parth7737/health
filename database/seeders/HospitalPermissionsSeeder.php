@@ -61,6 +61,9 @@ class HospitalPermissionsSeeder extends Seeder
             'Pharmacy Bad Stock' => 'pharmacy-bad-stock',
             'Pharmacy Supplier' => 'pharmacy-supplier',
 
+            // Nursing
+            'Nursing MAR' => 'nursing-mar',
+
             // Pathology
             'Pathology Category' => 'pathology-category',
             'Pathology Unit' => 'pathology-unit',
@@ -163,6 +166,19 @@ class HospitalPermissionsSeeder extends Seeder
             $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
             if ($role) {
                 $role->givePermissionTo($trainingCategoryPermissions);
+            }
+        }
+
+        $nursingMarPermissions = [
+            'view-nursing-mar',
+            'create-nursing-mar',
+            'edit-nursing-mar',
+            'delete-nursing-mar',
+        ];
+        foreach (['Master Admin', 'Administrator', 'Chairman'] as $roleName) {
+            $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
+            if ($role) {
+                $role->givePermissionTo($nursingMarPermissions);
             }
         }
 

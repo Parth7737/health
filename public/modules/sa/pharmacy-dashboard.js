@@ -2681,30 +2681,6 @@
         });
     }
 
-    function loadMARContent() {
-        var el = document.getElementById('marContent');
-        if (!el) {
-            return;
-        }
-        var marData = [
-            { patient: 'Kavita Sharma', bed: 'A-14', slots: { '08:00': 'yes', '12:00': 'no', '18:00': 'no', '22:00': 'no' }, drugs: ['Amlodipine 5mg', 'Metformin 500mg'] },
-            { patient: 'Babita Devi', bed: 'A-11', slots: { '08:00': 'yes', '12:00': 'yes', '18:00': 'no', '22:00': 'no' }, drugs: ['Meropenem 1g IV', 'Paracetamol 1g IV'] },
-            { patient: 'Mohan Gupta', bed: 'A-08', slots: { '08:00': 'yes', '12:00': 'no', '18:00': 'no', '22:00': 'no' }, drugs: ['Insulin 8u SC'] }
-        ];
-
-        el.innerHTML = '<div class="table-wrap"><table class="hims-table"><thead><tr><th>Patient</th><th>Bed</th><th>Medications</th><th>08:00</th><th>12:00</th><th>18:00</th><th>22:00</th></tr></thead><tbody>' +
-            marData.map(function (m) {
-                var slots = Object.keys(m.slots).map(function (key) {
-                    return m.slots[key] === 'yes'
-                        ? '<td style="text-align:center"><span class="badge badge-green">✅</span></td>'
-                        : '<td style="text-align:center"><button class="btn btn-outline-primary btn-xs" onclick="showToast(\'Given\',\'Medication administered\',\'success\')">Give</button></td>';
-                }).join('');
-
-                return '<tr><td class="fw-700">' + m.patient + '</td><td class="text-muted">' + m.bed + '</td><td class="fs-11">' + m.drugs.join('<br>') + '</td>' + slots + '</tr>';
-            }).join('') +
-            '</tbody></table></div>';
-    }
-
     var dispenseState = {
         mode: 'walkin',
         patient: null,
@@ -4508,7 +4484,6 @@
             'expiryPane',
             'grnListPane',
             'poPane',
-            'marPane',
             'allBillsPane'
         ].forEach(function (id) {
             var el = document.getElementById(id);
@@ -5178,7 +5153,6 @@
     document.addEventListener('DOMContentLoaded', function () {
         loadDashboardCounts();
         loadDispenseQueue();
-        loadMARContent();
 
         // Tab scrolling arrows update and setup
         var tabsBar = document.getElementById('pharmacyTabsBar');

@@ -9,6 +9,10 @@ class MedicineFrequency extends Model
 {
     protected $guarded = [];
 
+    protected $casts = [
+        'schedule_times' => 'array',
+    ];
+
     /**
      * Boot the model and apply any global scopes.
      *
