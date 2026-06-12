@@ -191,6 +191,10 @@ class PharmacyPurchaseController extends BaseHospitalController
             abort(403);
         }
 
+        if (!auth()->user()->can('approve-pharmacy-purchase')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to approve purchase orders.'], 403);
+        }
+
         try {
             $bill = $inventoryService->approvePurchaseBill($bill);
         } catch (Throwable $e) {
@@ -208,6 +212,10 @@ class PharmacyPurchaseController extends BaseHospitalController
     {
         if ($bill->hospital_id !== $this->hospital_id) {
             abort(403);
+        }
+
+        if (!auth()->user()->can('reject-pharmacy-purchase')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to reject purchase orders.'], 403);
         }
 
         $validator = Validator::make($request->all(), [

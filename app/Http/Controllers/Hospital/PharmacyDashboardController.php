@@ -1066,7 +1066,27 @@ class PharmacyDashboardController extends BaseHospitalController
             return response()->json(['errors' => Helpers::error_processor($validator)], 422);
         }
 
-        $log->status = $request->input('status');
+        $status = $request->input('status');
+        if ($status === 'approved' && !auth()->user()->can('approve-pharmacy-rx-validation')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to approve override.'
+            ], 403);
+        }
+        if ($status === 'rejected' && !auth()->user()->can('reject-pharmacy-rx-validation')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to cancel/reject Rx.'
+            ], 403);
+        }
+        if ($status === 'escalated' && !auth()->user()->can('escalate-pharmacy-rx-validation')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to escalate this validation alert.'
+            ], 403);
+        }
+
+        $log->status = $status;
         $log->action_note = $request->input('action_note');
         $log->action_by = auth()->id() ?: null;
         $log->action_at = now();

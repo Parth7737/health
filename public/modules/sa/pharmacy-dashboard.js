@@ -1335,13 +1335,35 @@
         var canAct = allowActions && log.status === 'pending' && !log.has_bill;
 
         if (canAct) {
-            actionHtml = '' +
-                '<div style="display:flex; gap:12px; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,0.08); flex-wrap: wrap;">' +
-                '  <input class="form-control ph-grid-input rx-action-note" data-log-id="' + log.id + '" placeholder="Override justification / action remarks..." style="max-width: 320px; font-size: 12px; padding: 5px 10px; background:#fff;" type="text">' +
-                '  <button class="btn btn-success btn-xs" onclick="resolveRxAlert(' + log.id + ', \'approved\', this)">✅ Approve Override</button>' +
-                '  <button class="btn btn-danger btn-xs" onclick="resolveRxAlert(' + log.id + ', \'rejected\', this)">❌ Cancel/Reject Rx</button>' +
-                '  <button class="btn btn-warning btn-xs" onclick="resolveRxAlert(' + log.id + ', \'escalated\', this)">↗ Escalate</button>' +
-                '</div>';
+            var approveBtn = '';
+            var rejectBtn = '';
+            var escalateBtn = '';
+            var hasAnyActionPermission = false;
+
+            var rxPerms = window.rxValidationPermissions || { approve: true, reject: true, escalate: true };
+
+            if (rxPerms.approve) {
+                approveBtn = '  <button class="btn btn-success btn-xs" onclick="resolveRxAlert(' + log.id + ', \'approved\', this)">✅ Approve Override</button>';
+                hasAnyActionPermission = true;
+            }
+            if (rxPerms.reject) {
+                rejectBtn = '  <button class="btn btn-danger btn-xs" onclick="resolveRxAlert(' + log.id + ', \'rejected\', this)">❌ Cancel/Reject Rx</button>';
+                hasAnyActionPermission = true;
+            }
+            if (rxPerms.escalate) {
+                escalateBtn = '  <button class="btn btn-warning btn-xs" onclick="resolveRxAlert(' + log.id + ', \'escalated\', this)">↗ Escalate</button>';
+                hasAnyActionPermission = true;
+            }
+
+            if (hasAnyActionPermission) {
+                actionHtml = '' +
+                    '<div style="display:flex; gap:12px; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,0.08); flex-wrap: wrap;">' +
+                    '  <input class="form-control ph-grid-input rx-action-note" data-log-id="' + log.id + '" placeholder="Override justification / action remarks..." style="max-width: 320px; font-size: 12px; padding: 5px 10px; background:#fff;" type="text">' +
+                    approveBtn +
+                    rejectBtn +
+                    escalateBtn +
+                    '</div>';
+            }
         } else if (log.status !== 'pending') {
             var statusBadgeClass = log.status === 'approved' ? 'badge-green' : (log.status === 'rejected' ? 'badge-red' : 'badge-orange');
             var statusLabel = log.status === 'approved' ? 'Override Approved' : (log.status === 'rejected' ? 'Rejected/Flagged' : 'Escalated');

@@ -849,5 +849,10 @@
 <script>
 window.poMedicines = @json($medicines);
 window.hospitalStateId = {{ $hospitalStateId ?? 'null' }};
+window.rxValidationPermissions = {
+    approve: {{ auth()->user()->can('approve-pharmacy-rx-validation') ? 'true' : 'false' }},
+    reject: {{ auth()->user()->can('reject-pharmacy-rx-validation') ? 'true' : 'false' }},
+    escalate: {{ auth()->user()->can('escalate-pharmacy-rx-validation') ? 'true' : 'false' }}
+};
 </script>
 @endpush

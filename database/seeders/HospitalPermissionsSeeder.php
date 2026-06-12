@@ -188,6 +188,7 @@ class HospitalPermissionsSeeder extends Seeder
             'hospital-data' => ['view', 'edit'],
             'opd-payment' => ['delete'],
             'roles' => ['manage'],
+            'pharmacy-rx-validation' => ['approve', 'reject', 'escalate'],
         ];
 
         foreach ($manual_modules as $moduleSlug => $actions) {
@@ -202,6 +203,45 @@ class HospitalPermissionsSeeder extends Seeder
                     'module' => $module->id,
                     'guard_name' => 'web',
                 ]);
+            }
+        }
+
+        $rxValidationPermissions = [
+            'approve-pharmacy-rx-validation',
+            'reject-pharmacy-rx-validation',
+            'escalate-pharmacy-rx-validation',
+        ];
+        foreach (['Master Admin', 'Administrator', 'Chairman'] as $roleName) {
+            $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
+            if ($role) {
+                $role->givePermissionTo($rxValidationPermissions);
+            }
+        }
+
+        // Purchase manual permissions
+        $purchaseManualPermissions = [
+            'approve-pharmacy-purchase',
+            'reject-pharmacy-purchase',
+        ];
+        
+        $purchaseModule = Module::where('name', 'Pharmacy Purchase')->first();
+        $purchaseModuleId = $purchaseModule ? $purchaseModule->id : null;
+        
+        foreach ($purchaseManualPermissions as $permissionName) {
+            Permission::firstOrCreate(
+                ['name' => $permissionName],
+                [
+                    'name' => $permissionName,
+                    'module' => $purchaseModuleId,
+                    'guard_name' => 'web',
+                ]
+            );
+        }
+
+        foreach (['Master Admin', 'Administrator', 'Chairman'] as $roleName) {
+            $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
+            if ($role) {
+                $role->givePermissionTo($purchaseManualPermissions);
             }
         }
 
