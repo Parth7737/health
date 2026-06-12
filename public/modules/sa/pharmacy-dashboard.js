@@ -5152,7 +5152,23 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         loadDashboardCounts();
-        loadDispenseQueue();
+
+        // Find the active tab and initialize it dynamically based on Spatie permissions set in Blade
+        var activeTabBtn = document.querySelector('#pharmacyTabsBar .tab-btn.active');
+        if (activeTabBtn) {
+            var onclickAttr = activeTabBtn.getAttribute('onclick');
+            if (onclickAttr) {
+                var match = onclickAttr.match(/switchPhTab\(['"]([^'"]+)['"]/);
+                if (match && match[1]) {
+                    window.switchPhTab(match[1], activeTabBtn);
+                }
+            }
+        } else {
+            var dispensePane = document.getElementById('dispenseQueuePane');
+            if (dispensePane) {
+                loadDispenseQueue();
+            }
+        }
 
         // Tab scrolling arrows update and setup
         var tabsBar = document.getElementById('pharmacyTabsBar');

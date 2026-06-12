@@ -361,7 +361,7 @@ Route::group(['middleware'=>['hospital','auth'],'namespace' => 'App\Http\Control
         });
 
         // Pharmacy GRN
-        Route::middleware(['permission:view-pharmacy-purchase'])->group(function () {
+        Route::middleware(['permission:view-pharmacy-grn'])->group(function () {
             Route::post('grn/store', 'PharmacyGrnController@store')->name('grn.store');
             Route::post('grn/load', 'PharmacyGrnController@loaddata')->name('grn-load');
             Route::get('grn/approved-pos', 'PharmacyGrnController@approvedPOs')->name('grn.approved-pos');

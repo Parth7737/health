@@ -17,7 +17,7 @@ class PharmacyGrnController extends BaseHospitalController
     public function __construct()
     {
         parent::__construct();
-        $this->middleware('permission:create-pharmacy-purchase', ['only' => ['store']]);
+        $this->middleware('permission:create-pharmacy-grn', ['only' => ['store']]);
     }
 
     /**

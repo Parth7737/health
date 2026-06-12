@@ -55,6 +55,7 @@ class HospitalPermissionsSeeder extends Seeder
             'Medicine Instructions' => 'medicine-instructions',
             'Frequency' => 'frequency',
             'Pharmacy Purchase' => 'pharmacy-purchase',
+            'Pharmacy GRN' => 'pharmacy-grn',
             'Pharmacy Sale' => 'pharmacy-sale',
             'Pharmacy Stock' => 'pharmacy-stock',
             'Pharmacy Expiry' => 'pharmacy-expiry',

@@ -85,12 +85,14 @@
             </a>
         </li>
 
+        @canany(['view-pharmacy-sale', 'view-pharmacy-stock', 'view-pharmacy-expiry', 'view-pharmacy-purchase', 'view-pharmacy-grn'])
         <li class="sidebar-list">
             <a class="sidebar-link sidebar-title {{ request()->routeIs('hospital.pharmacy.*') ? 'active' : '' }}" href="{{ route('hospital.pharmacy.index') }}">
                 <span class="nav-icon">💊</span>
                 <span class="nav-label">Pharmacy</span>
             </a>
         </li>
+        @endcanany
 
         @can('view-pathology-report')
         <!-- route('hospital.pathology.worklist.index') -->

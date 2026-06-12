@@ -99,6 +99,22 @@
             return statusBadge(slot.status) + (meta.length ? '<div class="fs-10 text-muted mt-4">' + meta.join(' ') + '</div>' : '') + note;
         }
 
+        var dateParts = (marState.date || '').split('-');
+        var timeParts = (slot.scheduled_time || '00:00').split(':');
+        if (dateParts.length === 3 && timeParts.length >= 2) {
+            var scheduledDate = new Date(
+                parseInt(dateParts[0], 10),
+                parseInt(dateParts[1], 10) - 1,
+                parseInt(dateParts[2], 10),
+                parseInt(timeParts[0], 10),
+                parseInt(timeParts[1], 10),
+                0
+            );
+            if (scheduledDate > new Date()) {
+                return statusBadge('pending');
+            }
+        }
+
         if (!slot.can_manage) {
             return statusBadge('pending') + '<div class="fs-10 text-muted mt-4">View only</div>';
         }
@@ -112,13 +128,13 @@
             scheduled_time: slot.scheduled_time,
             meal_relation: slot.meal_relation
         }).replace(/"/g, '&quot;');
-        return '';
-        // return '<div class="mar-actions">' +
-        //     '<button class="btn btn-success btn-xs" data-mar-action="given" data-mar-payload="' + payload + '">✅ Give</button>' +
-        //     '<button class="btn btn-warning btn-xs" data-mar-action="held" data-mar-payload="' + payload + '">⏸ Hold</button>' +
-        //     '<button class="btn btn-danger btn-xs" data-mar-action="missed" data-mar-payload="' + payload + '">✖ Missed</button>' +
-        //     '<button class="btn btn-outline-danger btn-xs" data-mar-action="refused" data-mar-payload="' + payload + '">🚫 Refused</button>' +
-        //     '</div>';
+
+        return '<div class="mar-actions">' +
+            '<button class="btn btn-success btn-xs" data-mar-action="given" data-mar-payload="' + payload + '">✅ Give</button>' +
+            '<button class="btn btn-warning btn-xs" data-mar-action="held" data-mar-payload="' + payload + '">⏸ Hold</button>' +
+            '<button class="btn btn-danger btn-xs" data-mar-action="missed" data-mar-payload="' + payload + '">✖ Missed</button>' +
+            '<button class="btn btn-outline-danger btn-xs" data-mar-action="refused" data-mar-payload="' + payload + '">🚫 Refused</button>' +
+            '</div>';
     }
 
     function renderPatients(patients) {
@@ -330,12 +346,28 @@
                 return;
             }
 
-            var note = '';
             if (action !== 'given') {
-                note = window.prompt('Enter remark / reason (optional):', '') || '';
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Enter remark / reason (optional):',
+                        input: 'text',
+                        inputPlaceholder: 'Enter remark...',
+                        showCancelButton: true,
+                        confirmButtonText: 'Submit',
+                        cancelButtonText: 'Cancel'
+                    }).then(function (result) {
+                        if (result.isConfirmed) {
+                            var note = result.value || '';
+                            administerDose(action, payload, note);
+                        }
+                    });
+                } else {
+                    var note = window.prompt('Enter remark / reason (optional):', '') || '';
+                    administerDose(action, payload, note);
+                }
+            } else {
+                administerDose(action, payload, '');
             }
-
-            administerDose(action, payload, note);
         });
 
         marState.filtersBound = true;

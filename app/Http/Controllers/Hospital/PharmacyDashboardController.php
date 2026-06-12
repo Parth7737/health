@@ -74,6 +74,17 @@ class PharmacyDashboardController extends BaseHospitalController
 
     public function index()
     {
+        $user = auth()->user();
+        if (!$user || !(
+            $user->can('view-pharmacy-sale') ||
+            $user->can('view-pharmacy-stock') ||
+            $user->can('view-pharmacy-expiry') ||
+            $user->can('view-pharmacy-purchase') ||
+            $user->can('view-pharmacy-grn')
+        )) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $medicineCategories = MedicineCategory::query()->select('id', 'name')->orderBy('name')->get();
         $medicines = Medicine::query()
             ->with('unit:id,name')
@@ -101,6 +112,17 @@ class PharmacyDashboardController extends BaseHospitalController
 
     public function counts()
     {
+        $user = auth()->user();
+        if (!$user || !(
+            $user->can('view-pharmacy-sale') ||
+            $user->can('view-pharmacy-stock') ||
+            $user->can('view-pharmacy-expiry') ||
+            $user->can('view-pharmacy-purchase') ||
+            $user->can('view-pharmacy-grn')
+        )) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $today = now()->toDateString();
 
         $pendingOpdCount = $this->pendingOpdPrescriptionQuery($today)->count('rx.id');
@@ -508,6 +530,10 @@ class PharmacyDashboardController extends BaseHospitalController
 
     public function storeDispense(Request $request, PharmacyInventoryService $inventoryService)
     {
+        if (!auth()->user()?->can('create-pharmacy-sale')) {
+            return response()->json(['status' => false, 'message' => 'You do not have permission to dispense medicine.'], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'patient_id' => 'nullable|exists:patients,id',
             'prescription_type' => 'nullable|in:opd,ipd',

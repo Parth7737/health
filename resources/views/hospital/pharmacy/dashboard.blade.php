@@ -3,10 +3,14 @@
 @section('page_subtitle', 'Dispensing · Inventory · Expiry Alerts · GRN · Purchase Orders')
 
 @section('page_header_actions')
+@can('create-pharmacy-sale')
 <button class="btn btn-outline-primary btn-sm" type="button" onclick="openPrescriptionSearch()">🔍 Search Prescription</button>
 <button class="btn btn-warning btn-sm" type="button" onclick="openModal('statOrderModal')">🚨 STAT Order</button>
 <button class="btn btn-primary btn-sm" type="button" onclick="openWalkInDispense()">💊 Dispense</button>
+@endcan
+@can('create-pharmacy-grn')
 <button class="btn btn-success btn-sm" type="button" onclick="openModal('grnModal')">📥 GRN / Receive</button>
+@endcan
 @endsection
 
 @push('styles')
@@ -95,6 +99,29 @@
 @endpush
 
 @section('content')
+@php
+    $allowedTabs = [];
+    if (auth()->user()->can('view-pharmacy-sale')) {
+        $allowedTabs[] = 'dispenseQueuePane';
+        $allowedTabs[] = 'statPane';
+        $allowedTabs[] = 'allBillsPane';
+        $allowedTabs[] = 'rxValidatePane';
+    }
+    if (auth()->user()->can('view-pharmacy-stock')) {
+        $allowedTabs[] = 'inventoryPane';
+        $allowedTabs[] = 'quarantinePane';
+    }
+    if (auth()->user()->can('view-pharmacy-expiry')) {
+        $allowedTabs[] = 'expiryPane';
+    }
+    if (auth()->user()->can('view-pharmacy-grn')) {
+        $allowedTabs[] = 'grnListPane';
+    }
+    if (auth()->user()->can('view-pharmacy-purchase')) {
+        $allowedTabs[] = 'poPane';
+    }
+    $activeTab = count($allowedTabs) > 0 ? $allowedTabs[0] : '';
+@endphp
 
 <div class="pharmacy-dashboard-scope">
     <div class="stats-grid pharmacy-stats-grid">
@@ -150,219 +177,272 @@
 
     <div class="card">
         <div class="card-body p-0">
-            <div class="tabs-bar-wrapper">
-                <button class="tabs-scroll-btn scroll-left" type="button" onclick="scrollPharmacyTabs('left')">&lsaquo;</button>
-                <div class="tabs-bar pharmacy-tabs-bar" id="pharmacyTabsBar">
-                    <button class="tab-btn active" type="button" onclick="switchPhTab('dispenseQueuePane', this)">💊 Dispense Queue <span class="tab-count" id="phQueuePendingTabCount">0</span></button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('statPane', this)">🚨 STAT Orders <span class="tab-count" id="phStatOrdersTabCount">0</span></button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('allBillsPane', this)">📃 All Bills</button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('rxValidatePane', this)">✅ Rx Validation</button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('inventoryPane', this)">📦 Drug Inventory</button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('quarantinePane', this)">📦 Quarantine Inventory</button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('expiryPane', this)">⚠️ Expiry Alerts <span class="tab-count tab-count-danger" id="phExpiryAlertsTabCount">0</span></button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('grnListPane', this)">📥 GRN Log</button>
-                    <button class="tab-btn" type="button" onclick="switchPhTab('poPane', this)">📤 Purchase Orders</button>
+            @if(count($allowedTabs) === 0)
+                <div class="alert alert-red text-center" style="padding: 40px; margin: 20px;">
+                    <span class="alert-icon" style="font-size: 24px;">🚫</span>
+                    <div class="fw-700 fs-16 mt-8">Access Denied</div>
+                    <div class="text-muted mt-4">You do not have permission to access any section of the Pharmacy Dashboard. Please contact the administrator.</div>
                 </div>
-                <button class="tabs-scroll-btn scroll-right" type="button" onclick="scrollPharmacyTabs('right')">&rsaquo;</button>
-            </div>
+            @else
+                <div class="tabs-bar-wrapper">
+                    <button class="tabs-scroll-btn scroll-left" type="button" onclick="scrollPharmacyTabs('left')">&lsaquo;</button>
+                    <div class="tabs-bar pharmacy-tabs-bar" id="pharmacyTabsBar">
+                        @if(in_array('dispenseQueuePane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'dispenseQueuePane' ? 'active' : '' }}" type="button" onclick="switchPhTab('dispenseQueuePane', this)">💊 Dispense Queue <span class="tab-count" id="phQueuePendingTabCount">0</span></button>
+                        @endif
+                        @if(in_array('statPane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'statPane' ? 'active' : '' }}" type="button" onclick="switchPhTab('statPane', this)">🚨 STAT Orders <span class="tab-count" id="phStatOrdersTabCount">0</span></button>
+                        @endif
+                        @if(in_array('allBillsPane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'allBillsPane' ? 'active' : '' }}" type="button" onclick="switchPhTab('allBillsPane', this)">📃 All Bills</button>
+                        @endif
+                        @if(in_array('rxValidatePane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'rxValidatePane' ? 'active' : '' }}" type="button" onclick="switchPhTab('rxValidatePane', this)">✅ Rx Validation</button>
+                        @endif
+                        @if(in_array('inventoryPane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'inventoryPane' ? 'active' : '' }}" type="button" onclick="switchPhTab('inventoryPane', this)">📦 Drug Inventory</button>
+                        @endif
+                        @if(in_array('quarantinePane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'quarantinePane' ? 'active' : '' }}" type="button" onclick="switchPhTab('quarantinePane', this)">📦 Quarantine Inventory</button>
+                        @endif
+                        @if(in_array('expiryPane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'expiryPane' ? 'active' : '' }}" type="button" onclick="switchPhTab('expiryPane', this)">⚠️ Expiry Alerts <span class="tab-count tab-count-danger" id="phExpiryAlertsTabCount">0</span></button>
+                        @endif
+                        @if(in_array('grnListPane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'grnListPane' ? 'active' : '' }}" type="button" onclick="switchPhTab('grnListPane', this)">📥 GRN Log</button>
+                        @endif
+                        @if(in_array('poPane', $allowedTabs))
+                            <button class="tab-btn {{ $activeTab === 'poPane' ? 'active' : '' }}" type="button" onclick="switchPhTab('poPane', this)">📤 Purchase Orders</button>
+                        @endif
+                    </div>
+                    <button class="tabs-scroll-btn scroll-right" type="button" onclick="scrollPharmacyTabs('right')">&rsaquo;</button>
+                </div>
 
-            <div id="dispenseQueuePane" class="ph-pane">
-                <div class="ph-toolbar">
-                    <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="dispenseSearch" placeholder="Search patient/prescription..." oninput="filterDispenseQueue(this.value)"></div>
-                    <div class="d-flex gap-8">
-                        <select class="form-control ph-small-select" id="dispenseTypeFilter"><option value="all">All Types</option><option value="opd">OPD</option><option value="ipd">IPD</option><option value="emergency">Emergency</option></select>
-                        <button class="btn btn-secondary btn-xs" type="button" onclick="refreshQueue()">🔄 Refresh</button>
-                    </div>
-                </div>
-                <div class="table-wrap">
-                    <table class="hims-table display table-striped" id="dispenseQueueTable">
-                        <thead><tr><th>Rx No.</th><th>Patient</th><th>Ward/Type</th><th>Doctor</th><th>Drugs</th><th>Priority</th><th>Time</th><th>Status</th><th>Actions</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+                        @if(in_array('dispenseQueuePane', $allowedTabs))
+                            <div id="dispenseQueuePane" class="ph-pane {{ $activeTab === 'dispenseQueuePane' ? '' : 'ph-hidden' }}">
+                                <div class="ph-toolbar">
+                                    <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="dispenseSearch" placeholder="Search patient/prescription..." oninput="filterDispenseQueue(this.value)"></div>
+                                    <div class="d-flex gap-8">
+                                        <select class="form-control ph-small-select" id="dispenseTypeFilter"><option value="all">All Types</option><option value="opd">OPD</option><option value="ipd">IPD</option><option value="emergency">Emergency</option></select>
+                                        <button class="btn btn-secondary btn-xs" type="button" onclick="refreshQueue()">🔄 Refresh</button>
+                                    </div>
+                                </div>
+                                <div class="table-wrap">
+                                    <table class="hims-table display table-striped" id="dispenseQueueTable">
+                                        <thead><tr><th>Rx No.</th><th>Patient</th><th>Ward/Type</th><th>Doctor</th><th>Drugs</th><th>Priority</th><th>Time</th><th>Status</th><th>Actions</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
 
-            <div id="statPane" class="ph-pane ph-hidden">
-                <div class="alert alert-red mb-12"><span class="alert-icon">🚨</span><div><b>STAT Orders</b> — These require IMMEDIATE dispensing. Target time: &lt;15 minutes.</div></div>
-                <div class="ph-toolbar mb-12">
-                    <button class="btn btn-secondary btn-xs" type="button" onclick="refreshStatOrders()">🔄 Refresh STAT Orders</button>
-                </div>
-                <div id="statOrdersList"></div>
-            </div>
+                        @if(in_array('statPane', $allowedTabs))
+                            <div id="statPane" class="ph-pane {{ $activeTab === 'statPane' ? '' : 'ph-hidden' }}">
+                                <div class="alert alert-red mb-12"><span class="alert-icon">🚨</span><div><b>STAT Orders</b> — These require IMMEDIATE dispensing. Target time: &lt;15 minutes.</div></div>
+                                <div class="ph-toolbar mb-12">
+                                    <button class="btn btn-secondary btn-xs" type="button" onclick="refreshStatOrders()">🔄 Refresh STAT Orders</button>
+                                </div>
+                                <div id="statOrdersList"></div>
+                            </div>
+                        @endif
 
-            <div id="rxValidatePane" class="ph-pane ph-hidden">
-                <div class="ph-toolbar mb-8">
-                    <div>
-                        <div class="fw-700 fs-14">🛡️ Clinical Rx Validation & Drug Safety Logs</div>
-                        <div class="fs-11 text-muted mt-4">Pharmacy reviews clinical alerts <b>before dispensing</b> — Approve Override, Reject/Flag, or Escalate to senior pharmacist.</div>
-                    </div>
-                    <button class="btn btn-secondary btn-xs" type="button" onclick="loadRxValidation(1)">🔄 Refresh</button>
-                </div>
-                <div class="ph-toolbar mb-12 ph-wrap">
-                    <div class="input-group ph-search">
-                        <span class="input-addon">🔍</span>
-                        <input type="text" class="form-control" id="rxValidateSearch" placeholder="Search patient / Rx / drug / alert..." autocomplete="off">
-                    </div>
-                    <select class="form-control ph-small-select" id="rxValidateStatusFilter">
-                        <option value="all">All Status</option>
-                        <option value="pending" selected>Pending</option>
-                        <option value="escalated">Escalated</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                    </select>
-                    <select class="form-control ph-small-select" id="rxValidateBillFilter" style="width: 170px;">
-                        <option value="unbilled" selected>Undispensed</option>
-                        <option value="billed">Dispensed</option>
-                        <option value="all">All (Dispensed + Undispensed)</option>
-                    </select>
-                </div>
-                <div id="rxValidateList">
-                    <div class="text-muted text-center" style="padding: 30px;">Loading clinical alerts...</div>
-                </div>
-                <div class="d-flex justify-content-between align-center mt-12" id="rxValidatePagination" style="display:none;">
-                    <div class="fs-11 text-muted" id="rxValidatePagInfo"></div>
-                    <div class="d-flex gap-4" id="rxValidatePagBtns"></div>
-                </div>
-            </div>
+                        @if(in_array('rxValidatePane', $allowedTabs))
+                            <div id="rxValidatePane" class="ph-pane {{ $activeTab === 'rxValidatePane' ? '' : 'ph-hidden' }}">
+                                <div class="ph-toolbar mb-8">
+                                    <div>
+                                        <div class="fw-700 fs-14">🛡️ Clinical Rx Validation & Drug Safety Logs</div>
+                                        <div class="fs-11 text-muted mt-4">Pharmacy reviews clinical alerts <b>before dispensing</b> — Approve Override, Reject/Flag, or Escalate to senior pharmacist.</div>
+                                    </div>
+                                    <button class="btn btn-secondary btn-xs" type="button" onclick="loadRxValidation(1)">🔄 Refresh</button>
+                                </div>
+                                <div class="ph-toolbar mb-12 ph-wrap">
+                                    <div class="input-group ph-search">
+                                        <span class="input-addon">🔍</span>
+                                        <input type="text" class="form-control" id="rxValidateSearch" placeholder="Search patient / Rx / drug / alert..." autocomplete="off">
+                                    </div>
+                                    <select class="form-control ph-small-select" id="rxValidateStatusFilter">
+                                        <option value="all">All Status</option>
+                                        <option value="pending" selected>Pending</option>
+                                        <option value="escalated">Escalated</option>
+                                        <option value="approved">Approved</option>
+                                        <option value="rejected">Rejected</option>
+                                    </select>
+                                    <select class="form-control ph-small-select" id="rxValidateBillFilter" style="width: 170px;">
+                                        <option value="unbilled" selected>Undispensed</option>
+                                        <option value="billed">Dispensed</option>
+                                        <option value="all">All (Dispensed + Undispensed)</option>
+                                    </select>
+                                </div>
+                                <div id="rxValidateList">
+                                    <div class="text-muted text-center" style="padding: 30px;">Loading clinical alerts...</div>
+                                </div>
+                                <div class="d-flex justify-content-between align-center mt-12" id="rxValidatePagination" style="display:none;">
+                                    <div class="fs-11 text-muted" id="rxValidatePagInfo"></div>
+                                    <div class="d-flex gap-4" id="rxValidatePagBtns"></div>
+                                </div>
+                            </div>
+                        @endif
 
-            <div id="inventoryPane" class="ph-pane ph-hidden">
-                <div class="ph-toolbar inventory-toolbar">
-                    <div class="inventory-filter-row">
-                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="drugSearch" placeholder="Drug name / category..."></div>
-                        <select class="form-control ph-small-select" id="drugCategoryFilter">
-                            <option value="">All Categories</option>
-                            @foreach($medicineCategories as $category)
-                                <option value="{{ $category->id }}">{{ $category->name }}</option>
-                            @endforeach
-                        </select>
-                        <select class="form-control ph-small-select" id="drugStockFilter">
-                            <option value="all">All Stock</option>
-                            <option value="in_stock">In Stock</option>
-                            <option value="low_stock">Low Stock</option>
-                            <option value="out_of_stock">Out of Stock</option>
-                            <option value="expired">Expired</option>
-                        </select>
-                        <select class="form-control ph-small-select" id="drugExpiryFilter">
-                            <option value="all">All Expiry</option>
-                            <option value="exp_30">Expiring in 30 Days</option>
-                            <option value="exp_90">Expiring in 90 Days</option>
-                            <option value="expired">Already Expired</option>
-                        </select>
-                    </div>
-                    <div class="inventory-action-row">
-                        <button class="btn btn-outline-primary btn-sm" type="button" onclick="openModal('grnModal')">📥 Add Stock</button>
-                        <button class="btn btn-secondary btn-sm" type="button" onclick="exportDrugInventory()">🖨️ Export</button>
-                    </div>
-                </div>
-                <div class="table-wrap">
-                    <table class="hims-table display table-striped" id="drugInventoryTable">
-                        <thead><tr><th>Drug Name</th><th>Category</th><th>Form</th><th>Batch</th><th>Expiry</th><th>Stock</th><th>Min Level</th><th>MRP ₹</th><th>Sale Price ₹</th><th>Status</th><th>Action</th></tr></thead>
-                        <tbody id="drugInventoryBody"></tbody>
-                    </table>
-                </div>
-            </div>
-            <div id="quarantinePane" class="ph-pane ph-hidden">
-                <div class="ph-toolbar inventory-toolbar">
-                    <div class="inventory-filter-row">
-                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="quarantineDrugSearch" placeholder="Drug name / category..."></div>
-                        <select class="form-control ph-small-select" id="quarantineDrugCategoryFilter">
-                            <option value="">All Categories</option>
-                            @foreach($medicineCategories as $category)
-                                <option value="{{ $category->id }}">{{ $category->name }}</option>
-                            @endforeach
-                        </select>
-                        <select class="form-control ph-small-select" id="quarantineDrugExpiryFilter">
-                            <option value="all">All Expiry</option>
-                            <option value="exp_30">Expiring in 30 Days</option>
-                            <option value="exp_90">Expiring in 90 Days</option>
-                            <option value="expired">Already Expired</option>
-                        </select>
-                    </div>
-                    <div class="inventory-action-row">
-                        <button class="btn btn-secondary btn-sm" type="button" onclick="exportQuarantineDrugInventory()">🖨️ Export</button>
-                    </div>
-                </div>
-                <div class="table-wrap">
-                    <table class="hims-table display table-striped" id="quarantineDrugInventoryTable">
-                        <thead><tr><th>Drug Name</th><th>Category</th><th>Form</th><th>Batch</th><th>Expiry</th><th>Quarantine Stock</th><th>Min Level</th><th>MRP ₹</th><th>Action</th></tr></thead>
-                        <tbody id="quarantineDrugInventoryBody"></tbody>
-                    </table>
-                </div>
-            </div>
+                        @if(in_array('inventoryPane', $allowedTabs))
+                            <div id="inventoryPane" class="ph-pane {{ $activeTab === 'inventoryPane' ? '' : 'ph-hidden' }}">
+                                <div class="ph-toolbar inventory-toolbar">
+                                    <div class="inventory-filter-row">
+                                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="drugSearch" placeholder="Drug name / category..."></div>
+                                        <select class="form-control ph-small-select" id="drugCategoryFilter">
+                                            <option value="">All Categories</option>
+                                            @foreach($medicineCategories as $category)
+                                                <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                            @endforeach
+                                        </select>
+                                        <select class="form-control ph-small-select" id="drugStockFilter">
+                                            <option value="all">All Stock</option>
+                                            <option value="in_stock">In Stock</option>
+                                            <option value="low_stock">Low Stock</option>
+                                            <option value="out_of_stock">Out of Stock</option>
+                                            <option value="expired">Expired</option>
+                                        </select>
+                                        <select class="form-control ph-small-select" id="drugExpiryFilter">
+                                            <option value="all">All Expiry</option>
+                                            <option value="exp_30">Expiring in 30 Days</option>
+                                            <option value="exp_90">Expiring in 90 Days</option>
+                                            <option value="expired">Already Expired</option>
+                                        </select>
+                                    </div>
+                                    <div class="inventory-action-row">
+                                        @can('create-pharmacy-grn')
+                                            <button class="btn btn-outline-primary btn-sm" type="button" onclick="openModal('grnModal')">📥 Add Stock</button>
+                                        @endcan
+                                        <button class="btn btn-secondary btn-sm" type="button" onclick="exportDrugInventory()">🖨️ Export</button>
+                                    </div>
+                                </div>
+                                <div class="table-wrap">
+                                    <table class="hims-table display table-striped" id="drugInventoryTable">
+                                        <thead><tr><th>Drug Name</th><th>Category</th><th>Form</th><th>Batch</th><th>Expiry</th><th>Stock</th><th>Min Level</th><th>MRP ₹</th><th>Sale Price ₹</th><th>Status</th><th>Action</th></tr></thead>
+                                        <tbody id="drugInventoryBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
 
-            <div id="expiryPane" class="ph-pane ph-hidden">
-                <div class="ph-toolbar inventory-toolbar mb-12">
-                    <div class="inventory-filter-row">
-                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="expirySearch" placeholder="Drug name / batch..."></div>
-                        <select class="form-control ph-small-select" id="expiryRangeFilter">
-                            <option value="all_alerts">All Alerts (90 days)</option>
-                            <option value="expired">Already Expired</option>
-                            <option value="exp_30">Expiring in 30 Days</option>
-                            <option value="exp_90">Expiring in 90 Days</option>
-                        </select>
-                    </div>
-                    <div class="inventory-action-row">
-                        <button class="btn btn-danger btn-sm" type="button" onclick="processExpiredBatches()">⚙️ Process Expired</button>
-                    </div>
-                </div>
-                <div id="expiryAlertBanner" class="alert alert-orange mb-12"><span class="alert-icon">⚠️</span><div id="expiryAlertMsg"><b>Loading expiry alerts...</b></div></div>
-                <div class="table-wrap">
-                    <table class="hims-table display table-striped" id="expiryAlertsTable">
-                        <thead><tr><th>Drug</th><th>Batch</th><th>Expiry Date</th><th>Days Left</th><th>Stock Qty</th><th>Recommended Action</th><th>Actions</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+                        @if(in_array('quarantinePane', $allowedTabs))
+                            <div id="quarantinePane" class="ph-pane {{ $activeTab === 'quarantinePane' ? '' : 'ph-hidden' }}">
+                                <div class="ph-toolbar inventory-toolbar">
+                                    <div class="inventory-filter-row">
+                                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="quarantineDrugSearch" placeholder="Drug name / category..."></div>
+                                        <select class="form-control ph-small-select" id="quarantineDrugCategoryFilter">
+                                            <option value="">All Categories</option>
+                                            @foreach($medicineCategories as $category)
+                                                <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                            @endforeach
+                                        </select>
+                                        <select class="form-control ph-small-select" id="quarantineDrugExpiryFilter">
+                                            <option value="all">All Expiry</option>
+                                            <option value="exp_30">Expiring in 30 Days</option>
+                                            <option value="exp_90">Expiring in 90 Days</option>
+                                            <option value="expired">Already Expired</option>
+                                        </select>
+                                    </div>
+                                    <div class="inventory-action-row">
+                                        <button class="btn btn-secondary btn-sm" type="button" onclick="exportQuarantineDrugInventory()">🖨️ Export</button>
+                                    </div>
+                                </div>
+                                <div class="table-wrap">
+                                    <table class="hims-table display table-striped" id="quarantineDrugInventoryTable">
+                                        <thead><tr><th>Drug Name</th><th>Category</th><th>Form</th><th>Batch</th><th>Expiry</th><th>Quarantine Stock</th><th>Min Level</th><th>MRP ₹</th><th>Action</th></tr></thead>
+                                        <tbody id="quarantineDrugInventoryBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
 
-            <div id="grnListPane" class="ph-pane ph-hidden">
-                <div class="ph-toolbar mb-12">
-                    <div class="fw-700 fs-14">GRN Log</div>
-                    <button class="btn btn-success btn-sm" type="button" onclick="openModal('grnModal')">📥 New GRN</button>
-                </div>
-                <div class="table-wrap">
-                    <table class="hims-table display table-striped" id="grnLogTable">
-                        <thead><tr><th>#</th><th>GRN No.</th><th>PO Ref</th><th>Supplier</th><th>Invoice No.</th><th>Items</th><th>Total Value</th><th>Received By</th><th>Date</th><th>Action</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+                        @if(in_array('expiryPane', $allowedTabs))
+                            <div id="expiryPane" class="ph-pane {{ $activeTab === 'expiryPane' ? '' : 'ph-hidden' }}">
+                                <div class="ph-toolbar inventory-toolbar mb-12">
+                                    <div class="inventory-filter-row">
+                                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="expirySearch" placeholder="Drug name / batch..."></div>
+                                        <select class="form-control ph-small-select" id="expiryRangeFilter">
+                                            <option value="all_alerts">All Alerts (90 days)</option>
+                                            <option value="expired">Already Expired</option>
+                                            <option value="exp_30">Expiring in 30 Days</option>
+                                            <option value="exp_90">Expiring in 90 Days</option>
+                                        </select>
+                                    </div>
+                                    <div class="inventory-action-row">
+                                        @can('edit-pharmacy-expiry')
+                                            <button class="btn btn-danger btn-sm" type="button" onclick="processExpiredBatches()">⚙️ Process Expired</button>
+                                        @endcan
+                                    </div>
+                                </div>
+                                <div id="expiryAlertBanner" class="alert alert-orange mb-12"><span class="alert-icon">⚠️</span><div id="expiryAlertMsg"><b>Loading expiry alerts...</b></div></div>
+                                <div class="table-wrap">
+                                    <table class="hims-table display table-striped" id="expiryAlertsTable">
+                                        <thead><tr><th>Drug</th><th>Batch</th><th>Expiry Date</th><th>Days Left</th><th>Stock Qty</th><th>Recommended Action</th><th>Actions</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
 
-            <div id="poPane" class="ph-pane ph-hidden">
-                <div class="ph-toolbar mb-12">
-                    <div class="fw-700 fs-14">Purchase Orders</div>
-                    <button class="btn btn-primary btn-sm" type="button" onclick="window.openNewPOModal()">+ New PO</button>
-                </div>
-                <div class="table-wrap">
-                    <table class="hims-table display table-striped" id="purchaseOrdersTable">
-                        <thead><tr><th>#</th><th>PO No.</th><th>Date</th><th>Supplier</th><th>Items</th><th>Created By</th><th>Net Total</th><th>Status</th><th>Action</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+                        @if(in_array('grnListPane', $allowedTabs))
+                            <div id="grnListPane" class="ph-pane {{ $activeTab === 'grnListPane' ? '' : 'ph-hidden' }}">
+                                <div class="ph-toolbar mb-12">
+                                    <div class="fw-700 fs-14">GRN Log</div>
+                                    @can('create-pharmacy-grn')
+                                        <button class="btn btn-success btn-sm" type="button" onclick="openModal('grnModal')">📥 New GRN</button>
+                                    @endcan
+                                </div>
+                                <div class="table-wrap">
+                                    <table class="hims-table display table-striped" id="grnLogTable">
+                                        <thead><tr><th>#</th><th>GRN No.</th><th>PO Ref</th><th>Supplier</th><th>Invoice No.</th><th>Items</th><th>Total Value</th><th>Received By</th><th>Date</th><th>Action</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
 
-            <div id="allBillsPane" class="ph-pane ph-hidden">
-                <div class="ph-toolbar mb-12">
-                    <div class="fw-700 fs-14">📃 All Pharmacy Bills</div>
-                    <div class="d-flex gap-8 align-center">
-                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="allBillsSearch" placeholder="Search bill no / patient..."></div>
-                        <div class="input-group" style="width: 270px; position: relative;">
-                            <span class="input-addon">📅</span>
-                            <input type="text" class="form-control all-bills-date-input" id="allBillsDateRange" placeholder="Select Date Range" readonly>
-                            <button type="button" class="btn-clear-date" id="clearAllBillsDate" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 14px; cursor: pointer; color: var(--text-light); display: none; z-index: 5;">✕</button>
-                        </div>
-                        <button class="btn btn-secondary btn-xs" type="button" onclick="refreshAllBills()">🔄 Refresh</button>
-                    </div>
-                </div>
-                <div class="table-wrap">
-                    <table class="hims-table display table-striped" id="allBillsTable">
-                        <thead><tr><th>Bill No</th><th>Date</th><th>Patient</th><th>Items</th><th>Subtotal ₹</th><th>Discount ₹</th><th>Net Total ₹</th><th>Paid ₹</th><th>Actions</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
+                        @if(in_array('poPane', $allowedTabs))
+                            <div id="poPane" class="ph-pane {{ $activeTab === 'poPane' ? '' : 'ph-hidden' }}">
+                                <div class="ph-toolbar mb-12">
+                                    <div class="fw-700 fs-14">Purchase Orders</div>
+                                    @can('create-pharmacy-purchase')
+                                        <button class="btn btn-primary btn-sm" type="button" onclick="window.openNewPOModal()">+ New PO</button>
+                                    @endcan
+                                </div>
+                                <div class="table-wrap">
+                                    <table class="hims-table display table-striped" id="purchaseOrdersTable">
+                                        <thead><tr><th>#</th><th>PO No.</th><th>Date</th><th>Supplier</th><th>Items</th><th>Created By</th><th>Net Total</th><th>Status</th><th>Action</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
+
+                        @if(in_array('allBillsPane', $allowedTabs))
+                            <div id="allBillsPane" class="ph-pane {{ $activeTab === 'allBillsPane' ? '' : 'ph-hidden' }}">
+                                <div class="ph-toolbar mb-12">
+                                    <div class="fw-700 fs-14">📃 All Pharmacy Bills</div>
+                                    <div class="d-flex gap-8 align-center">
+                                        <div class="input-group ph-search"><span class="input-addon">🔍</span><input type="text" class="form-control" id="allBillsSearch" placeholder="Search bill no / patient..."></div>
+                                        <div class="input-group" style="width: 270px; position: relative;">
+                                            <span class="input-addon">📅</span>
+                                            <input type="text" class="form-control all-bills-date-input" id="allBillsDateRange" placeholder="Select Date Range" readonly>
+                                            <button type="button" class="btn-clear-date" id="clearAllBillsDate" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 14px; cursor: pointer; color: var(--text-light); display: none; z-index: 5;">✕</button>
+                                        </div>
+                                        <button class="btn btn-secondary btn-xs" type="button" onclick="refreshAllBills()">🔄 Refresh</button>
+                                    </div>
+                                </div>
+                                <div class="table-wrap">
+                                    <table class="hims-table display table-striped" id="allBillsTable">
+                                        <thead><tr><th>Bill No</th><th>Date</th><th>Patient</th><th>Items</th><th>Subtotal ₹</th><th>Discount ₹</th><th>Net Total ₹</th><th>Paid ₹</th><th>Actions</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
+                    @endif
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
 <div class="modal-overlay hidden" id="dispenseModal" onclick="if(event.target===this) closeModal('dispenseModal')">
     <div class="modal modal-fullscreen">

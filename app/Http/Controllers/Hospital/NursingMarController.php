@@ -25,7 +25,7 @@ class NursingMarController extends BaseHospitalController
         $this->routes = [
             'marLoad' => route('hospital.nursing.mar.load'),
             'marAdminister' => route('hospital.nursing.mar.administer'),
-            'wards' => route('hospital.nursing.mar.wards'),
+            'marWards' => route('hospital.nursing.mar.wards'),
         ];
     }
 
